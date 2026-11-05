@@ -14,8 +14,15 @@ const { TASK_CATALOG, signTaskPayload } = require("../config/taskCatalog");
 const { evaluateMachineHealth } = require("../services/healthEvaluator");
 const { triggerN8nIncidentWebhook } = require("../services/n8nWebhookService");
 const socketHub = require("../realtime/socketHub");
+const fs = require("fs");
+const path = require("path");
 
 const router = express.Router();
+
+// Filas em memória para comunicação Cliente-Servidor com o Super Agente Nativo (.exe)
+const pendingRefreshByAgent = new Set();
+const pendingMessagesByAgent = new Map();
+const chatHistoryByMachine = new Map();
 
 const authLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 30 });
 const heartbeatLimiter = createRateLimiter({
@@ -287,13 +294,14 @@ router.post("/machines/:id/refresh-telemetry", requireAuth, async (req, res) => 
     }
 
     const socketOutcome = socketHub.requestImmediateTelemetry(machine.id);
+    pendingRefreshByAgent.add(machine.agent_uuid);
 
     await repository.recordAuditLog({
       userId: req.user.id,
       machineId: machine.id,
       actionType: "MANUAL_TELEMETRY_REFRESH",
       ipAddress: req.ip,
-      details: { deliveredToSocket: socketOutcome.deliveredToSocket },
+      details: { deliveredToSocket: socketOutcome.deliveredToSocket, queuedForNativeAgent: true },
     });
 
     if (!socketOutcome.deliveredToSocket) {
@@ -549,5 +557,120 @@ router.get(
     res.json({ logs });
   },
 );
+
+// 11. Download Direto do Instalador Executável Nativo do Agente Windows (.exe)
+router.get("/agent/download", (req, res) => {
+  const exePath = path.join(__dirname, "../../public/IpojucaRMM-Setup.exe");
+  if (!fs.existsSync(exePath)) {
+    return res
+      .status(404)
+      .json({ error: "Instalador IpojucaRMM-Setup.exe não encontrado no servidor." });
+  }
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="IpojucaRMM-Setup.exe"',
+  );
+  return res.sendFile(exePath);
+});
+
+// 12. Poll de Comandos e Mensagens para o Super Agente Nativo (.exe em segundo plano)
+router.get("/agent/pending", (req, res) => {
+  const agentUuid = String(
+    req.headers["x-agent-uuid"] || req.query.agent_uuid || "",
+  ).trim();
+  if (!agentUuid) {
+    return res.status(400).json({ error: "agent_uuid obrigatório." });
+  }
+
+  const refreshRequested = pendingRefreshByAgent.has(agentUuid);
+  if (refreshRequested) {
+    pendingRefreshByAgent.delete(agentUuid);
+  }
+
+  const queuedMsgs = pendingMessagesByAgent.get(agentUuid) || [];
+  if (queuedMsgs.length > 0) {
+    pendingMessagesByAgent.set(agentUuid, []);
+  }
+
+  return res.json({
+    refresh_requested: refreshRequested,
+    messages: queuedMsgs,
+    server_time: new Date().toISOString(),
+  });
+});
+
+// 13. Canal Super Agente Cliente -> Servidor (Mensagem enviada pelo usuário na máquina Windows)
+router.post("/agent/message", async (req, res) => {
+  const agentUuid = String(
+    req.headers["x-agent-uuid"] || req.body?.agent_uuid || "",
+  ).trim();
+  const messageText = String(req.body?.message || "").trim().slice(0, 500);
+  const sender = String(req.body?.sender || agentUuid).trim().slice(0, 80);
+
+  if (!agentUuid || !messageText) {
+    return res.status(400).json({ error: "agent_uuid e message são obrigatórios." });
+  }
+
+  const machine = await repository.findMachineByAgentUuid(agentUuid);
+  const machineId = machine ? machine.id : 0;
+  const entry = {
+    id: `msg_${Date.now()}`,
+    machine_id: machineId,
+    agent_uuid: agentUuid,
+    direction: "CLIENT_TO_SERVER",
+    sender,
+    message: messageText,
+    created_at: new Date().toISOString(),
+  };
+
+  if (machineId) {
+    const hist = chatHistoryByMachine.get(machineId) || [];
+    hist.push(entry);
+    chatHistoryByMachine.set(machineId, hist.slice(-100));
+  }
+
+  socketHub.broadcastToDashboard("agent:message", entry);
+  return res.json({ status: "ok", message: entry });
+});
+
+// 14. Canal Super Agente Servidor -> Cliente (Histórico e envio de mensagem da Central de TI para o PC)
+router.get("/machines/:id/messages", requireAuth, async (req, res) => {
+  const machineId = Number(req.params.id);
+  const messages = chatHistoryByMachine.get(machineId) || [];
+  return res.json({ messages });
+});
+
+router.post("/machines/:id/messages", requireAuth, async (req, res) => {
+  const machine = await repository.findMachineById(req.params.id);
+  if (!machine) {
+    return res.status(404).json({ error: "Computador não encontrado." });
+  }
+  const messageText = String(req.body?.message || "").trim().slice(0, 500);
+  if (!messageText) {
+    return res.status(400).json({ error: "Mensagem vazia." });
+  }
+
+  const entry = {
+    id: `msg_${Date.now()}`,
+    machine_id: machine.id,
+    agent_uuid: machine.agent_uuid,
+    direction: "SERVER_TO_CLIENT",
+    sender: req.user?.name || "Central TI",
+    message: messageText,
+    created_at: new Date().toISOString(),
+  };
+
+  const hist = chatHistoryByMachine.get(machine.id) || [];
+  hist.push(entry);
+  chatHistoryByMachine.set(machine.id, hist.slice(-100));
+
+  const queue = pendingMessagesByAgent.get(machine.agent_uuid) || [];
+  queue.push(entry);
+  pendingMessagesByAgent.set(machine.agent_uuid, queue);
+
+  socketHub.broadcastToDashboard("agent:message", entry);
+  return res.json({ status: "ok", message: entry });
+});
 
 module.exports = router;

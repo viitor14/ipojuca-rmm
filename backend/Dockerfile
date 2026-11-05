@@ -6,6 +6,7 @@ COPY package.json ./
 RUN npm install --omit=dev
 
 COPY src ./src
+COPY public ./public
 
 # Executa como usuario nao-root por seguranca (@security & @devops)
 USER node

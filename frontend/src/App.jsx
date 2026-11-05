@@ -504,6 +504,21 @@ export default function App() {
               FOCO ESTAÇÃO
             </CamModeBtn>
 
+            <CamModeBtn
+              as="a"
+              href="/IpojucaRMM-Setup.exe"
+              download="IpojucaRMM-Setup.exe"
+              style={{
+                textDecoration: 'none',
+                borderColor: 'rgba(16, 185, 129, 0.55)',
+                color: '#10B981',
+                background: 'rgba(16, 185, 129, 0.12)',
+              }}
+              title="Baixar o instalador executável (.exe) para instalar o Agente Windows em segundo plano em qualquer PC"
+            >
+              ⬇ BAIXAR AGENTE (.EXE)
+            </CamModeBtn>
+
             <RoleSelect
               value={selectedProfileIdx}
               onChange={(e) => setSelectedProfileIdx(Number(e.target.value))}
@@ -587,8 +602,15 @@ export default function App() {
             DOCK DE ESTAÇÕES REAIS // {activeUnit?.code || 'UNIDADE'}
           </DockLabel>
           {machines.length === 0 && (
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', color: '#8A90A2' }}>
-              [NENHUMA MÁQUINA REGISTRADA NESTA UNIDADE — INICIE O AGENTE WINDOWS PARA AUTO-ENROLLMENT]
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', color: '#8A90A2', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span>[NENHUMA MÁQUINA REGISTRADA NESTA UNIDADE — INSTALE O AGENTE (.EXE) NO PC]</span>
+              <a
+                href="/IpojucaRMM-Setup.exe"
+                download="IpojucaRMM-Setup.exe"
+                style={{ color: '#10B981', textDecoration: 'underline', fontWeight: 600 }}
+              >
+                ⬇ Baixar IpojucaRMM-Setup.exe
+              </a>
             </div>
           )}
           {machines.map((m, idx) => {
