@@ -1,0 +1,20 @@
+{
+  "name": "ipojuca-rmm-backend",
+  "version": "1.0.0",
+  "description": "Backend API e Realtime Hub (Socket.io) do RMM Ipojuca",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test tests/api.test.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "mysql2": "^3.11.3",
+    "socket.io": "^4.8.1"
+  }
+}
+

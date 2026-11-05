@@ -1,0 +1,16 @@
+{
+  "name": "ipojuca-rmm-windows-agent",
+  "version": "1.0.0",
+  "description": "Serviço Windows oficial de Inventário, Telemetria e Manutenção Remota Controlada (IpojucaRMMService)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "once": "node src/index.js --once"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "socket.io-client": "^4.8.1"
+  }
+}
+

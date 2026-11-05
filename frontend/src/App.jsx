@@ -1,0 +1,624 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import styled, { ThemeProvider, keyframes } from 'styled-components';
+import { theme, STATUS_LABELS } from './styles/theme';
+import { GlobalStyles } from './styles/GlobalStyles';
+import { rmmApi, connectDashboardSocket } from './services/api';
+import { DigitalTwin3D } from './components/DigitalTwin3D';
+import { DiagnosticDrawer } from './components/DiagnosticDrawer';
+
+const pulseDot = keyframes`
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+`;
+
+const HudOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px 20px;
+`;
+
+const TopCommandDeck = styled.header`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  pointer-events: none;
+`;
+
+const MastheadPod = styled.div`
+  pointer-events: auto;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  backdrop-filter: blur(22px);
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-left: 3px solid ${({ theme }) => theme.colors.brandPrimary};
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  .sys-tag {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.64rem;
+    letter-spacing: 0.14em;
+    color: ${({ theme }) => theme.colors.brandPrimary};
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .brand-title {
+    font-size: 0.98rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+`;
+
+const LiveBeacon = styled.span`
+  width: 7px;
+  height: 7px;
+  background: ${({ $online }) => ($online ? '#00F5A0' : '#FFB800')};
+  display: inline-block;
+  animation: ${pulseDot} 1.6s infinite;
+`;
+
+const UnitSwitcherPod = styled.div`
+  pointer-events: auto;
+  display: flex;
+  gap: 6px;
+  background: rgba(8, 9, 12, 0.84);
+  backdrop-filter: blur(20px);
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  padding: 5px;
+`;
+
+const UnitSwitchBtn = styled.button`
+  background: ${({ $active }) =>
+    $active ? '#D4FF33' : 'rgba(18, 20, 27, 0.85)'};
+  color: ${({ $active }) => ($active ? '#050507' : '#F4F4F0')};
+  border: 1px solid
+    ${({ $active }) =>
+      $active ? '#D4FF33' : 'rgba(244, 244, 240, 0.1)'};
+  padding: 7px 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
+
+  .u-code {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    opacity: 0.8;
+    display: block;
+  }
+
+  .u-name {
+    font-size: 0.76rem;
+    font-weight: 700;
+    display: block;
+    margin-top: 1px;
+  }
+`;
+
+const RightControlPod = styled.div`
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  backdrop-filter: blur(20px);
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  padding: 6px 10px;
+`;
+
+const CamModeBtn = styled.button`
+  padding: 6px 10px;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  background: ${({ $active }) => ($active ? '#D4FF33' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#050507' : '#F4F4F0')};
+  border: 1px solid
+    ${({ $active }) =>
+      $active ? '#D4FF33' : 'rgba(244, 244, 240, 0.16)'};
+`;
+
+const RoleSelect = styled.select`
+  background: #0b0c10;
+  color: #d4ff33;
+  border: 1px solid rgba(212, 255, 51, 0.45);
+  padding: 6px 10px;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.66rem;
+  font-weight: 600;
+  cursor: pointer;
+`;
+
+const MiddleWorkspace = styled.div`
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 14px;
+  margin-bottom: 14px;
+  pointer-events: none;
+  overflow: hidden;
+`;
+
+const LeftRadarColumn = styled.div`
+  width: 285px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+
+  @media (max-width: 960px) {
+    display: none;
+  }
+`;
+
+const RadarCard = styled.div`
+  background: ${({ theme }) => theme.colors.bgSurface};
+  backdrop-filter: blur(20px);
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  padding: 12px 14px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+
+  .card-tag {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+`;
+
+const KpiMatrix = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+`;
+
+const KpiCell = styled.div`
+  background: rgba(5, 5, 7, 0.7);
+  border: 1px solid rgba(244, 244, 240, 0.08);
+  border-left: 2px solid ${({ $color }) => $color};
+  padding: 6px 8px;
+
+  .num {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: ${({ $color }) => $color};
+  }
+  .lbl {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    color: ${({ theme }) => theme.colors.textSecondary};
+  }
+`;
+
+const IncidentItem = styled.div`
+  padding: 8px 9px;
+  background: rgba(255, 42, 84, 0.08);
+  border: 1px solid rgba(255, 42, 84, 0.35);
+  margin-top: 6px;
+  cursor: pointer;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.64rem;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 42, 84, 0.2);
+  }
+
+  .tck {
+    color: #d4ff33;
+    font-weight: 700;
+    display: flex;
+    justify-content: space-between;
+  }
+  .msg {
+    color: #f4f4f0;
+    margin-top: 3px;
+    line-height: 1.35;
+  }
+`;
+
+const BottomMatrixDock = styled.footer`
+  pointer-events: auto;
+  background: rgba(8, 9, 13, 0.86);
+  backdrop-filter: blur(22px);
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+`;
+
+const DockLabel = styled.div`
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  white-space: nowrap;
+  padding-right: 8px;
+  border-right: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+`;
+
+const NodeKeycap = styled.button`
+  min-width: 162px;
+  padding: 7px 10px;
+  background: ${({ $selected }) =>
+    $selected ? 'rgba(212, 255, 51, 0.16)' : 'rgba(17, 19, 26, 0.92)'};
+  border: 1px solid
+    ${({ $selected, $color }) =>
+      $selected ? '#D4FF33' : 'rgba(244, 244, 240, 0.12)'};
+  border-top: 2px solid ${({ $color }) => $color};
+  color: #f4f4f0;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: #d4ff33;
+    transform: translateY(-2px);
+  }
+
+  .n-top {
+    display: flex;
+    justify-content: space-between;
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.58rem;
+    color: ${({ theme }) => theme.colors.textSecondary};
+  }
+  .n-host {
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin: 2px 0;
+  }
+  .n-metrics {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.62rem;
+    color: ${({ $color }) => $color};
+  }
+`;
+
+const DEMO_PROFILES = [
+  { label: 'ADMIN_N2 // Vitor França', email: 'admin@ipojuca.pe.gov.br', pass: 'Admin@Rmm2026' },
+  { label: 'TECH_N1 // Carlos Mendes', email: 'suporte@ipojuca.pe.gov.br', pass: 'Suporte@Rmm2026' },
+  { label: 'VIEWER // Dra. Helena', email: 'gestao@ipojuca.pe.gov.br', pass: 'Gestao@Rmm2026' },
+];
+
+export default function App() {
+  const [auth, setAuth] = useState({ token: null, user: null });
+  const [selectedProfileIdx, setSelectedProfileIdx] = useState(0);
+  const [units, setUnits] = useState([]);
+  const [selectedUnitId, setSelectedUnitId] = useState(1);
+  const [machines, setMachines] = useState([]);
+  const [selectedMachineId, setSelectedMachineId] = useState(null);
+  const [diagnostics, setDiagnostics] = useState(null);
+  const [taskCatalog, setTaskCatalog] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [cameraMode, setCameraMode] = useState('ISO');
+
+  const loadAllData = useCallback(async (token, unitId, machineId) => {
+    const [unitsRes, machinesRes, catalogRes, alertsRes] = await Promise.all([
+      rmmApi.getUnits(token),
+      rmmApi.getMachines(token, { unitId }),
+      rmmApi.getTaskCatalog(token),
+      rmmApi.getAlerts(token),
+    ]);
+    const loadedMachines = machinesRes.machines || [];
+    setUnits(unitsRes.units || []);
+    setMachines(loadedMachines);
+    setTaskCatalog(catalogRes.tasks || []);
+    setAlerts(alertsRes.alerts || []);
+
+    const targetId =
+      machineId && loadedMachines.some((m) => m.id === Number(machineId))
+        ? machineId
+        : loadedMachines[0]?.id || null;
+
+    if (targetId) {
+      const diagRes = await rmmApi.getMachineDiagnostics(token, targetId);
+      setDiagnostics(diagRes);
+    } else {
+      setDiagnostics(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    let activeSocket = null;
+    const profile = DEMO_PROFILES[selectedProfileIdx];
+
+    rmmApi
+      .login(profile.email, profile.pass)
+      .then((res) => {
+        setAuth({ token: res.token, user: res.user });
+        loadAllData(res.token, selectedUnitId, selectedMachineId);
+
+        activeSocket = connectDashboardSocket(res.token, {
+          onConnect: () => setSocketConnected(true),
+          onDisconnect: () => setSocketConnected(false),
+          onMachineUpdated: (updatedMachine) => {
+            setMachines((prev) => {
+              const exists = prev.some((m) => m.id === updatedMachine.id);
+              if (exists) {
+                return prev.map((m) =>
+                  m.id === updatedMachine.id ? updatedMachine : m
+                );
+              }
+              return [...prev, updatedMachine];
+            });
+            setDiagnostics((prev) =>
+              !prev || prev.machine?.id === updatedMachine.id
+                ? { ...(prev || {}), machine: updatedMachine }
+                : prev
+            );
+          },
+          onAlertTriggered: (newAlert) => {
+            setAlerts((prev) => [newAlert, ...prev.slice(0, 19)]);
+          },
+          onTaskUpdated: () => {
+            if (selectedMachineId) {
+              rmmApi
+                .getMachineDiagnostics(res.token, selectedMachineId)
+                .then(setDiagnostics)
+                .catch(() => {});
+            }
+          },
+        });
+      })
+      .catch((err) => console.error('Falha de autenticação:', err));
+
+    return () => {
+      if (activeSocket) activeSocket.close();
+    };
+  }, [selectedProfileIdx]);
+
+  useEffect(() => {
+    if (!auth.token) return;
+    loadAllData(auth.token, selectedUnitId, selectedMachineId);
+  }, [auth.token, selectedUnitId, selectedMachineId, loadAllData]);
+
+  const activeUnit =
+    units.find((u) => u.id === Number(selectedUnitId)) || units[0];
+  const selectedMachine =
+    machines.find((m) => m.id === Number(selectedMachineId)) || machines[0];
+
+  const totalSummary = units.reduce(
+    (acc, u) => ({
+      total: acc.total + (u.summary?.total || 0),
+      NORMAL: acc.NORMAL + (u.summary?.NORMAL || 0),
+      WARNING: acc.WARNING + (u.summary?.WARNING || 0),
+      CRITICAL: acc.CRITICAL + (u.summary?.CRITICAL || 0),
+      OFFLINE: acc.OFFLINE + (u.summary?.OFFLINE || 0),
+    }),
+    { total: 0, NORMAL: 0, WARNING: 0, CRITICAL: 0, OFFLINE: 0 }
+  );
+
+  async function handleDispatchTask(payload) {
+    const res = await rmmApi.dispatchAuthorizedTask(auth.token, payload);
+    await loadAllData(auth.token, selectedUnitId, payload.machineId);
+    return res;
+  }
+
+  async function handleRefreshTelemetryNow(machineId) {
+    const res = await rmmApi.refreshMachineTelemetryNow(auth.token, machineId);
+    setTimeout(() => {
+      loadAllData(auth.token, selectedUnitId, machineId).catch(() => {});
+    }, 350);
+    return res;
+  }
+
+  return (
+    <ThemeProvider theme={theme}>
+      <GlobalStyles />
+
+      {/* PALCO ESPACIAL 3D EM TELA CHEIA (100VW x 100VH) */}
+      <DigitalTwin3D
+        activeUnit={activeUnit}
+        machines={machines}
+        selectedMachine={selectedMachine}
+        cameraMode={cameraMode}
+        onUserOrbit={() => {
+          if (cameraMode !== 'FREE') setCameraMode('FREE');
+        }}
+        onSelectMachine={(m) => {
+          setSelectedMachineId(m.id);
+          setCameraMode('FOCUS');
+        }}
+      />
+
+      {/* CAMADA HUD TÁTICA FLUTUANTE */}
+      <HudOverlay>
+        <TopCommandDeck>
+          <MastheadPod>
+            <div>
+              <div className="sys-tag">
+                <LiveBeacon $online={socketConnected} />
+                <span>
+                  IPOJUCA.SPATIAL.OS // 08°23&apos;56&quot;S 35°03&apos;50&quot;W
+                </span>
+              </div>
+              <div className="brand-title">
+                RMM Comando Biomédico &amp; Gêmeo Digital
+              </div>
+            </div>
+          </MastheadPod>
+
+          <UnitSwitcherPod>
+            {units.map((u) => (
+              <UnitSwitchBtn
+                key={u.id}
+                $active={u.id === Number(selectedUnitId)}
+                onClick={() => {
+                  setSelectedUnitId(u.id);
+                  setSelectedMachineId(null);
+                  setCameraMode('ISO');
+                }}
+              >
+                <span className="u-code">
+                  [{u.code}] • {u.summary?.total || 0} NODES
+                </span>
+                <span className="u-name">{u.name}</span>
+              </UnitSwitchBtn>
+            ))}
+          </UnitSwitcherPod>
+
+          <RightControlPod>
+            <CamModeBtn
+              $active={cameraMode === 'ISO'}
+              onClick={() => setCameraMode('ISO')}
+            >
+              ISO 3D
+            </CamModeBtn>
+            <CamModeBtn
+              $active={cameraMode === 'TOP'}
+              onClick={() => setCameraMode('TOP')}
+            >
+              CAD TOPO
+            </CamModeBtn>
+            <CamModeBtn
+              $active={cameraMode === 'FOCUS'}
+              onClick={() => setCameraMode('FOCUS')}
+            >
+              FOCO ESTAÇÃO
+            </CamModeBtn>
+
+            <RoleSelect
+              value={selectedProfileIdx}
+              onChange={(e) => setSelectedProfileIdx(Number(e.target.value))}
+            >
+              {DEMO_PROFILES.map((p, idx) => (
+                <option key={p.email} value={idx}>
+                  {p.label}
+                </option>
+              ))}
+            </RoleSelect>
+          </RightControlPod>
+        </TopCommandDeck>
+
+        <MiddleWorkspace>
+          <LeftRadarColumn>
+            <RadarCard>
+              <div className="card-tag">
+                <span>MATRIZ GLOBAL DA REDE</span>
+                <span>[{totalSummary.total} ESTAÇÕES]</span>
+              </div>
+              <KpiMatrix>
+                <KpiCell $color={theme.colors.status.NORMAL}>
+                  <div className="num">{totalSummary.NORMAL}</div>
+                  <div className="lbl">NOMINAL</div>
+                </KpiCell>
+                <KpiCell $color={theme.colors.status.WARNING}>
+                  <div className="num">{totalSummary.WARNING}</div>
+                  <div className="lbl">ATENÇÃO</div>
+                </KpiCell>
+                <KpiCell $color={theme.colors.status.CRITICAL}>
+                  <div className="num">{totalSummary.CRITICAL}</div>
+                  <div className="lbl">ANOMALIA</div>
+                </KpiCell>
+                <KpiCell $color={theme.colors.status.OFFLINE}>
+                  <div className="num">{totalSummary.OFFLINE}</div>
+                  <div className="lbl">SILÊNCIO</div>
+                </KpiCell>
+              </KpiMatrix>
+            </RadarCard>
+
+            <RadarCard>
+              <div className="card-tag">
+                <span>DESPACHOS AUTÔNOMOS N8N</span>
+                <span style={{ color: '#D4FF33' }}>WHATSAPP LIVE</span>
+              </div>
+              {alerts.slice(0, 3).map((a) => (
+                <IncidentItem
+                  key={a.id}
+                  onClick={() => {
+                    const targetMachine = machines.find(
+                      (m) => m.id === a.machine_id
+                    );
+                    if (targetMachine) {
+                      setSelectedMachineId(targetMachine.id);
+                      setCameraMode('FOCUS');
+                    }
+                  }}
+                >
+                  <div className="tck">
+                    <span>#{a.external_ticket_id || `INC-${a.id}`}</span>
+                    <span>{a.hostname}</span>
+                  </div>
+                  <div className="msg">{a.message}</div>
+                </IncidentItem>
+              ))}
+            </RadarCard>
+          </LeftRadarColumn>
+
+          <DiagnosticDrawer
+            diagnostics={diagnostics}
+            taskCatalog={taskCatalog}
+            currentUser={auth.user || { name: 'Operador', role: 'ADMIN_N2' }}
+            onDispatchTask={handleDispatchTask}
+            onRefreshTelemetryNow={handleRefreshTelemetryNow}
+            onFocusCamera={() => setCameraMode('FOCUS')}
+          />
+        </MiddleWorkspace>
+
+        <BottomMatrixDock>
+          <DockLabel>
+            DOCK DE ESTAÇÕES REAIS // {activeUnit?.code || 'UNIDADE'}
+          </DockLabel>
+          {machines.length === 0 && (
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', color: '#8A90A2' }}>
+              [NENHUMA MÁQUINA REGISTRADA NESTA UNIDADE — INICIE O AGENTE WINDOWS PARA AUTO-ENROLLMENT]
+            </div>
+          )}
+          {machines.map((m, idx) => {
+            const stColor =
+              theme.colors.status[m.health_status] || theme.colors.status.NORMAL;
+            const isSel = selectedMachine?.id === m.id;
+            return (
+              <NodeKeycap
+                key={m.id}
+                $selected={isSel}
+                $color={stColor}
+                onClick={() => {
+                  setSelectedMachineId(m.id);
+                  setCameraMode('FOCUS');
+                }}
+              >
+                <div className="n-top">
+                  <span>[0{idx + 1}] {m.sector_code}</span>
+                  <span>{STATUS_LABELS[m.health_status]}</span>
+                </div>
+                <div className="n-host">{m.hostname}</div>
+                <div className="n-metrics">
+                  CPU {Number(m.cpu_usage_pct).toFixed(0)}% • HD{' '}
+                  {Number(m.disk_usage_pct).toFixed(0)}% • {m.ip_address}
+                </div>
+              </NodeKeycap>
+            );
+          })}
+        </BottomMatrixDock>
+      </HudOverlay>
+    </ThemeProvider>
+  );
+}

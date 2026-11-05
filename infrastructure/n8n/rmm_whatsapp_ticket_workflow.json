@@ -1,0 +1,91 @@
+{
+  "name": "RMM Ipojuca - Abertura Autonoma de Chamados e Alerta WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rmm-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook-trigger",
+      "name": "Webhook Backend RMM",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const headers = $input.first().json.headers || {};\nconst body = $input.first().json.body || $input.first().json;\nconst idempotencyKey = headers['x-idempotency-key'] || body.incident_id;\nif (!idempotencyKey || !body.machine || !body.unit) {\n  throw new Error('Payload de alerta invalido ou sem chave de idempotencia.');\n}\nconst ticketId = `IPO-SAUDE-${Date.now().toString().slice(-6)}`;\nconst whatsappMessage = [\n  `🚨 *[RMM SAÚDE IPOJUCA - ALERTA ${body.event_type}]*`,\n  `🏥 *Unidade:* ${body.unit.name} (${body.unit.type})`,\n  `📍 *Setor:* ${body.sector?.name || 'Geral'}`,\n  `💻 *Equipamento:* ${body.machine.hostname} (${body.machine.ip_address})`,\n  `⚠️ *Diagnóstico:* ${body.reason}`,\n  `📊 *Métricas:* CPU ${body.metrics?.cpu_usage_pct}% | RAM ${body.metrics?.ram_usage_pct}% | HD ${body.metrics?.disk_usage_pct}%`,\n  `🎫 *Chamado Aberto:* #${ticketId}`,\n  `🔗 *Acesso 3D:* ${body.dashboard_url}`\n].join('\\n');\nreturn [{ json: { ticket_id: ticketId, idempotency_key: idempotencyKey, whatsapp_text: whatsappMessage, raw_incident: body } }];"
+      },
+      "id": "node-validate-format",
+      "name": "Validar Payload & Gerar Ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHATSAPP_API_URL || 'http://whatsapp-gateway:8080/message/sendText/rmm-ipojuca' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.WHATSAPP_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $env.TI_SUPPORT_WHATSAPP_GROUP || '5581999999999' }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.whatsapp_text }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "node-whatsapp-send",
+      "name": "Notificar Equipe TI no WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', ticket_id: $('Validar Payload & Gerar Ticket').item.json.ticket_id }) }}",
+        "options": {}
+      },
+      "id": "node-webhook-response",
+      "name": "Retornar Ticket ID ao Backend",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Backend RMM": {
+      "main": [[{ "node": "Validar Payload & Gerar Ticket", "type": "main", "index": 0 }]]
+    },
+    "Validar Payload & Gerar Ticket": {
+      "main": [[{ "node": "Notificar Equipe TI no WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Notificar Equipe TI no WhatsApp": {
+      "main": [[{ "node": "Retornar Ticket ID ao Backend", "type": "main", "index": 0 }]]
+    }
+  }
+}
+

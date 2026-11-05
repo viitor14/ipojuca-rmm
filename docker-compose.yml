@@ -1,0 +1,78 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ipojuca-rmm-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_change_in_prod}
+      MYSQL_DATABASE: ${DB_NAME:-ipojuca_rmm}
+      MYSQL_USER: ${DB_USER:-rmm_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-rmm_pass_change_in_prod}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infrastructure/mysql/01_schema_and_seed.sql:/docker-entrypoint-initdb.d/01_schema_and_seed.sql:ro
+    # Seguindo a sequencia da VPS (3306=mensageria, 3307=visitas, 3308=chamados -> 3309=rmm)
+    ports:
+      - "${MYSQL_EXTERNAL_PORT:-3309}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rmm_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ipojuca-rmm-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DB_MODE: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-rmm_user}
+      DB_PASSWORD: ${DB_PASSWORD:-rmm_pass_change_in_prod}
+      DB_NAME: ${DB_NAME:-ipojuca_rmm}
+      OFFLINE_THRESHOLD_SECONDS: ${OFFLINE_THRESHOLD_SECONDS:-15000}
+      JWT_SECRET: ${JWT_SECRET:-rmm-ipojuca-jwt-secret-change-in-production-2026}
+      TASK_SIGNING_SECRET: ${TASK_SIGNING_SECRET:-rmm-ipojuca-hmac-task-secret-change-in-production-2026}
+      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-rmm-ipojuca-n8n-webhook-secret-2026}
+      AGENT_ENROLLMENT_KEY: ${AGENT_ENROLLMENT_KEY:-rmm-ipojuca-enroll-2026}
+      # Conecta ao container n8n ja existente na VPS (porta 5678) sem duplicar container
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://host.docker.internal:5678/webhook/rmm-alert}
+      DASHBOARD_PUBLIC_URL: ${DASHBOARD_PUBLIC_URL:-http://31.97.86.253:8095}
+    # Porta 4000 ja ocupada por api-chamados-node -> Usa 4005 externa
+    ports:
+      - "${BACKEND_PORT:-4005}:4000"
+    networks:
+      - rmm_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ipojuca-rmm-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # Seguindo o padrao da VPS (8082=relatorio-front, 8090=mdm_frontend_prod -> 8095=rmm-frontend)
+    ports:
+      - "${FRONTEND_PORT:-8095}:80"
+    networks:
+      - rmm_net
+
+volumes:
+  mysql_data:
+
+networks:
+  rmm_net:
+    driver: bridge

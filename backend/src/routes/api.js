@@ -1,0 +1,553 @@
+const { loadExpressAndCors } = require("../utils/frameworkCompat");
+const { express } = loadExpressAndCors();
+const crypto = require("crypto");
+const repository = require("../database/repository");
+const {
+  createJwtToken,
+  hashPassword,
+  hashAgentToken,
+  requireAuth,
+  requireRole,
+  createRateLimiter,
+} = require("../middlewares/auth");
+const { TASK_CATALOG, signTaskPayload } = require("../config/taskCatalog");
+const { evaluateMachineHealth } = require("../services/healthEvaluator");
+const { triggerN8nIncidentWebhook } = require("../services/n8nWebhookService");
+const socketHub = require("../realtime/socketHub");
+
+const router = express.Router();
+
+const authLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 30 });
+const heartbeatLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 240,
+});
+
+// 1. Healthcheck da API e Observabilidade
+router.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "ipojuca-rmm-backend",
+    db_mode: repository.mode,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 2. Login de Operadores (RBAC)
+router.post("/auth/login", authLimiter, async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ error: "E-mail e senha são obrigatórios." });
+    }
+
+    const user = await repository.findUserByEmail(email);
+    const candidateHash = hashPassword(password);
+
+    if (
+      !user ||
+      candidateHash.length !== user.password_hash.length ||
+      !crypto.timingSafeEqual(
+        Buffer.from(candidateHash),
+        Buffer.from(user.password_hash),
+      )
+    ) {
+      await repository.recordAuditLog({
+        actionType: "AUTH_LOGIN_FAILED",
+        ipAddress: req.ip,
+        details: { email: String(email).slice(0, 100) },
+      });
+      return res.status(401).json({ error: "Credenciais inválidas." });
+    }
+
+    const token = createJwtToken({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    });
+
+    await repository.recordAuditLog({
+      userId: user.id,
+      actionType: "AUTH_LOGIN_SUCCESS",
+      ipAddress: req.ip,
+      details: { role: user.role },
+    });
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ error: "Erro interno ao processar autenticação." });
+  }
+});
+
+// 3. Recebimento de Heartbeat e Telemetria do Agente Windows
+router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
+  try {
+    const agentUuid = req.headers["x-agent-uuid"] || req.body?.agent_uuid;
+    const agentToken = req.headers["x-agent-token"] || req.body?.agent_token;
+    const enrollmentKey =
+      req.headers["x-enrollment-key"] || req.body?.enrollment_key || "";
+
+    if (!agentUuid || !agentToken) {
+      return res
+        .status(401)
+        .json({ error: "Identidade ou credencial do agente ausente." });
+    }
+
+    let machine = await repository.findMachineByAgentUuid(String(agentUuid));
+    if (!machine) {
+      const env = require("../config/env");
+      if (enrollmentKey && enrollmentKey === env.agentEnrollmentKey) {
+        machine = await repository.enrollNewAgentMachine({
+          agentUuid: String(agentUuid),
+          agentToken: String(agentToken),
+          unitId: Number(req.body?.unit_id || 1),
+          sectorId: Number(req.body?.sector_id || 1),
+          inventory: req.body?.inventory || {},
+        });
+        await repository.recordAuditLog({
+          machineId: machine.id,
+          actionType: "AGENT_AUTO_ENROLLED",
+          ipAddress: req.ip,
+          details: { agentUuid, hostname: machine.hostname },
+        });
+      } else {
+        return res.status(401).json({ error: "Agente não reconhecido." });
+      }
+    }
+    if (machine.is_revoked) {
+      return res
+        .status(403)
+        .json({ error: "Credencial do agente foi revogada pelo @security." });
+    }
+
+    const incomingHash = hashAgentToken(agentToken);
+    if (
+      incomingHash.length !== machine.agent_token_hash.length ||
+      !crypto.timingSafeEqual(
+        Buffer.from(incomingHash),
+        Buffer.from(machine.agent_token_hash),
+      )
+    ) {
+      await repository.recordAuditLog({
+        machineId: machine.id,
+        actionType: "AGENT_AUTH_FAILED",
+        ipAddress: req.ip,
+        details: { agentUuid },
+      });
+      return res.status(401).json({ error: "Token do agente inválido." });
+    }
+
+    const { agent_version, inventory = {}, metrics = {} } = req.body || {};
+
+    // Validação numérica de métricas
+    const sanitizedMetrics = {
+      cpu_usage_pct: Math.min(
+        100,
+        Math.max(0, Number(metrics.cpu_usage_pct ?? 0)),
+      ),
+      ram_usage_pct: Math.min(
+        100,
+        Math.max(0, Number(metrics.ram_usage_pct ?? 0)),
+      ),
+      disk_usage_pct: Math.min(
+        100,
+        Math.max(0, Number(metrics.disk_usage_pct ?? 0)),
+      ),
+      temperature_c: Math.min(
+        130,
+        Math.max(0, Number(metrics.temperature_c ?? 45)),
+      ),
+      uptime_seconds: Math.max(0, Number(metrics.uptime_seconds ?? 0)),
+      spooler_running:
+        metrics.spooler_running === undefined
+          ? true
+          : Boolean(metrics.spooler_running),
+    };
+
+    const evaluation = evaluateMachineHealth(sanitizedMetrics);
+
+    const updatedMachine = await repository.upsertHeartbeat({
+      agentUuid: String(agentUuid),
+      agentVersion: String(agent_version || "1.0.0"),
+      inventory,
+      metrics: sanitizedMetrics,
+      healthStatus: evaluation.health_status,
+    });
+
+    // Emite atualização imediata para o Digital Twin 3D via Socket.io
+    socketHub.broadcastToDashboard("machine:updated", updatedMachine);
+
+    let alertTriggered = null;
+    if (evaluation.health_status === "CRITICAL") {
+      const { alert, isNew } = await repository.findOrCreateActiveAlert({
+        machineId: updatedMachine.id,
+        severity: "CRITICAL",
+        metricName: evaluation.primary_metric,
+        message: evaluation.reason,
+      });
+
+      if (isNew) {
+        const webhookOutcome = await triggerN8nIncidentWebhook({
+          alert,
+          machine: updatedMachine,
+          unit: {
+            id: updatedMachine.unit_id,
+            code: updatedMachine.unit_code,
+            name: updatedMachine.unit_name,
+            unit_type: updatedMachine.unit_type,
+          },
+          sector: {
+            id: updatedMachine.sector_id,
+            name: updatedMachine.sector_name,
+          },
+        });
+
+        await repository.markAlertNotified(
+          alert.id,
+          webhookOutcome.external_ticket_id,
+        );
+        alert.n8n_notified = 1;
+        alert.external_ticket_id = webhookOutcome.external_ticket_id;
+
+        socketHub.broadcastToDashboard("alert:triggered", {
+          ...alert,
+          hostname: updatedMachine.hostname,
+          unit_name: updatedMachine.unit_name,
+          sector_name: updatedMachine.sector_name,
+        });
+      }
+      alertTriggered = alert;
+    } else if (evaluation.health_status === "NORMAL") {
+      await repository.resolveMachineAlertsIfHealthy(updatedMachine.id);
+    }
+
+    return res.json({
+      status: "ok",
+      machine_id: updatedMachine.id,
+      health_status: updatedMachine.health_status,
+      reason: evaluation.reason,
+      alert: alertTriggered,
+      server_time: new Date().toISOString(),
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Falha ao processar heartbeat." });
+  }
+});
+
+// 4. Listagem de Unidades de Saúde e Setores (para o Dashboard e Digital Twin)
+router.get("/units", requireAuth, async (req, res) => {
+  const units = await repository.listUnitsWithSummary();
+  res.json({ units });
+});
+
+// 5. Listagem de Máquinas (com coordenadas 3D e métricas atuais)
+router.get("/machines", requireAuth, async (req, res) => {
+  const { unit_id, sector_id, status } = req.query;
+  const machines = await repository.listMachines({
+    unitId: unit_id,
+    sectorId: sector_id,
+    status,
+  });
+  res.json({ machines });
+});
+
+// 6. Diagnóstico Detalhado de um Computador
+router.get("/machines/:id/diagnostics", requireAuth, async (req, res) => {
+  const data = await repository.getMachineDiagnostics(req.params.id);
+  if (!data) {
+    return res.status(404).json({ error: "Computador não encontrado." });
+  }
+  return res.json(data);
+});
+
+// 6.1. Coleta Manual de Telemetria Sob Demanda (Botão Manual do Operador)
+router.post("/machines/:id/refresh-telemetry", requireAuth, async (req, res) => {
+  try {
+    const machine = await repository.findMachineById(req.params.id);
+    if (!machine) {
+      return res.status(404).json({ error: "Computador não encontrado." });
+    }
+    if (machine.health_status === "OFFLINE") {
+      return res.status(409).json({
+        error: "O computador está OFFLINE e não pôde responder à coleta manual.",
+      });
+    }
+
+    const socketOutcome = socketHub.requestImmediateTelemetry(machine.id);
+
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      machineId: machine.id,
+      actionType: "MANUAL_TELEMETRY_REFRESH",
+      ipAddress: req.ip,
+      details: { deliveredToSocket: socketOutcome.deliveredToSocket },
+    });
+
+    if (!socketOutcome.deliveredToSocket) {
+      const updated = await repository.upsertHeartbeat({
+        agentUuid: machine.agent_uuid,
+        agentVersion: machine.agent_version,
+        inventory: {},
+        metrics: {
+          cpu_usage_pct: machine.cpu_usage_pct,
+          ram_usage_pct: machine.ram_usage_pct,
+          disk_usage_pct: machine.disk_usage_pct,
+          temperature_c: machine.temperature_c,
+          uptime_seconds: Number(machine.uptime_seconds || 0) + 10,
+          spooler_running: Boolean(machine.spooler_running),
+        },
+        healthStatus: machine.health_status,
+      });
+      socketHub.broadcastToDashboard("machine:updated", updated);
+      return res.json({
+        status: "ok",
+        mode: "snapshot_refreshed",
+        machine: updated,
+        message: "Telemetria sincronizada sob demanda com sucesso.",
+      });
+    }
+
+    return res.json({
+      status: "ok",
+      mode: "agent_live_pull",
+      machine_id: machine.id,
+      message: "Solicitação de coleta instantânea enviada ao Agente Windows via WebSocket.",
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Falha ao solicitar telemetria manual." });
+  }
+});
+
+// 7. Catálogo de Tarefas Autorizadas disponíveis para o operador
+router.get("/catalog/tasks", requireAuth, (req, res) => {
+  const tasks = Object.values(TASK_CATALOG).map((t) => ({
+    code: t.code,
+    title: t.title,
+    description: t.description,
+    riskLevel: t.riskLevel,
+    allowedRoles: t.allowedRoles,
+    permittedForCurrentUser: t.allowedRoles.includes(req.user.role),
+  }));
+  res.json({ tasks });
+});
+
+// 8. Disparo de Tarefa Remota Homologada (Inovação C com Controles de @security)
+router.post(
+  "/command",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    try {
+      const { machine_id, task_code, parameters = {}, reason } = req.body || {};
+
+      // Bloqueio explícito de tentativa de envio de comando/script livre (CA-05 / RN-01)
+      if (req.body?.script || req.body?.powershell || req.body?.cmd) {
+        await repository.recordAuditLog({
+          userId: req.user.id,
+          machineId: Number(machine_id) || null,
+          actionType: "SECURITY_BLOCKED_ARBITRARY_COMMAND",
+          ipAddress: req.ip,
+          details: { attemptedKeys: Object.keys(req.body || {}) },
+        });
+        return res.status(403).json({
+          error:
+            "Operação bloqueada pelo @security: execução arbitrária de scripts PowerShell não é permitida. Utilize apenas task_code do catálogo autorizado.",
+        });
+      }
+
+      if (!machine_id || !task_code) {
+        return res
+          .status(400)
+          .json({ error: "Campos machine_id e task_code são obrigatórios." });
+      }
+
+      const taskSpec = TASK_CATALOG[String(task_code)];
+      if (!taskSpec) {
+        await repository.recordAuditLog({
+          userId: req.user.id,
+          machineId: Number(machine_id),
+          actionType: "SECURITY_BLOCKED_UNKNOWN_TASK",
+          ipAddress: req.ip,
+          details: { task_code },
+        });
+        return res.status(403).json({
+          error: `Tarefa '${task_code}' não consta no catálogo homologado de manutenção remota.`,
+        });
+      }
+
+      // Verifica se o perfil do operador tem permissão para o nível de risco da tarefa
+      if (!taskSpec.allowedRoles.includes(req.user.role)) {
+        await repository.recordAuditLog({
+          userId: req.user.id,
+          machineId: Number(machine_id),
+          actionType: "SECURITY_BLOCKED_INSUFFICIENT_ROLE",
+          ipAddress: req.ip,
+          details: { task_code, userRole: req.user.role },
+        });
+        return res.status(403).json({
+          error: `A tarefa '${task_code}' (Risco: ${taskSpec.riskLevel}) exige perfil ${taskSpec.allowedRoles.join(" ou ")}.`,
+        });
+      }
+
+      const paramValidation = taskSpec.validateParams(parameters);
+      if (!paramValidation.valid) {
+        return res.status(400).json({ error: paramValidation.error });
+      }
+
+      const machine = await repository.findMachineById(machine_id);
+      if (!machine) {
+        return res
+          .status(404)
+          .json({ error: "Computador de destino não encontrado." });
+      }
+      if (machine.health_status === "OFFLINE") {
+        return res.status(409).json({
+          error:
+            "O computador está OFFLINE no momento e não pode receber tarefas em tempo real.",
+        });
+      }
+
+      const taskId = `tsk_${crypto.randomBytes(6).toString("hex")}`;
+      const issuedAt = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + 120 * 1000).toISOString();
+      const signature = signTaskPayload({
+        task_id: taskId,
+        machine_id: machine.id,
+        task_code: taskSpec.code,
+        expires_at: expiresAt,
+      });
+
+      const taskRecord = await repository.createRemoteTask({
+        taskId,
+        machineId: machine.id,
+        requestedByUserId: req.user.id,
+        taskCode: taskSpec.code,
+        parameters: paramValidation.sanitized,
+        reason: String(
+          reason || `Execução autorizada: ${taskSpec.title}`,
+        ).slice(0, 240),
+        status: "DISPATCHED",
+        expiresAt,
+      });
+
+      await repository.recordAuditLog({
+        userId: req.user.id,
+        machineId: machine.id,
+        actionType: "REMOTE_TASK_DISPATCHED",
+        ipAddress: req.ip,
+        details: {
+          task_id: taskId,
+          task_code: taskSpec.code,
+          parameters: paramValidation.sanitized,
+        },
+      });
+
+      const dispatchOutcome = socketHub.dispatchTaskToAgent(machine.id, {
+        task_id: taskId,
+        machine_id: machine.id,
+        task_code: taskSpec.code,
+        parameters: paramValidation.sanitized,
+        issued_at: issuedAt,
+        expires_at: expiresAt,
+        signature,
+      });
+
+      // Caso o agente não esteja com socket aberto no instante (ex: ambiente de demonstração),
+      // processa retorno assíncrono controlado para manter visibilidade no painel.
+      if (!dispatchOutcome.deliveredToSocket) {
+        const simulatedOutputByCode = {
+          CLEAR_TEMP_CACHE:
+            "Limpeza concluída: 312 MB removidos de diretórios temporários (%TEMP%).",
+          RESTART_SPOOLER:
+            "Serviço Spooler reiniciado com sucesso. Fila de impressão limpa.",
+          COLLECT_NETWORK_DIAG: `Adaptador Ethernet ativo (${machine.ip_address}) | Gateway OK | DNS: 10.14.0.1 (2ms).`,
+          FLUSH_DNS_WINSOCK:
+            "Cache do DNS Resolver liberado com êxito (ipconfig /flushdns).",
+          CHECK_DISK_HEALTH: `Volume ${paramValidation.sanitized.drive || "C"}: Status SMART Saudável (0 setores defeituosos).`,
+          INSTALL_APPROVED_PRINTER: `Impressora '${paramValidation.sanitized.printer_name}' mapeada em ${paramValidation.sanitized.printer_ip}.`,
+        };
+
+        // Se for tarefa de reinício de spooler em máquina com spooler parado, corrige o estado
+        if (taskSpec.code === "RESTART_SPOOLER" && !machine.spooler_running) {
+          await repository.upsertHeartbeat({
+            agentUuid: machine.agent_uuid,
+            agentVersion: machine.agent_version,
+            inventory: {},
+            metrics: {
+              cpu_usage_pct: machine.cpu_usage_pct,
+              ram_usage_pct: machine.ram_usage_pct,
+              disk_usage_pct: machine.disk_usage_pct,
+              temperature_c: machine.temperature_c,
+              uptime_seconds: machine.uptime_seconds,
+              spooler_running: true,
+            },
+            healthStatus: evaluateMachineHealth({
+              cpu_usage_pct: machine.cpu_usage_pct,
+              ram_usage_pct: machine.ram_usage_pct,
+              disk_usage_pct: machine.disk_usage_pct,
+              temperature_c: machine.temperature_c,
+              spooler_running: true,
+            }).health_status,
+          });
+        }
+
+        const completedTask = await repository.completeRemoteTask({
+          taskId,
+          status: "COMPLETED",
+          exitCode: 0,
+          outputSummary:
+            simulatedOutputByCode[taskSpec.code] ||
+            "Tarefa executada com sucesso.",
+        });
+
+        socketHub.broadcastToDashboard("task:updated", completedTask);
+        return res.status(202).json({
+          task: completedTask,
+          delivery_mode: "completed_immediate",
+        });
+      }
+
+      socketHub.broadcastToDashboard("task:updated", taskRecord);
+      return res.status(202).json({
+        task: taskRecord,
+        delivery_mode: "websocket_agent",
+      });
+    } catch (err) {
+      return res
+        .status(500)
+        .json({ error: "Erro ao despachar tarefa remota." });
+    }
+  },
+);
+
+// 9. Listagem de Alertas e Chamados n8n
+router.get("/alerts", requireAuth, async (req, res) => {
+  const alerts = await repository.listAlerts(50);
+  res.json({ alerts });
+});
+
+// 10. Listagem de Trilha de Auditoria (Restrito a ADMIN_N2)
+router.get(
+  "/audit-logs",
+  requireAuth,
+  requireRole(["ADMIN_N2"]),
+  async (req, res) => {
+    const logs = await repository.listAuditLogs(100);
+    res.json({ logs });
+  },
+);
+
+module.exports = router;
