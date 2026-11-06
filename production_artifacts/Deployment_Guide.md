@@ -88,3 +88,18 @@ npm start
 - **Sonda de Disponibilidade (Liveness/Readiness):** `GET /api/health` retorna o estado da API, modo do banco (`mysql` / `memory`) e timestamp UTC.
 - **Trilha de Auditoria de Segurança:** `GET /api/audit-logs` (restrito a `ADMIN_N2`) lista logins, falhas de autenticação, despachos de tarefas remotas e tentativas bloqueadas.
 
+---
+
+## 5. Atualização do Container Frontend — Ciclo #03 (`@devops`)
+
+Para publicar a evolução do **Digital Twin 3D Arquitetônico & HUD Holográfico v3.0** na VPS (`31.97.86.253:8095`) após autorização no Gate Final:
+
+```bash
+git add .
+git commit -m "feat(frontend): evolve 3D architectural digital twin, clinical furniture, fiber mesh and holographic HUD"
+git push origin main
+
+# Na VPS (root@srv912524):
+cd /opt/ipojuca-rmm && git pull origin main && docker compose up -d --build frontend
+```
+

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import styled, { ThemeProvider, keyframes } from 'styled-components';
 import { theme, STATUS_LABELS } from './styles/theme';
 import { GlobalStyles } from './styles/GlobalStyles';
@@ -19,15 +19,16 @@ const HudOverlay = styled.div`
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 14px 18px;
 `;
 
 const TopCommandDeck = styled.header`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
   pointer-events: none;
+  flex-wrap: wrap;
 `;
 
 const MastheadPod = styled.div`
@@ -37,14 +38,14 @@ const MastheadPod = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
   border-left: 3px solid ${({ theme }) => theme.colors.brandPrimary};
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
-  padding: 10px 16px;
+  padding: 9px 15px;
   display: flex;
   align-items: center;
   gap: 14px;
 
   .sys-tag {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.64rem;
+    font-size: 0.62rem;
     letter-spacing: 0.14em;
     color: ${({ theme }) => theme.colors.brandPrimary};
     display: flex;
@@ -53,7 +54,7 @@ const MastheadPod = styled.div`
   }
 
   .brand-title {
-    font-size: 0.98rem;
+    font-size: 0.94rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -86,7 +87,7 @@ const UnitSwitchBtn = styled.button`
   border: 1px solid
     ${({ $active }) =>
       $active ? '#D4FF33' : 'rgba(244, 244, 240, 0.1)'};
-  padding: 7px 13px;
+  padding: 6px 12px;
   cursor: pointer;
   text-align: left;
   transition: all 0.15s ease;
@@ -94,15 +95,15 @@ const UnitSwitchBtn = styled.button`
 
   .u-code {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.6rem;
+    font-size: 0.58rem;
     font-weight: 700;
     letter-spacing: 0.1em;
-    opacity: 0.8;
+    opacity: 0.82;
     display: block;
   }
 
   .u-name {
-    font-size: 0.76rem;
+    font-size: 0.74rem;
     font-weight: 700;
     display: block;
     margin-top: 1px;
@@ -113,7 +114,7 @@ const RightControlPod = styled.div`
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: ${({ theme }) => theme.colors.bgSurface};
   backdrop-filter: blur(20px);
   border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
@@ -121,9 +122,9 @@ const RightControlPod = styled.div`
 `;
 
 const CamModeBtn = styled.button`
-  padding: 6px 10px;
+  padding: 6px 9px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   cursor: pointer;
@@ -132,15 +133,20 @@ const CamModeBtn = styled.button`
   border: 1px solid
     ${({ $active }) =>
       $active ? '#D4FF33' : 'rgba(244, 244, 240, 0.16)'};
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: #d4ff33;
+  }
 `;
 
 const RoleSelect = styled.select`
   background: #0b0c10;
   color: #d4ff33;
   border: 1px solid rgba(212, 255, 51, 0.45);
-  padding: 6px 10px;
+  padding: 6px 9px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.66rem;
+  font-size: 0.63rem;
   font-weight: 600;
   cursor: pointer;
 `;
@@ -150,18 +156,20 @@ const MiddleWorkspace = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-top: 14px;
-  margin-bottom: 14px;
+  margin-top: 12px;
+  margin-bottom: 12px;
   pointer-events: none;
   overflow: hidden;
 `;
 
 const LeftRadarColumn = styled.div`
-  width: 285px;
+  width: 295px;
+  max-height: calc(100vh - 140px);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
   pointer-events: auto;
+  overflow-y: auto;
 
   @media (max-width: 960px) {
     display: none;
@@ -172,16 +180,16 @@ const RadarCard = styled.div`
   background: ${({ theme }) => theme.colors.bgSurface};
   backdrop-filter: blur(20px);
   border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding: 12px 14px;
+  padding: 11px 13px;
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
 
   .card-tag {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.6rem;
+    font-size: 0.59rem;
     letter-spacing: 0.12em;
     color: ${({ theme }) => theme.colors.textSecondary};
     text-transform: uppercase;
-    margin-bottom: 8px;
+    margin-bottom: 7px;
     display: flex;
     justify-content: space-between;
   }
@@ -197,30 +205,80 @@ const KpiCell = styled.div`
   background: rgba(5, 5, 7, 0.7);
   border: 1px solid rgba(244, 244, 240, 0.08);
   border-left: 2px solid ${({ $color }) => $color};
-  padding: 6px 8px;
+  padding: 5px 8px;
 
   .num {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 1.05rem;
+    font-size: 1.02rem;
     font-weight: 700;
     color: ${({ $color }) => $color};
   }
   .lbl {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.58rem;
+    font-size: 0.56rem;
     letter-spacing: 0.08em;
     color: ${({ theme }) => theme.colors.textSecondary};
   }
 `;
 
+const LayerToggleGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
+`;
+
+const LayerChip = styled.button`
+  padding: 5px 7px;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: left;
+  cursor: pointer;
+  background: ${({ $on }) =>
+    $on ? 'rgba(0, 229, 255, 0.12)' : 'rgba(10, 12, 18, 0.75)'};
+  color: ${({ $on }) => ($on ? '#00E5FF' : '#7E8494')};
+  border: 1px solid
+    ${({ $on }) => ($on ? 'rgba(0, 229, 255, 0.5)' : 'rgba(244, 244, 240, 0.08)')};
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.14s ease;
+
+  &:hover {
+    border-color: #00e5ff;
+  }
+`;
+
+const SectorMiniRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 7px;
+  background: rgba(5, 6, 9, 0.65);
+  border-left: 2px solid ${({ $accent }) => $accent};
+  margin-bottom: 4px;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.61rem;
+
+  .s-name {
+    color: #f4f4f0;
+    font-weight: 600;
+  }
+  .s-meta {
+    color: #8a90a2;
+    font-size: 0.56rem;
+  }
+`;
+
 const IncidentItem = styled.div`
-  padding: 8px 9px;
+  padding: 7px 9px;
   background: rgba(255, 42, 84, 0.08);
   border: 1px solid rgba(255, 42, 84, 0.35);
-  margin-top: 6px;
+  margin-top: 5px;
   cursor: pointer;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   transition: background 0.15s ease;
 
   &:hover {
@@ -235,14 +293,14 @@ const IncidentItem = styled.div`
   }
   .msg {
     color: #f4f4f0;
-    margin-top: 3px;
+    margin-top: 2px;
     line-height: 1.35;
   }
 `;
 
 const BottomMatrixDock = styled.footer`
   pointer-events: auto;
-  background: rgba(8, 9, 13, 0.86);
+  background: rgba(8, 9, 13, 0.88);
   backdrop-filter: blur(22px);
   border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
   padding: 8px 12px;
@@ -252,29 +310,51 @@ const BottomMatrixDock = styled.footer`
   overflow-x: auto;
 `;
 
-const DockLabel = styled.div`
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.62rem;
-  letter-spacing: 0.12em;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  white-space: nowrap;
-  padding-right: 8px;
+const DockControlsBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 10px;
   border-right: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  min-width: 195px;
+
+  .dock-title {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    color: ${({ theme }) => theme.colors.brandPrimary};
+    white-space: nowrap;
+  }
+
+  .dock-search {
+    background: rgba(5, 6, 10, 0.9);
+    border: 1px solid rgba(244, 244, 240, 0.16);
+    color: #f4f4f0;
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.62rem;
+    padding: 4px 7px;
+    outline: none;
+
+    &:focus {
+      border-color: #d4ff33;
+    }
+  }
 `;
 
 const NodeKeycap = styled.button`
-  min-width: 162px;
+  min-width: 175px;
   padding: 7px 10px;
   background: ${({ $selected }) =>
-    $selected ? 'rgba(212, 255, 51, 0.16)' : 'rgba(17, 19, 26, 0.92)'};
+    $selected ? 'rgba(212, 255, 51, 0.16)' : 'rgba(16, 19, 27, 0.94)'};
   border: 1px solid
-    ${({ $selected, $color }) =>
+    ${({ $selected }) =>
       $selected ? '#D4FF33' : 'rgba(244, 244, 240, 0.12)'};
   border-top: 2px solid ${({ $color }) => $color};
   color: #f4f4f0;
   text-align: left;
   cursor: pointer;
   transition: all 0.15s ease;
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
 
   &:hover {
     border-color: #d4ff33;
@@ -285,18 +365,36 @@ const NodeKeycap = styled.button`
     display: flex;
     justify-content: space-between;
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.58rem;
+    font-size: 0.56rem;
     color: ${({ theme }) => theme.colors.textSecondary};
   }
   .n-host {
     font-size: 0.78rem;
     font-weight: 700;
     margin: 2px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
   .n-metrics {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.62rem;
+    font-size: 0.6rem;
     color: ${({ $color }) => $color};
+    margin-bottom: 4px;
+  }
+  .n-bars {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  .bar-track {
+    height: 3px;
+    background: rgba(244, 244, 240, 0.1);
+    overflow: hidden;
+    i {
+      display: block;
+      height: 100%;
+    }
   }
 `;
 
@@ -318,6 +416,17 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [socketConnected, setSocketConnected] = useState(false);
   const [cameraMode, setCameraMode] = useState('ISO');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sceneLayers, setSceneLayers] = useState({
+    furniture: true,
+    network: true,
+    labels: true,
+    volumetric: true,
+  });
+
+  const toggleLayer = (key) => {
+    setSceneLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const loadAllData = useCallback(async (token, unitId, machineId) => {
     const [unitsRes, machinesRes, catalogRes, alertsRes] = await Promise.all([
@@ -404,6 +513,17 @@ export default function App() {
   const selectedMachine =
     machines.find((m) => m.id === Number(selectedMachineId)) || machines[0];
 
+  const filteredMachines = useMemo(() => {
+    if (!searchQuery.trim()) return machines;
+    const q = searchQuery.toLowerCase();
+    return machines.filter(
+      (m) =>
+        String(m.hostname || '').toLowerCase().includes(q) ||
+        String(m.ip_address || '').toLowerCase().includes(q) ||
+        String(m.sector_name || '').toLowerCase().includes(q)
+    );
+  }, [machines, searchQuery]);
+
   const totalSummary = units.reduce(
     (acc, u) => ({
       total: acc.total + (u.summary?.total || 0),
@@ -439,6 +559,7 @@ export default function App() {
         machines={machines}
         selectedMachine={selectedMachine}
         cameraMode={cameraMode}
+        sceneLayers={sceneLayers}
         onUserOrbit={() => {
           if (cameraMode !== 'FREE') setCameraMode('FREE');
         }}
@@ -456,7 +577,7 @@ export default function App() {
               <div className="sys-tag">
                 <LiveBeacon $online={socketConnected} />
                 <span>
-                  IPOJUCA.SPATIAL.OS // 08°23&apos;56&quot;S 35°03&apos;50&quot;W
+                  IPOJUCA.SPATIAL.OS v3.0 // 08°23&apos;56&quot;S 35°03&apos;50&quot;W
                 </span>
               </div>
               <div className="brand-title">
@@ -503,6 +624,15 @@ export default function App() {
             >
               FOCO ESTAÇÃO
             </CamModeBtn>
+            <CamModeBtn
+              $active={cameraMode === 'ORBIT'}
+              onClick={() =>
+                setCameraMode((prev) => (prev === 'ORBIT' ? 'ISO' : 'ORBIT'))
+              }
+              title="Giro orbital cinematográfico automático ao redor da Unidade de Saúde"
+            >
+              ORBITAL 360°
+            </CamModeBtn>
 
             <CamModeBtn
               as="a"
@@ -516,7 +646,7 @@ export default function App() {
               }}
               title="Baixar o instalador executável (.exe) para instalar o Agente Windows em segundo plano em qualquer PC"
             >
-              ⬇ BAIXAR AGENTE (.EXE)
+              ⬇ AGENTE (.EXE)
             </CamModeBtn>
 
             <RoleSelect
@@ -561,9 +691,84 @@ export default function App() {
 
             <RadarCard>
               <div className="card-tag">
+                <span>CAMADAS HOLOGRÁFICAS 3D</span>
+                <span style={{ color: '#00E5FF' }}>BIO-CAD</span>
+              </div>
+              <LayerToggleGrid>
+                <LayerChip
+                  $on={sceneLayers.furniture}
+                  onClick={() => toggleLayer('furniture')}
+                >
+                  <span>MOBILIÁRIO</span>
+                  <span>{sceneLayers.furniture ? 'ON' : 'OFF'}</span>
+                </LayerChip>
+                <LayerChip
+                  $on={sceneLayers.network}
+                  onClick={() => toggleLayer('network')}
+                >
+                  <span>FIBRA GPON</span>
+                  <span>{sceneLayers.network ? 'ON' : 'OFF'}</span>
+                </LayerChip>
+                <LayerChip
+                  $on={sceneLayers.labels}
+                  onClick={() => toggleLayer('labels')}
+                >
+                  <span>HUD 3D</span>
+                  <span>{sceneLayers.labels ? 'ON' : 'OFF'}</span>
+                </LayerChip>
+                <LayerChip
+                  $on={sceneLayers.volumetric}
+                  onClick={() => toggleLayer('volumetric')}
+                >
+                  <span>LUZ VOLUM.</span>
+                  <span>{sceneLayers.volumetric ? 'ON' : 'OFF'}</span>
+                </LayerChip>
+              </LayerToggleGrid>
+            </RadarCard>
+
+            <RadarCard>
+              <div className="card-tag">
+                <span>PLANTA ARQUITETÔNICA</span>
+                <span>{(activeUnit?.sectors || []).length} SETORES</span>
+              </div>
+              {(activeUnit?.sectors || []).map((sec) => {
+                const secNodes = machines.filter(
+                  (m) => Number(m.sector_id) === Number(sec.id)
+                );
+                const hasCrit = secNodes.some((m) => m.health_status === 'CRITICAL');
+                const accent = hasCrit
+                  ? theme.colors.status.CRITICAL
+                  : secNodes.length > 0
+                    ? theme.colors.status.NORMAL
+                    : '#3a4256';
+                return (
+                  <SectorMiniRow key={sec.id} $accent={accent}>
+                    <div>
+                      <div className="s-name">{sec.name}</div>
+                      <div className="s-meta">[{sec.code}]</div>
+                    </div>
+                    <span className="s-meta">{secNodes.length} PC(S)</span>
+                  </SectorMiniRow>
+                );
+              })}
+            </RadarCard>
+
+            <RadarCard>
+              <div className="card-tag">
                 <span>DESPACHOS AUTÔNOMOS N8N</span>
                 <span style={{ color: '#D4FF33' }}>WHATSAPP LIVE</span>
               </div>
+              {alerts.length === 0 && (
+                <div
+                  style={{
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: '0.6rem',
+                    color: '#7E8494',
+                  }}
+                >
+                  NENHUM INCIDENTE ATIVO NA REDE.
+                </div>
+              )}
               {alerts.slice(0, 3).map((a) => (
                 <IncidentItem
                   key={a.id}
@@ -598,25 +803,55 @@ export default function App() {
         </MiddleWorkspace>
 
         <BottomMatrixDock>
-          <DockLabel>
-            DOCK DE ESTAÇÕES REAIS // {activeUnit?.code || 'UNIDADE'}
-          </DockLabel>
-          {machines.length === 0 && (
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', color: '#8A90A2', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span>[NENHUMA MÁQUINA REGISTRADA NESTA UNIDADE — INSTALE O AGENTE (.EXE) NO PC]</span>
+          <DockControlsBlock>
+            <span className="dock-title">
+              DOCK // {activeUnit?.code || 'UNIDADE'} ({filteredMachines.length})
+            </span>
+            <input
+              className="dock-search"
+              type="text"
+              placeholder="Filtrar Hostname, IP ou Setor..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </DockControlsBlock>
+
+          {filteredMachines.length === 0 && (
+            <div
+              style={{
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: '0.68rem',
+                color: '#8A90A2',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+              }}
+            >
+              <span>
+                [NENHUMA MÁQUINA REGISTRADA NESTA UNIDADE — INSTALE O AGENTE (.EXE) NO PC]
+              </span>
               <a
                 href="/IpojucaRMM-Setup.exe"
                 download="IpojucaRMM-Setup.exe"
-                style={{ color: '#10B981', textDecoration: 'underline', fontWeight: 600 }}
+                style={{
+                  color: '#10B981',
+                  textDecoration: 'underline',
+                  fontWeight: 600,
+                }}
               >
                 ⬇ Baixar IpojucaRMM-Setup.exe
               </a>
             </div>
           )}
-          {machines.map((m, idx) => {
+
+          {filteredMachines.map((m, idx) => {
             const stColor =
               theme.colors.status[m.health_status] || theme.colors.status.NORMAL;
             const isSel = selectedMachine?.id === m.id;
+            const cpu = Math.min(100, Math.max(0, Number(m.cpu_usage_pct || 0)));
+            const ram = Math.min(100, Math.max(0, Number(m.ram_usage_pct || 0)));
+            const dsk = Math.min(100, Math.max(0, Number(m.disk_usage_pct || 0)));
+
             return (
               <NodeKeycap
                 key={m.id}
@@ -628,13 +863,36 @@ export default function App() {
                 }}
               >
                 <div className="n-top">
-                  <span>[0{idx + 1}] {m.sector_code}</span>
+                  <span>
+                    [0{idx + 1}] {m.sector_code}
+                  </span>
                   <span>{STATUS_LABELS[m.health_status]}</span>
                 </div>
-                <div className="n-host">{m.hostname}</div>
+                <div className="n-host">
+                  <span>{m.hostname}</span>
+                  <span
+                    style={{
+                      fontSize: '0.56rem',
+                      fontFamily: "'IBM Plex Mono', monospace",
+                      color: m.spooler_running ? '#00F5A0' : '#FF2A54',
+                    }}
+                  >
+                    {m.spooler_running ? 'PRN:OK' : 'PRN:ERR'}
+                  </span>
+                </div>
                 <div className="n-metrics">
-                  CPU {Number(m.cpu_usage_pct).toFixed(0)}% • HD{' '}
-                  {Number(m.disk_usage_pct).toFixed(0)}% • {m.ip_address}
+                  CPU {cpu.toFixed(0)}% • RAM {ram.toFixed(0)}% • {m.ip_address}
+                </div>
+                <div className="n-bars">
+                  <div className="bar-track" title={`CPU: ${cpu.toFixed(0)}%`}>
+                    <i style={{ width: `${cpu}%`, background: '#00F5A0' }} />
+                  </div>
+                  <div className="bar-track" title={`RAM: ${ram.toFixed(0)}%`}>
+                    <i style={{ width: `${ram}%`, background: '#00E5FF' }} />
+                  </div>
+                  <div className="bar-track" title={`Disco: ${dsk.toFixed(0)}%`}>
+                    <i style={{ width: `${dsk}%`, background: stColor }} />
+                  </div>
                 </div>
               </NodeKeycap>
             );

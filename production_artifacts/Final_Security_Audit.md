@@ -41,3 +41,10 @@ Foi realizada auditoria estática e dinâmica sobre o código-fonte implementado
 - **Vulnerabilidades Críticas ou Altas Pendentes:** **0 (Zero)**.
 - O sistema está liberado para a Fase 11 (Preparação de Infraestrutura e Guia de Implantação).
 
+---
+
+## 5. Adendo de Auditoria — Ciclo #03 (`@security`)
+
+1. **Minimização de Dados e LGPD no Ambiente 3D:** As camadas de mobiliário clínico, malha de fibra óptica e osciloscópio consomem exclusivamente metadados técnicos e coordenadas espaciais das estações e setores, sem exposição de dados pessoais ou clínicos.
+2. **Integridade de Controles RBAC:** A evolução do HUD e da lâmina tática preservou integralmente o bloqueio de tarefas remotas conforme o perfil do operador autenticado (`VIEWER`, `TECH_N1`, `ADMIN_N2`).
+

@@ -242,3 +242,17 @@ Para respeitar o padrão oficial do `startcycle.md` e manter compatibilidade com
 - **Risco de Sobrecarga no Banco por Telemetria:** Mitigado pela separação física entre a tabela `machines` (1 linha por computador com o estado atual e coordenadas 3D para leitura instantânea) e `telemetry_history` (inserção indexada por `machine_id, recorded_at` com expurgo automático após 30 dias).
 - **Risco de Perda de Performance 3D em PCs Modestos:** Mitigado pelo uso de geometrias low-poly instanciadas/declarativas no React Three Fiber e renderização condicional por Unidade selecionada.
 
+---
+
+## 7. Evolução Arquitetural — Ciclo #03 (Digital Twin 3D Arquitetônico & HUD Holográfico)
+
+1. **Subsistema Espacial 3D (`frontend/src/components/DigitalTwin3D.jsx`):**
+   - **Corredor Central & Rack Core (`CentralSpineAndNetworkCore`):** Renderiza a espinha dorsal arquitetônica da Unidade de Saúde conectando os setores (`SectorRoom3D`), com iluminação guia hospitalar e um Bastidor de Telecomunicações Central (`Core Switch Rack`) posicionado no centro operacional `(0, 0, 0)`.
+   - **Malha de Fibra Óptica 3D (`FiberOpticConduit`):** Para cada máquina real registrada em `machines`, calcula o trajeto ortogonal (estilo trilha de placa de circuito / eletrocalha técnica) entre o `Core Switch Rack` `(0, 0.04, 0)` e a coordenada `(pos_x, 0.04, pos_z)` da estação, com pulsos luminosos animados via `useFrame` na cor semântica do estado da máquina.
+   - **Mobiliário Contextual por Setor (`SectorClinicalFurniture`):** Inferência determinística baseada no `code`/`name` do setor (`REC`/`TRIAGEM` → balcão de atendimento + totem + longarinas; `CONS`/`ENF`/`MED` → maca clínica + armário vitrine + biombo; `FARM`/`VAC` → câmara fria com display térmico + estantes modulares; `ADM`/`TI` → rack auxiliar e bancada).
+   - **Estação de Trabalho de Alta Precisão (`ComputerAvatar3D`):** Bancada chanfrada, cadeira ergonômica 5 pontas, gabinete com janela lateral acrílica, monitores duplos curvos/angulados, periféricos iluminados, **impressora física de prontuário** com LED de estado sincronizado ao atributo `machine.spooler_running`, anéis holográficos de telemetria no piso e feixe volumétrico vertical para anomalias.
+2. **Subsistema HUD Holográfico (`frontend/src/App.jsx` & `DiagnosticDrawer.jsx`):**
+   - Estado `sceneLayers` (`{ furniture: true, network: true, labels: true, volumetric: true }`) controlado em tempo real na barra superior/inferior sem desmontar o contexto WebGL.
+   - Modo de câmera adicional `ORBIT` (rotação orbital suave automática ao redor do complexo hospitalar) somado a `ISO`, `TOP` e `FOCUS`.
+   - Filtro rápido de busca textual e seletor de status no Dock inferior + gráfico SVG Sparkline e telemetria expandida na lâmina [`DiagnosticDrawer`](file:///c:/Users/Usuario/Desktop/VSCODE/SMS/ipojuca-rmm/frontend/src/components/DiagnosticDrawer.jsx).
+

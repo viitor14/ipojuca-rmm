@@ -113,9 +113,42 @@ Prover à equipe de TI da Saúde de Ipojuca visibilidade em tempo real, diagnós
 
 ---
 
-## 7. Gate de Aprovação — FASE 1
+## 7. Ciclo #03 — Especificação de Evolução do Digital Twin 3D & HUD Holográfico (`@pm` + `@designer`)
+
+### 7.1. Escopo Aprovado pelo Usuário para o Ciclo #03
+Elevar o nível de realismo arquitetônico 3D e a sofisticação do HUD Tático no painel RMM Ipojuca, preservando 100% da stack aprovada (`React`, `Styled Components`, `Three.js`, `@react-three/fiber`, `@react-three/drei`) e a integração real com a VPS:
+
+1. **Arquitetura 3D Conectada & Corredores da Unidade (`RF-16`):**
+   - Substituir as "ilhas isoladas" de setores por uma **planta arquitetônica integrada** com corredor central iluminado, faixas guia de piso hospitalar/técnico, portas/vãos de acesso com pórticos translúcidos, rodapés iluminados por estado do setor e sinalização suspensa (totens holográficos por setor).
+   - Conduíte/Trilha de Fibra Óptica 3D no piso conectando o Rack Central de Telecomunicações (Switch Core da Unidade) a cada estação de trabalho ativa, com pulsos luminosos refletindo o tráfego/estado da máquina (`NORMAL`, `WARNING`, `CRITICAL`, `OFFLINE`).
+2. **Mobiliário Médico/TI Detalhado & Estações de Trabalho Realistas (`RF-17`):**
+   - **Estação de Trabalho Completa:** Mesa técnica chanfrada com passa-cabos, cadeira ergonômica detalhada (base estrela 5 pontas, pistão, assento, encosto e braços), gabinete workstation com janela lateral acrílica e LED de telemetria, monitores duplos com borda fina + suporte articulado, teclado luminoso, mouse + mousepad e impressora térmica/laser de prontuário na bancada (refletindo visualmente o status do `spooler_running`).
+   - **Ambientação por Setor de Saúde:**
+     - *Recepção / Triagem:* Balcão de atendimento chanfrado, totem de senha e cadeiras de espera.
+     - *Consultório Médico / Enfermagem:* Maca clínica de exame com cabeceira, armário vitrine de insumos e biombo técnico.
+     - *Farmácia / Vacina:* Estantes modulares de medicamentos e câmara fria de vacinas com display digital térmico.
+     - *Administração / TI:* Rack Server de piso com leds piscantes de switch/patch panel.
+3. **Iluminação Volumétrica, Atmosfera & Telemetria Holográfica 3D (`RF-18`):**
+   - Feixes de iluminação volumétrica suave (spotlights arquitetônicos + grade de coordenadas polar/cartesiana com anéis de radar no perímetro da unidade).
+   - **Anéis e Arcos Holográficos 3D no Piso e Acima da Estação:** Indicadores espaciais em tempo real exibindo carga de CPU/RAM e feixe de anomalia crítica com partículas/anéis pulsantes.
+   - **Modo Raio-X / Fibra (`X-RAY / TOPOLOGIA DE REDE`):** Filtro tático no HUD para destacar o cabeamento estruturado e os fluxos de dados entre o Switch Central da Unidade e os computadores.
+4. **HUD Holográfico & Telemetria Avançada (`RF-19`):**
+   - **Bússola / Mini-Radar Tático e Seletor de Camadas 3D:** Controle rápido na tela para alternar camadas visuais (`MOBILIÁRIO CLÍNICO`, `MALHA DE REDE / FIBRA`, `ETIQUETAS HOLOGRÁFICAS`) e modos de câmera (`ISO 3D`, `PLANTA CAD`, `FOCO ESTAÇÃO`, `ORBITAL AUTOMÁTICO`).
+   - **Gráfico de Pulso / Sparkline em Tempo Real e Telemetria Expandida** na lâmina direita (`DiagnosticDrawer`) e filtro rápido de busca/status no Dock inferior.
+
+### 7.2. Critérios de Aceitação do Ciclo #03 (`@pm`)
+
+| ID | Cenário | Dado que (Contexto) | Quando (Ação) | Então (Resultado Esperado) |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-07** | Renderização Arquitetônica e Mobiliário por Setor | O operador seleciona qualquer Unidade de Saúde no topo | O palco 3D carrega os setores da unidade | Os setores são exibidos conectados a uma circulação central com Rack de Rede, conduítes de fibra até as máquinas e mobiliário específico (maca em consultório, câmara fria/estantes na farmácia, balcão na recepção) mantendo taxa fluida de quadros. |
+| **CA-08** | Topologia de Rede 3D e Estado do Spooler | Uma máquina real está conectada no setor da unidade | O operador ativa a camada de rede ou inspeciona a estação em foco | Uma linha/feixe de fibra óptica conecta o Switch Central da unidade até a mesa da máquina na cor do seu status, e a impressora 3D sobre a mesa indica visualmente se o serviço de Spooler está ativo ou em falha. |
+| **CA-09** | Controles de Camadas Holográficas e Câmera | O operador utiliza a barra tática do HUD | Alterna entre `ISO 3D`, `CAD TOPO`, `FOCO`, `TOUR ORBITAL` ou ativa/desativa camadas (`MOBILIÁRIO`, `REDE`, `HUD 3D`) | A cena 3D responde instantaneamente sem recarregar a página e mantendo a seleção e telemetria ao vivo via Socket.io. |
+
+---
+
+## 8. Gate de Aprovação — FASE 1 (Ciclo #03)
 
 Conforme definido em `.agents/workflows/startcycle.md`:
 - O pipeline encontra-se **pausado no Gate de Aprovação da Fase 1**.
-- Responda **`Approved`** para aprovar esta especificação e autorizar o avanço para a **FASE 2 (Arquitetura e Orquestração — `@lead`)**, ou informe quaisquer alterações que deseje realizar.
+- Responda **`Approved`** para aprovar esta especificação e autorizar o avanço para a modelagem arquitetônica/visual e implementação do novo Digital Twin 3D & HUD Holográfico, ou informe quaisquer ajustes desejados.
 

@@ -51,3 +51,26 @@ Para romper completamente com o visual padronizado de dashboards gerados por IA 
    - Barra flutuante horizontal na base da tela onde cada computador da unidade é representado como um **módulo físico/keycap numerado** com anel de carga de CPU/Disco. Clicar em um módulo move a câmera 3D até a mesa correspondente.
 4. **Lâmina Tática Direita (`DiagnosticDrawer`):**
    - Painel chanfrado flutuante à direita com medidores circulares SVG de CPU, RAM, Disco e Temperatura, gráfico de pulso em tempo real, chapa de identificação de hardware (BIOS/MAC/Serial) e matriz de chaves de comando remoto homologado.
+
+---
+
+## 4. Evolução Visual & Arquitetura 3D — Ciclo #03 ("Architectural Bio-CAD & Holographic Telemetry")
+
+1. **Planta Conectada com Corredor Central e Eletrocalhas de Fibra Óptica:**
+   - O piso do Digital Twin recebe uma **passarela central técnica** integrando todos os setores da unidade, com marcações CAD de coordenadas, anéis concêntricos de radar no solo e um **Bastidor Central de Rede (Core Switch Rack)** com LEDs de atividade.
+   - Cada estação real conectada exibe um **conduíte luminoso de fibra óptica** traçado ortogonalmente pelo piso desde o Core Switch até a bancada da máquina, pulsando na cor do seu estado operacional (`#00F5A0`, `#FFB800`, `#FF2A54` ou `#525866`).
+2. **Detalhamento de Mobiliário Clínico e Estações de Trabalho:**
+   - **Setores com Identidade Clínica Realista:**
+     - *Recepção / Triagem:* Balcão de atendimento em L chanfrado, totem de retirada de senhas e longarinas de espera.
+     - *Consultórios / Enfermagem:* Maca clínica estofada com travesseiro e estrutura tubular, armário vitrine de medicamentos/insumos e biombo hospitalar.
+     - *Farmácia / Sala de Vacina:* Câmara fria vertical de imunobiológicos com visor digital (`+4.0°C`) e estantes modulares.
+     - *Administração / TI:* Rack de servidores com painéis de LEDs e bancada técnica.
+   - **Estação de Trabalho Completa:**
+     - Mesa técnica chanfrada + cadeira ergonômica em base estrela + gabinete torre com janela acrílica + monitores duplos em braço articulado + teclado iluminado + mouse + **impressora física de prontuário** com LED indicador do `spooler_running` (`#00F5A0` ativa / `#FF2A54` parada).
+3. **HUD Holográfico & Controle de Camadas (`Scene Layer Matrix`):**
+   - Controles táticos para ativar/desativar em tempo real:
+     - `CAMADA: MOBILIÁRIO` (exibe/oculta móveis clínicos para foco puro em TI)
+     - `CAMADA: FIBRA / REDE` (exibe/oculta a malha de cabeamento estruturado e pulsos de dados)
+     - `CAMADA: HOLOGRAMAS` (exibe/oculta os callouts flutuantes 3D)
+     - `CAMADA: LUZ VOLUMÉTRICA` (feixes atmosféricos sobre os setores e o rack central)
+   - Novo modo de câmera **`ORBITAL AUTO`** para apresentação contínua em monitores de NOC/Sala de Situação da TI de Ipojuca.

@@ -46,3 +46,14 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 
 - **Status:** **APROVADO PELO `@qa`**. Nenhuma falha crítica ou regressão pendente.
 
+---
+
+## 5. Validação do Ciclo #03 — Digital Twin 3D Arquitetônico & HUD Holográfico (`@qa`)
+
+| ID | Critério de Aceitação (Ciclo #03) | Verificação Executada | Status |
+| :--- | :--- | :--- | :--- |
+| **CA-07** | Renderização Arquitetônica Conectada e Mobiliário por Setor | Verificado `CentralArchitectureHub`, `SectorRoom3D` e `SectorClinicalFurniture` em [`DigitalTwin3D.jsx`](file:///c:/Users/Usuario/Desktop/VSCODE/SMS/ipojuca-rmm/frontend/src/components/DigitalTwin3D.jsx) (recepção com balcão/totem/longarinas, consultórios com maca/armário/biombo, farmácia com câmara fria +4°C e estantes). | **APROVADO** |
+| **CA-08** | Topologia de Rede 3D (Fibra GPON) e Estado da Impressora/Spooler | Verificado `FiberOpticConduit` (pulsos luminosos entre o Core Switch `(0,0,0)` e cada máquina) e impressora 3D com LED sincronizado a `machine.spooler_running`. | **APROVADO** |
+| **CA-09** | Controles de Camadas Holográficas, Giro Orbital 360° e Osciloscópio SVG | Verificado seletor `sceneLayers` (`MOBILIÁRIO`, `FIBRA GPON`, `HUD 3D`, `LUZ VOLUM.`), modo `ORBITAL 360°`, filtro no Dock em [`App.jsx`](file:///c:/Users/Usuario/Desktop/VSCODE/SMS/ipojuca-rmm/frontend/src/App.jsx) e `TelemetryOscilloscope` em [`DiagnosticDrawer.jsx`](file:///c:/Users/Usuario/Desktop/VSCODE/SMS/ipojuca-rmm/frontend/src/components/DiagnosticDrawer.jsx). | **APROVADO** |
+| **Regressão Backend** | Suíte `npm --prefix backend test` (`8/8` testes) | Todos os 8 testes de API, RBAC, Auto-Enrollment e Telemetria Sob Demanda passaram com `0` falhas (`1028 ms`). | **APROVADO** |
+
