@@ -85,9 +85,17 @@ class SocketHub {
         }
       });
 
-      socket.on('disconnect', () => {
+      socket.on('disconnect', async () => {
         if (this.connectedAgents.get(machineId) === socket) {
           this.connectedAgents.delete(machineId);
+          try {
+            const offlineMachine = await repository.markMachineOfflineById(machineId);
+            if (offlineMachine) {
+              this.broadcastToDashboard('machine:updated', offlineMachine);
+            }
+          } catch {
+            // Ignora falha em desconexão
+          }
         }
       });
     });

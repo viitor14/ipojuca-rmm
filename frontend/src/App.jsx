@@ -482,6 +482,12 @@ export default function App() {
                 ? { ...(prev || {}), machine: updatedMachine }
                 : prev
             );
+            rmmApi.getUnits(res.token).then((uRes) => setUnits(uRes.units || [])).catch(() => {});
+          },
+          onMachineDeleted: ({ id }) => {
+            setMachines((prev) => prev.filter((m) => m.id !== Number(id)));
+            setDiagnostics((prev) => (prev?.machine?.id === Number(id) ? null : prev));
+            rmmApi.getUnits(res.token).then((uRes) => setUnits(uRes.units || [])).catch(() => {});
           },
           onAlertTriggered: (newAlert) => {
             setAlerts((prev) => [newAlert, ...prev.slice(0, 19)]);
@@ -506,6 +512,10 @@ export default function App() {
   useEffect(() => {
     if (!auth.token) return;
     loadAllData(auth.token, selectedUnitId, selectedMachineId);
+    const syncTimer = setInterval(() => {
+      loadAllData(auth.token, selectedUnitId, selectedMachineId).catch(() => {});
+    }, 12000);
+    return () => clearInterval(syncTimer);
   }, [auth.token, selectedUnitId, selectedMachineId, loadAllData]);
 
   const activeUnit =
@@ -547,6 +557,12 @@ export default function App() {
       loadAllData(auth.token, selectedUnitId, machineId).catch(() => {});
     }, 350);
     return res;
+  }
+
+  async function handleDeleteMachine(machineId) {
+    await rmmApi.deleteMachine(auth.token, machineId);
+    setSelectedMachineId(null);
+    await loadAllData(auth.token, selectedUnitId, null);
   }
 
   return (
@@ -798,6 +814,7 @@ export default function App() {
             currentUser={auth.user || { name: 'Operador', role: 'ADMIN_N2' }}
             onDispatchTask={handleDispatchTask}
             onRefreshTelemetryNow={handleRefreshTelemetryNow}
+            onDeleteMachine={handleDeleteMachine}
             onFocusCamera={() => setCameraMode('FOCUS')}
           />
         </MiddleWorkspace>

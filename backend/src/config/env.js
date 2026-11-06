@@ -23,8 +23,9 @@ const env = {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'ipojuca_rmm',
   },
-  // Intervalo de tolerancia OFFLINE ajustado para ciclo de 4h (14400s + 600s margem = 15000s)
-  offlineThresholdSeconds: Number(process.env.OFFLINE_THRESHOLD_SECONDS || 15000),
+  // Limiar de presenca OFFLINE em tempo real (45s sem sinal leve de presenca/socket -> OFFLINE)
+  // A coleta pesada de WMI/Telemetria permanece a cada 4h + no boot + botao manual.
+  offlineThresholdSeconds: Number(process.env.OFFLINE_THRESHOLD_SECONDS || 45),
   n8nWebhookUrl: process.env.N8N_WEBHOOK_URL || '',
   dashboardPublicUrl: process.env.DASHBOARD_PUBLIC_URL || 'http://localhost:5173',
 };

@@ -270,6 +270,7 @@ class RmmRepository {
   }
 
   async listUnitsWithSummary() {
+    await this.markStaleMachinesOffline(env.offlineThresholdSeconds);
     if (this.mode === 'mysql') {
       const [units] = await this.pool.query(
         'SELECT * FROM health_units WHERE is_active = 1 ORDER BY id ASC'
@@ -310,6 +311,7 @@ class RmmRepository {
   }
 
   async listMachines({ unitId, sectorId, status } = {}) {
+    await this.markStaleMachinesOffline(env.offlineThresholdSeconds);
     if (this.mode === 'mysql') {
       let sql = `
         SELECT m.*, u.name AS unit_name, u.code AS unit_code, u.unit_type,
@@ -741,6 +743,73 @@ class RmmRepository {
       }
     }
     return transitioned;
+  }
+
+  async touchAgentPresence(agentUuid) {
+    const machine = await this.findMachineByAgentUuid(agentUuid);
+    if (!machine) return null;
+    const nowIso = new Date().toISOString();
+    const wasOffline = machine.health_status === 'OFFLINE';
+
+    if (this.mode === 'mysql') {
+      if (wasOffline) {
+        await this.pool.execute(
+          `UPDATE machines SET health_status = 'NORMAL', last_seen_at = NOW() WHERE id = ?`,
+          [machine.id]
+        );
+      } else {
+        await this.pool.execute(`UPDATE machines SET last_seen_at = NOW() WHERE id = ?`, [
+          machine.id,
+        ]);
+      }
+      return wasOffline ? this.findMachineById(machine.id) : null;
+    }
+
+    const memMachine = this.machines.find((m) => m.id === machine.id);
+    if (!memMachine) return null;
+    memMachine.last_seen_at = nowIso;
+    memMachine.updated_at = nowIso;
+    if (wasOffline) {
+      memMachine.health_status = 'NORMAL';
+      return this.findMachineById(memMachine.id);
+    }
+    return null;
+  }
+
+  async markMachineOfflineById(machineId) {
+    const id = Number(machineId);
+    if (this.mode === 'mysql') {
+      await this.pool.execute(
+        `UPDATE machines SET health_status = 'OFFLINE', cpu_usage_pct = 0, ram_usage_pct = 0 WHERE id = ?`,
+        [id]
+      );
+      return this.findMachineById(id);
+    }
+    const m = this.machines.find((x) => x.id === id);
+    if (!m) return null;
+    m.health_status = 'OFFLINE';
+    m.cpu_usage_pct = 0;
+    m.ram_usage_pct = 0;
+    m.updated_at = new Date().toISOString();
+    return this.findMachineById(id);
+  }
+
+  async markMachineOfflineByAgentUuid(agentUuid) {
+    const machine = await this.findMachineByAgentUuid(agentUuid);
+    if (!machine) return null;
+    return this.markMachineOfflineById(machine.id);
+  }
+
+  async deleteMachineById(machineId) {
+    const id = Number(machineId);
+    if (this.mode === 'mysql') {
+      await this.pool.execute('DELETE FROM machines WHERE id = ?', [id]);
+      return true;
+    }
+    const idx = this.machines.findIndex((m) => m.id === id);
+    if (idx === -1) return false;
+    this.machines.splice(idx, 1);
+    return true;
   }
 }
 

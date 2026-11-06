@@ -38,6 +38,9 @@ function loadExpressAndCors() {
         post(path, ...handlers) {
           routes.push({ method: 'POST', path, handlers });
         },
+        delete(path, ...handlers) {
+          routes.push({ method: 'DELETE', path, handlers });
+        },
       };
       return router;
     }

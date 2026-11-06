@@ -225,10 +225,14 @@ namespace IpojucaRMM
             ToolStripMenuItem exitItem = new ToolStripMenuItem("Encerrar Agente");
             exitItem.Click += (s, e) =>
             {
+                SendDisconnectSignal();
                 _trayIcon.Visible = false;
                 Application.Exit();
             };
             menu.Items.Add(exitItem);
+
+            SystemEvents.SessionEnding += (s, e) => SendDisconnectSignal();
+            Application.ApplicationExit += (s, e) => SendDisconnectSignal();
 
             _trayIcon = new NotifyIcon();
             _trayIcon.Icon = CreateCustomIcon();
@@ -553,6 +557,28 @@ namespace IpojucaRMM
             {
                 string entry = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + line + Environment.NewLine;
                 File.AppendAllText(_logFile, entry, Encoding.UTF8);
+            }
+            catch { }
+        }
+
+        private void SendDisconnectSignal()
+        {
+            try
+            {
+                string url = _config.BackendUrl.TrimEnd('/') + "/api/agent/disconnect";
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
+                req.Method = "POST";
+                req.ContentType = "application/json; charset=utf-8";
+                req.Timeout = 2500;
+                req.Headers["X-Agent-UUID"] = _config.AgentUuid;
+                req.Headers["X-Agent-Token"] = _config.AgentToken;
+                byte[] bytes = Encoding.UTF8.GetBytes("{\"agent_uuid\":\"" + _config.AgentUuid + "\"}");
+                req.ContentLength = bytes.Length;
+                using (Stream reqStream = req.GetRequestStream())
+                {
+                    reqStream.Write(bytes, 0, bytes.Length);
+                }
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) { }
             }
             catch { }
         }

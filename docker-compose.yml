@@ -42,7 +42,7 @@ services:
       DB_USER: ${DB_USER:-rmm_user}
       DB_PASSWORD: ${DB_PASSWORD:-rmm_pass_change_in_prod}
       DB_NAME: ${DB_NAME:-ipojuca_rmm}
-      OFFLINE_THRESHOLD_SECONDS: ${OFFLINE_THRESHOLD_SECONDS:-15000}
+      OFFLINE_THRESHOLD_SECONDS: ${OFFLINE_THRESHOLD_SECONDS:-45}
       JWT_SECRET: ${JWT_SECRET:-rmm-ipojuca-jwt-secret-change-in-production-2026}
       TASK_SIGNING_SECRET: ${TASK_SIGNING_SECRET:-rmm-ipojuca-hmac-task-secret-change-in-production-2026}
       N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-rmm-ipojuca-n8n-webhook-secret-2026}

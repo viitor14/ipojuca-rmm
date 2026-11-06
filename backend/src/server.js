@@ -27,9 +27,16 @@ async function startServer() {
     // Opera em modo REST + Event Hub interno caso socket.io ainda nao esteja instalado localmente
   }
 
-  // Worker periódico de verificação de agentes OFFLINE (CA-02)
+  // Worker periódico de verificação de agentes OFFLINE em tempo real (a cada 10s)
   const offlineTimer = setInterval(async () => {
     try {
+      // Mantém last_seen_at atualizado para agentes com WebSocket ativo
+      for (const [, sock] of socketHub.connectedAgents.entries()) {
+        if (sock?.connected && sock?.machine?.agent_uuid) {
+          await repository.touchAgentPresence(sock.machine.agent_uuid);
+        }
+      }
+
       const newlyOffline = await repository.markStaleMachinesOffline(
         env.offlineThresholdSeconds
       );
@@ -39,7 +46,7 @@ async function startServer() {
     } catch {
       // Falha silenciosa para não interromper o loop
     }
-  }, 30000);
+  }, 10000);
   offlineTimer.unref();
 
   return new Promise((resolve) => {

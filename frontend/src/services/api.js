@@ -46,6 +46,12 @@ export const rmmApi = {
       token,
     });
   },
+  deleteMachine(token, machineId) {
+    return request(`/api/machines/${machineId}`, {
+      method: 'DELETE',
+      token,
+    });
+  },
   getTaskCatalog(token) {
     return request('/api/catalog/tasks', { token });
   },
@@ -89,6 +95,9 @@ export function connectDashboardSocket(token, handlers = {}) {
 
   if (handlers.onMachineUpdated) {
     socket.on('machine:updated', handlers.onMachineUpdated);
+  }
+  if (handlers.onMachineDeleted) {
+    socket.on('machine:deleted', handlers.onMachineDeleted);
   }
   if (handlers.onAlertTriggered) {
     socket.on('alert:triggered', handlers.onAlertTriggered);

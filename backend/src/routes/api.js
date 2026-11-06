@@ -575,12 +575,22 @@ router.get("/agent/download", (req, res) => {
 });
 
 // 12. Poll de Comandos e Mensagens para o Super Agente Nativo (.exe em segundo plano)
-router.get("/agent/pending", (req, res) => {
+router.get("/agent/pending", async (req, res) => {
   const agentUuid = String(
     req.headers["x-agent-uuid"] || req.query.agent_uuid || "",
   ).trim();
   if (!agentUuid) {
     return res.status(400).json({ error: "agent_uuid obrigatório." });
+  }
+
+  // Atualiza presença leve do agente (mantém máquina ONLINE enquanto o agente estiver aberto)
+  try {
+    const reactivatedMachine = await repository.touchAgentPresence(agentUuid);
+    if (reactivatedMachine) {
+      socketHub.broadcastToDashboard("machine:updated", reactivatedMachine);
+    }
+  } catch {
+    // Ignora falha silenciosa
   }
 
   const refreshRequested = pendingRefreshByAgent.has(agentUuid);
@@ -599,6 +609,38 @@ router.get("/agent/pending", (req, res) => {
     server_time: new Date().toISOString(),
   });
 });
+
+// 12.1. Desconexão Imediata do Agente (Quando o usuário encerra o Agente ou desliga o PC)
+router.post("/agent/disconnect", async (req, res) => {
+  const agentUuid = String(
+    req.headers["x-agent-uuid"] || req.body?.agent_uuid || "",
+  ).trim();
+  if (!agentUuid) {
+    return res.status(400).json({ error: "agent_uuid obrigatório." });
+  }
+
+  const offlineMachine = await repository.markMachineOfflineByAgentUuid(agentUuid);
+  if (offlineMachine) {
+    socketHub.broadcastToDashboard("machine:updated", offlineMachine);
+  }
+  return res.json({ status: "offline", agent_uuid: agentUuid });
+});
+
+// 12.2. Exclusão de Máquina Cadastrada (Limpeza administrativa de estações)
+router.delete(
+  "/machines/:id",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    const machineId = Number(req.params.id);
+    const removed = await repository.deleteMachineById(machineId);
+    if (!removed) {
+      return res.status(404).json({ error: "Computador não encontrado." });
+    }
+    socketHub.broadcastToDashboard("machine:deleted", { id: machineId });
+    return res.json({ status: "deleted", id: machineId });
+  },
+);
 
 // 13. Canal Super Agente Cliente -> Servidor (Mensagem enviada pelo usuário na máquina Windows)
 router.post("/agent/message", async (req, res) => {

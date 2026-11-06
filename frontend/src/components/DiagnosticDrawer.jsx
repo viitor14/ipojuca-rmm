@@ -384,6 +384,7 @@ export function DiagnosticDrawer({
   currentUser,
   onDispatchTask,
   onRefreshTelemetryNow,
+  onDeleteMachine,
   onFocusCamera,
 }) {
   const [busyTask, setBusyTask] = useState(null);
@@ -488,6 +489,23 @@ export function DiagnosticDrawer({
             >
               [MIRAR 3D]
             </button>
+            {onDeleteMachine && currentUser?.role !== 'VIEWER' && (
+              <button
+                onClick={() => onDeleteMachine(machine.id)}
+                style={{
+                  background: 'rgba(255,42,84,0.12)',
+                  border: '1px solid rgba(255,42,84,0.45)',
+                  color: '#FF2A54',
+                  fontFamily: 'IBM Plex Mono, monospace',
+                  fontSize: '8.5px',
+                  padding: '2px 6px',
+                  cursor: 'pointer',
+                }}
+                title="Remover estação cadastrada do painel"
+              >
+                [REMOVER]
+              </button>
+            )}
             <button
               onClick={() => setCollapsed((prev) => !prev)}
               style={{
