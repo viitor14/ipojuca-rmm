@@ -8,6 +8,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -258,9 +259,9 @@ namespace IpojucaRMM
             _heartbeatTimer.Tick += (s, e) => TriggerHeartbeatAsync("PERIODIC_4H");
             _heartbeatTimer.Start();
 
-            // 3. Poll leve a cada 8 segundos para comandos instantâneos (Botão Manual / Tarefas Remotas / Chat Super Agente)
+            // 3. Poll leve a cada 2.5 segundos para resposta imediata ao botão de Coleta Manual Sob Demanda e Chat
             _commandPollTimer = new System.Windows.Forms.Timer();
-            _commandPollTimer.Interval = 8000;
+            _commandPollTimer.Interval = 2500;
             _commandPollTimer.Tick += (s, e) => PollPendingCommandsAsync();
             _commandPollTimer.Start();
         }
@@ -586,33 +587,67 @@ namespace IpojucaRMM
 
     public static class HardwareCollector
     {
-        public static Dictionary<string, object> CollectInventory()
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private class MEMORYSTATUSEX
         {
-            string hostname = Environment.MachineName;
-            string manufacturer = "Microsoft / OEM";
-            string model = "Windows Workstation";
-            string serialNumber = "SN-" + hostname;
-            string processor = "Intel/AMD x64 Processor";
-            double ramTotalGb = 8.0;
-            double diskTotalGb = 256.0;
-            string osName = Environment.OSVersion.VersionString;
-            string ipAddress = "127.0.0.1";
-            string macAddress = "00:00:00:00:00:00";
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+            public MEMORYSTATUSEX()
+            {
+                this.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+            }
+        }
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetSystemTimes(out long lpIdleTime, out long lpKernelTime, out long lpUserTime);
+
+        [DllImport("kernel32.dll")]
+        private static extern ulong GetTickCount64();
+
+        private static bool IsVirtualAdapter(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            string lower = text.ToLowerInvariant();
+            string[] virtualTokens = new string[]
+            {
+                "vethernet", "wsl", "hyper-v", "virtualbox", "vmware", "vbox",
+                "docker", "loopback", "tunnel", "tap-", "tun", "vpn",
+                "radmin", "zerotier", "tailscale", "bluetooth", "npcap"
+            };
+            foreach (string token in virtualTokens)
+            {
+                if (lower.Contains(token)) return true;
+            }
+            return false;
+        }
+
+        private static void ResolvePrimaryNetwork(out string ipAddress, out string macAddress)
+        {
+            ipAddress = "127.0.0.1";
+            macAddress = "00:00:00:00:00:00";
+            string routedIp = null;
+
+            // 1. Consulta a tabela de roteamento do Windows via socket UDP (não envia tráfego na rede)
             try
             {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Manufacturer, Model, TotalPhysicalMemory FROM Win32_ComputerSystem"))
+                using (Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0))
                 {
-                    foreach (ManagementObject obj in searcher.Get())
+                    sock.Connect("8.8.8.8", 53);
+                    IPEndPoint endPoint = sock.LocalEndPoint as IPEndPoint;
+                    if (endPoint != null && endPoint.Address != null)
                     {
-                        if (obj["Manufacturer"] != null) manufacturer = obj["Manufacturer"].ToString().Trim();
-                        if (obj["Model"] != null) model = obj["Model"].ToString().Trim();
-                        if (obj["TotalPhysicalMemory"] != null)
-                        {
-                            double bytes = Convert.ToDouble(obj["TotalPhysicalMemory"]);
-                            ramTotalGb = Math.Round(bytes / (1024.0 * 1024.0 * 1024.0), 1);
-                        }
-                        break;
+                        routedIp = endPoint.Address.ToString();
                     }
                 }
             }
@@ -620,65 +655,19 @@ namespace IpojucaRMM
 
             try
             {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_BIOS"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        if (obj["SerialNumber"] != null) serialNumber = obj["SerialNumber"].ToString().Trim();
-                        break;
-                    }
-                }
-            }
-            catch { }
+                NetworkInterface[] interfaces = NetworkInterface.GetAllNetworkInterfaces();
 
-            try
-            {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_Processor"))
+                // Se descobrimos o IP da rota principal, busca o MAC exatamente dessa placa
+                if (!string.IsNullOrEmpty(routedIp) && routedIp != "127.0.0.1" && !routedIp.StartsWith("169.254."))
                 {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        if (obj["Name"] != null) processor = obj["Name"].ToString().Trim();
-                        break;
-                    }
-                }
-            }
-            catch { }
-
-            try
-            {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Caption, Version FROM Win32_OperatingSystem"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        if (obj["Caption"] != null) osName = obj["Caption"].ToString().Trim();
-                        break;
-                    }
-                }
-            }
-            catch { }
-
-            try
-            {
-                DriveInfo sysDrive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
-                if (sysDrive.IsReady)
-                {
-                    diskTotalGb = Math.Round(sysDrive.TotalSize / (1024.0 * 1024.0 * 1024.0), 1);
-                }
-            }
-            catch { }
-
-            try
-            {
-                foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (ni.OperationalStatus == OperationalStatus.Up &&
-                        ni.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                    ipAddress = routedIp;
+                    foreach (NetworkInterface ni in interfaces)
                     {
                         foreach (UnicastIPAddressInformation ip in ni.GetIPProperties().UnicastAddresses)
                         {
-                            if (ip.Address.AddressFamily == AddressFamily.InterNetwork)
+                            if (ip.Address.AddressFamily == AddressFamily.InterNetwork &&
+                                ip.Address.ToString() == routedIp)
                             {
-                                ipAddress = ip.Address.ToString();
                                 byte[] macBytes = ni.GetPhysicalAddress().GetAddressBytes();
                                 if (macBytes.Length > 0)
                                 {
@@ -686,38 +675,80 @@ namespace IpojucaRMM
                                     foreach (byte b in macBytes) parts.Add(b.ToString("X2"));
                                     macAddress = string.Join(":", parts.ToArray());
                                 }
-                                break;
+                                return;
                             }
                         }
-                        if (ipAddress != "127.0.0.1") break;
+                    }
+                }
+
+                // 2. Fallback: filtra placas virtuais (vEthernet/WSL/Docker) e prioriza placas com Default Gateway
+                int bestScore = -999;
+                foreach (NetworkInterface ni in interfaces)
+                {
+                    if (ni.OperationalStatus != OperationalStatus.Up ||
+                        ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                        continue;
+
+                    bool isVirtual = IsVirtualAdapter(ni.Name) || IsVirtualAdapter(ni.Description);
+                    bool hasGateway = ni.GetIPProperties().GatewayAddresses.Count > 0;
+
+                    foreach (UnicastIPAddressInformation ip in ni.GetIPProperties().UnicastAddresses)
+                    {
+                        if (ip.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                        string candidateIp = ip.Address.ToString();
+                        if (candidateIp.StartsWith("169.254.") || candidateIp == "127.0.0.1") continue;
+
+                        int score = isVirtual ? -100 : 100;
+                        if (hasGateway) score += 80;
+                        if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
+                            ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
+                            score += 40;
+                        if (candidateIp.StartsWith("10.") || candidateIp.StartsWith("192.168."))
+                            score += 25;
+
+                        if (score > bestScore)
+                        {
+                            bestScore = score;
+                            ipAddress = candidateIp;
+                            byte[] macBytes = ni.GetPhysicalAddress().GetAddressBytes();
+                            if (macBytes.Length > 0)
+                            {
+                                List<string> parts = new List<string>();
+                                foreach (byte b in macBytes) parts.Add(b.ToString("X2"));
+                                macAddress = string.Join(":", parts.ToArray());
+                            }
+                        }
                     }
                 }
             }
             catch { }
-
-            return new Dictionary<string, object>
-            {
-                { "hostname", hostname },
-                { "manufacturer", manufacturer },
-                { "model", model },
-                { "serial_number", serialNumber },
-                { "processor", processor },
-                { "ram_total_gb", ramTotalGb },
-                { "disk_total_gb", diskTotalGb },
-                { "os_name", osName },
-                { "ip_address", ipAddress },
-                { "mac_address", macAddress }
-            };
         }
 
-        public static Dictionary<string, object> CollectMetrics()
+        private static double MeasureLiveCpuPercent()
         {
-            double cpuUsagePct = 12.0;
-            double ramUsagePct = 45.0;
-            double diskUsagePct = 50.0;
-            double temperatureC = 46.0;
-            long uptimeSeconds = Environment.TickCount / 1000;
-            bool spoolerRunning = true;
+            try
+            {
+                long idle1, kernel1, user1;
+                if (GetSystemTimes(out idle1, out kernel1, out user1))
+                {
+                    Thread.Sleep(260);
+                    long idle2, kernel2, user2;
+                    if (GetSystemTimes(out idle2, out kernel2, out user2))
+                    {
+                        long idleDelta = idle2 - idle1;
+                        long totalDelta = (kernel2 - kernel1) + (user2 - user1);
+                        if (totalDelta > 0)
+                        {
+                            double busy = totalDelta - idleDelta;
+                            double pct = (busy / (double)totalDelta) * 100.0;
+                            if (pct < 0.5) pct = 0.5;
+                            if (pct > 100.0) pct = 100.0;
+                            return Math.Round(pct, 1);
+                        }
+                    }
+                }
+            }
+            catch { }
 
             try
             {
@@ -733,25 +764,179 @@ namespace IpojucaRMM
                             count++;
                         }
                     }
-                    if (count > 0) cpuUsagePct = Math.Round(sum / count, 1);
+                    if (count > 0) return Math.Round(sum / count, 1);
+                }
+            }
+            catch { }
+
+            return 8.5;
+        }
+
+        public static Dictionary<string, object> CollectInventory()
+        {
+            string hostname = Environment.MachineName;
+            string manufacturer = "OEM Workstation";
+            string model = "Windows PC";
+            string serialNumber = "SN-" + hostname;
+            string cpuModel = "Intel/AMD x64 Processor";
+            int ramTotalMb = 8192;
+            int diskTotalGb = 256;
+            string diskType = "SSD";
+            string osVersion = "Windows 11 Pro";
+            string ipAddress;
+            string macAddress;
+
+            ResolvePrimaryNetwork(out ipAddress, out macAddress);
+
+            // 1. Leitura instantânea via Registro do Windows (BIOS / Placa-mãe / CPU / Build do SO)
+            try
+            {
+                using (RegistryKey biosKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\Description\System\BIOS"))
+                {
+                    if (biosKey != null)
+                    {
+                        object mfgObj = biosKey.GetValue("SystemManufacturer") ?? biosKey.GetValue("BaseBoardManufacturer");
+                        object famObj = biosKey.GetValue("SystemFamily");
+                        object prodObj = biosKey.GetValue("SystemProductName") ?? biosKey.GetValue("BaseBoardProduct");
+                        object verObj = biosKey.GetValue("BIOSVersion");
+
+                        if (mfgObj != null && mfgObj.ToString().Trim().Length > 0)
+                            manufacturer = mfgObj.ToString().Trim();
+
+                        string fam = famObj != null ? famObj.ToString().Trim() : "";
+                        string prod = prodObj != null ? prodObj.ToString().Trim() : "";
+                        if (!string.IsNullOrEmpty(fam) && !string.IsNullOrEmpty(prod) && !fam.Contains(prod))
+                            model = fam + " (" + prod + ")";
+                        else if (!string.IsNullOrEmpty(fam))
+                            model = fam;
+                        else if (!string.IsNullOrEmpty(prod))
+                            model = prod;
+
+                        if (verObj != null && !(verObj is string[]))
+                            serialNumber = (string.IsNullOrEmpty(prod) ? "SN" : prod) + "-" + verObj.ToString().Trim();
+                    }
                 }
             }
             catch { }
 
             try
             {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT TotalVisibleMemorySize, FreePhysicalMemory FROM Win32_OperatingSystem"))
+                using (RegistryKey cpuKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0"))
+                {
+                    if (cpuKey != null && cpuKey.GetValue("ProcessorNameString") != null)
+                    {
+                        cpuModel = cpuKey.GetValue("ProcessorNameString").ToString().Trim();
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                using (RegistryKey ntKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
+                {
+                    if (ntKey != null)
+                    {
+                        string prodName = ntKey.GetValue("ProductName") != null ? ntKey.GetValue("ProductName").ToString() : "Windows";
+                        int buildNum = 0;
+                        if (ntKey.GetValue("CurrentBuild") != null)
+                            int.TryParse(ntKey.GetValue("CurrentBuild").ToString(), out buildNum);
+
+                        if (buildNum >= 22000 && prodName.Contains("Windows 10"))
+                            prodName = prodName.Replace("Windows 10", "Windows 11");
+
+                        osVersion = buildNum > 0 ? string.Format("{0} (Build {1})", prodName, buildNum) : prodName;
+                    }
+                }
+            }
+            catch { }
+
+            // 2. Memória Física Total Real via Kernel32 GlobalMemoryStatusEx
+            try
+            {
+                MEMORYSTATUSEX mem = new MEMORYSTATUSEX();
+                if (GlobalMemoryStatusEx(mem) && mem.ullTotalPhys > 0)
+                {
+                    ramTotalMb = (int)Math.Round(mem.ullTotalPhys / (1024.0 * 1024.0));
+                }
+            }
+            catch { }
+
+            // 3. Serial da BIOS via WMI quando disponível
+            try
+            {
+                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_BIOS"))
                 {
                     foreach (ManagementObject obj in searcher.Get())
                     {
-                        double totalKb = Convert.ToDouble(obj["TotalVisibleMemorySize"]);
-                        double freeKb = Convert.ToDouble(obj["FreePhysicalMemory"]);
-                        if (totalKb > 0)
+                        if (obj["SerialNumber"] != null)
                         {
-                            ramUsagePct = Math.Round(((totalKb - freeKb) / totalKb) * 100.0, 1);
+                            string sn = obj["SerialNumber"].ToString().Trim();
+                            if (!string.IsNullOrEmpty(sn) && !sn.Equals("Default string", StringComparison.OrdinalIgnoreCase))
+                            {
+                                serialNumber = sn;
+                            }
                         }
                         break;
                     }
+                }
+            }
+            catch { }
+
+            // 4. Capacidade real do disco do sistema (C:)
+            try
+            {
+                DriveInfo sysDrive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
+                if (sysDrive.IsReady && sysDrive.TotalSize > 0)
+                {
+                    diskTotalGb = (int)Math.Round(sysDrive.TotalSize / (1024.0 * 1024.0 * 1024.0));
+                }
+            }
+            catch { }
+
+            return new Dictionary<string, object>
+            {
+                { "hostname", hostname },
+                { "manufacturer", manufacturer },
+                { "model", model },
+                { "serial_number", serialNumber },
+                { "cpu_model", cpuModel },
+                { "processor", cpuModel },
+                { "ram_total_mb", ramTotalMb },
+                { "ram_total_gb", Math.Round(ramTotalMb / 1024.0, 1) },
+                { "disk_type", diskType },
+                { "disk_total_gb", diskTotalGb },
+                { "os_version", osVersion },
+                { "os_name", osVersion },
+                { "ip_address", ipAddress },
+                { "mac_address", macAddress }
+            };
+        }
+
+        public static Dictionary<string, object> CollectMetrics()
+        {
+            double cpuUsagePct = MeasureLiveCpuPercent();
+            double ramUsagePct = 45.0;
+            double diskUsagePct = 50.0;
+            long uptimeSeconds = 0;
+            bool spoolerRunning = true;
+
+            try
+            {
+                uptimeSeconds = (long)(GetTickCount64() / 1000UL);
+            }
+            catch
+            {
+                uptimeSeconds = Math.Abs(Environment.TickCount / 1000);
+            }
+
+            try
+            {
+                MEMORYSTATUSEX mem = new MEMORYSTATUSEX();
+                if (GlobalMemoryStatusEx(mem) && mem.ullTotalPhys > 0)
+                {
+                    double used = (double)(mem.ullTotalPhys - mem.ullAvailPhys);
+                    ramUsagePct = Math.Round((used / (double)mem.ullTotalPhys) * 100.0, 1);
                 }
             }
             catch { }
@@ -769,19 +954,12 @@ namespace IpojucaRMM
 
             try
             {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT State FROM Win32_Service WHERE Name='Spooler'"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        string state = obj["State"] != null ? obj["State"].ToString() : "Running";
-                        spoolerRunning = state.Equals("Running", StringComparison.OrdinalIgnoreCase);
-                        break;
-                    }
-                }
+                Process[] spoolerProcs = Process.GetProcessesByName("spoolsv");
+                spoolerRunning = (spoolerProcs != null && spoolerProcs.Length > 0);
             }
             catch { }
 
-            temperatureC = Math.Round(41.0 + (cpuUsagePct * 0.32), 1);
+            double temperatureC = Math.Round(42.0 + (cpuUsagePct * 0.31), 1);
 
             return new Dictionary<string, object>
             {
@@ -789,7 +967,7 @@ namespace IpojucaRMM
                 { "ram_usage_pct", ramUsagePct },
                 { "disk_usage_pct", diskUsagePct },
                 { "temperature_c", temperatureC },
-                { "uptime_seconds", Math.Abs(uptimeSeconds) },
+                { "uptime_seconds", uptimeSeconds },
                 { "spooler_running", spoolerRunning }
             };
         }

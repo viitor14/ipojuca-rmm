@@ -303,10 +303,10 @@ function RadialGauge({ value = 0, unit = '%', label }) {
           dominantBaseline="middle"
           fill="#F4F4F0"
           fontFamily="IBM Plex Mono, monospace"
-          fontSize="10.5"
+          fontSize="9.5"
           fontWeight="700"
         >
-          {clamped.toFixed(0)}
+          {clamped.toFixed(1)}
           {unit}
         </text>
       </svg>
@@ -408,7 +408,8 @@ export function DiagnosticDrawer({
     );
   }
 
-  const { machine, tasks = [], alerts = [], telemetryHistory = [] } = diagnostics;
+  const { machine, tasks = [], alerts = [], telemetry = [], telemetryHistory = [] } = diagnostics;
+  const activeTelemetryHistory = telemetry.length > 0 ? telemetry : telemetryHistory;
   const statusColor =
     theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
 
@@ -543,7 +544,7 @@ export function DiagnosticDrawer({
         <>
           <TelemetryOscilloscope
             machine={machine}
-            telemetryHistory={telemetryHistory}
+            telemetryHistory={activeTelemetryHistory}
           />
 
           <SpecPlate>
@@ -560,16 +561,27 @@ export function DiagnosticDrawer({
               </strong>
             </div>
             <div className="spec-cell">
-              <span>HARDWARE / BIOS</span>
+              <span>FABRICANTE / MODELO / BIOS</span>
               <strong>
                 {machine.manufacturer} {machine.model} ({machine.serial_number})
               </strong>
             </div>
             <div className="spec-cell">
-              <span>CPU / STORAGE</span>
+              <span>PROCESSADOR (CPU)</span>
+              <strong>{machine.cpu_model || 'x64 Processor'}</strong>
+            </div>
+            <div className="spec-cell">
+              <span>MEMÓRIA / DISCO</span>
               <strong>
-                {Math.round(Number(machine.ram_total_mb || 8192) / 1024)}GB RAM •{' '}
+                {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(1)}GB RAM •{' '}
                 {machine.disk_total_gb}GB {machine.disk_type}
+              </strong>
+            </div>
+            <div className="spec-cell">
+              <span>SISTEMA OPERACIONAL / UPTIME</span>
+              <strong>
+                {machine.os_version || 'Windows'} •{' '}
+                {Math.floor(Number(machine.uptime_seconds || 0) / 3600)}h ativo
               </strong>
             </div>
           </SpecPlate>

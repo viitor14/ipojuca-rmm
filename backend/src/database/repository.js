@@ -148,6 +148,14 @@ class RmmRepository {
     const posX = Number((baseSectorX - 1.5 + (offsetIdx % 3) * 1.8).toFixed(2));
     const posZ = Number((baseSectorZ - 0.5 + Math.floor(offsetIdx / 3) * 1.6).toFixed(2));
 
+    const resolvedCpuModel = inventory.cpu_model || inventory.processor || 'x64 CPU';
+    const resolvedRamMb = Number(
+      inventory.ram_total_mb ||
+        (inventory.ram_total_gb ? Math.round(Number(inventory.ram_total_gb) * 1024) : 8192)
+    );
+    const resolvedDiskGb = Math.max(1, Math.round(Number(inventory.disk_total_gb || 256)));
+    const resolvedOsVersion = inventory.os_version || inventory.os_name || 'Windows';
+
     if (this.mode === 'mysql') {
       await this.pool.execute(
         `INSERT INTO machines
@@ -167,11 +175,11 @@ class RmmRepository {
           inventory.serial_number || 'SN-AUTO',
           inventory.mac_address || '00:00:00:00:00:00',
           inventory.ip_address || '0.0.0.0',
-          inventory.cpu_model || 'x64 CPU',
-          Number(inventory.ram_total_mb || 8192),
+          resolvedCpuModel,
+          resolvedRamMb,
           inventory.disk_type || 'SSD',
-          Number(inventory.disk_total_gb || 256),
-          inventory.os_version || 'Windows',
+          resolvedDiskGb,
+          resolvedOsVersion,
           posX,
           posZ,
         ]
@@ -192,11 +200,11 @@ class RmmRepository {
       serial_number: inventory.serial_number || 'SN-AUTO',
       mac_address: inventory.mac_address || '00:00:00:00:00:00',
       ip_address: inventory.ip_address || '0.0.0.0',
-      cpu_model: inventory.cpu_model || 'x64 CPU',
-      ram_total_mb: Number(inventory.ram_total_mb || 8192),
+      cpu_model: resolvedCpuModel,
+      ram_total_mb: resolvedRamMb,
       disk_type: inventory.disk_type || 'SSD',
-      disk_total_gb: Number(inventory.disk_total_gb || 256),
-      os_version: inventory.os_version || 'Windows',
+      disk_total_gb: resolvedDiskGb,
+      os_version: resolvedOsVersion,
       agent_version: '1.0.0',
       health_status: 'NORMAL',
       cpu_usage_pct: 0,
@@ -369,6 +377,10 @@ class RmmRepository {
       throw new Error(`Agente '${agentUuid}' não provisionado.`);
     }
 
+    const incomingRamMb =
+      inventory.ram_total_mb ||
+      (inventory.ram_total_gb ? Math.round(Number(inventory.ram_total_gb) * 1024) : 0);
+
     const updatedFields = {
       hostname: inventory.hostname || machine.hostname,
       manufacturer: inventory.manufacturer || machine.manufacturer,
@@ -376,11 +388,11 @@ class RmmRepository {
       serial_number: inventory.serial_number || machine.serial_number,
       mac_address: inventory.mac_address || machine.mac_address,
       ip_address: inventory.ip_address || machine.ip_address,
-      cpu_model: inventory.cpu_model || machine.cpu_model,
-      ram_total_mb: Number(inventory.ram_total_mb || machine.ram_total_mb),
+      cpu_model: inventory.cpu_model || inventory.processor || machine.cpu_model,
+      ram_total_mb: Number(incomingRamMb || machine.ram_total_mb),
       disk_type: inventory.disk_type || machine.disk_type,
-      disk_total_gb: Number(inventory.disk_total_gb || machine.disk_total_gb),
-      os_version: inventory.os_version || machine.os_version,
+      disk_total_gb: Math.round(Number(inventory.disk_total_gb || machine.disk_total_gb)),
+      os_version: inventory.os_version || inventory.os_name || machine.os_version,
       agent_version: agentVersion || machine.agent_version,
       health_status: healthStatus,
       cpu_usage_pct: Number(metrics.cpu_usage_pct ?? machine.cpu_usage_pct),

@@ -553,9 +553,7 @@ export default function App() {
 
   async function handleRefreshTelemetryNow(machineId) {
     const res = await rmmApi.refreshMachineTelemetryNow(auth.token, machineId);
-    setTimeout(() => {
-      loadAllData(auth.token, selectedUnitId, machineId).catch(() => {});
-    }, 350);
+    await loadAllData(auth.token, selectedUnitId, machineId);
     return res;
   }
 

@@ -23,6 +23,43 @@ const router = express.Router();
 const pendingRefreshByAgent = new Set();
 const pendingMessagesByAgent = new Map();
 const chatHistoryByMachine = new Map();
+const heartbeatWaitersByAgent = new Map();
+
+function waitForLiveAgentHeartbeat(agentUuid, timeoutMs = 3800) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      const set = heartbeatWaitersByAgent.get(agentUuid);
+      if (set) set.delete(onHeartbeat);
+      resolve(null);
+    }, timeoutMs);
+
+    function onHeartbeat(updatedMachine) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(updatedMachine);
+    }
+
+    if (!heartbeatWaitersByAgent.has(agentUuid)) {
+      heartbeatWaitersByAgent.set(agentUuid, new Set());
+    }
+    heartbeatWaitersByAgent.get(agentUuid).add(onHeartbeat);
+  });
+}
+
+function notifyLiveAgentHeartbeat(agentUuid, updatedMachine) {
+  const waiters = heartbeatWaitersByAgent.get(agentUuid);
+  if (!waiters || waiters.size === 0) return;
+  for (const fn of Array.from(waiters)) {
+    waiters.delete(fn);
+    try {
+      fn(updatedMachine);
+    } catch {}
+  }
+}
 
 const authLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 30 });
 const heartbeatLimiter = createRateLimiter({
@@ -194,8 +231,9 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
       healthStatus: evaluation.health_status,
     });
 
-    // Emite atualização imediata para o Digital Twin 3D via Socket.io
+    // Emite atualização imediata para o Digital Twin 3D via Socket.io e resolve waiters manuais
     socketHub.broadcastToDashboard("machine:updated", updatedMachine);
+    notifyLiveAgentHeartbeat(String(agentUuid), updatedMachine);
 
     let alertTriggered = null;
     if (evaluation.health_status === "CRITICAL") {
@@ -304,27 +342,26 @@ router.post("/machines/:id/refresh-telemetry", requireAuth, async (req, res) => 
       details: { deliveredToSocket: socketOutcome.deliveredToSocket, queuedForNativeAgent: true },
     });
 
-    if (!socketOutcome.deliveredToSocket) {
-      const updated = await repository.upsertHeartbeat({
-        agentUuid: machine.agent_uuid,
-        agentVersion: machine.agent_version,
-        inventory: {},
-        metrics: {
-          cpu_usage_pct: machine.cpu_usage_pct,
-          ram_usage_pct: machine.ram_usage_pct,
-          disk_usage_pct: machine.disk_usage_pct,
-          temperature_c: machine.temperature_c,
-          uptime_seconds: Number(machine.uptime_seconds || 0) + 10,
-          spooler_running: Boolean(machine.spooler_running),
-        },
-        healthStatus: machine.health_status,
+    // Aguarda até 3.8s pela resposta real do Agente Windows (via WebSocket ou Poll do .exe)
+    const waitMs = process.env.FORCE_NATIVE_ROUTER === "1" ? 40 : 3800;
+    const liveMachine = await waitForLiveAgentHeartbeat(machine.agent_uuid, waitMs);
+
+    if (liveMachine) {
+      return res.json({
+        status: "ok",
+        mode: "agent_live_pull_completed",
+        machine: liveMachine,
+        message: `Telemetria coletada em tempo real do agente (${liveMachine.ip_address} | CPU ${Number(liveMachine.cpu_usage_pct).toFixed(1)}% | RAM ${Number(liveMachine.ram_usage_pct).toFixed(1)}%).`,
       });
-      socketHub.broadcastToDashboard("machine:updated", updated);
+    }
+
+    if (!socketOutcome.deliveredToSocket) {
+      const updated = await repository.findMachineById(machine.id);
       return res.json({
         status: "ok",
         mode: "snapshot_refreshed",
         machine: updated,
-        message: "Telemetria sincronizada sob demanda com sucesso.",
+        message: "Solicitação enfileirada para o Agente Windows em segundo plano.",
       });
     }
 
@@ -332,7 +369,7 @@ router.post("/machines/:id/refresh-telemetry", requireAuth, async (req, res) => 
       status: "ok",
       mode: "agent_live_pull",
       machine_id: machine.id,
-      message: "Solicitação de coleta instantânea enviada ao Agente Windows via WebSocket.",
+      message: "Solicitação de coleta instantânea enviada ao Agente Windows.",
     });
   } catch (err) {
     return res.status(500).json({ error: "Falha ao solicitar telemetria manual." });
