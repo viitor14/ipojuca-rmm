@@ -4,9 +4,6 @@ backend/node_modules/
 frontend/node_modules/
 agent/node_modules/
 
-# Build outputs
-frontend/dist/
-
 # Local runtime secrets & machine identity
 .env
 backend/.env
