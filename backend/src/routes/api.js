@@ -325,11 +325,6 @@ router.post("/machines/:id/refresh-telemetry", requireAuth, async (req, res) => 
     if (!machine) {
       return res.status(404).json({ error: "Computador não encontrado." });
     }
-    if (machine.health_status === "OFFLINE") {
-      return res.status(409).json({
-        error: "O computador está OFFLINE e não pôde responder à coleta manual.",
-      });
-    }
 
     const socketOutcome = socketHub.requestImmediateTelemetry(machine.id);
     pendingRefreshByAgent.add(machine.agent_uuid);

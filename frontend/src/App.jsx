@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import styled, { ThemeProvider, keyframes } from 'styled-components';
-import { theme, STATUS_LABELS } from './styles/theme';
+import { theme, STATUS_LABELS, fixTextEncoding } from './styles/theme';
 import { GlobalStyles } from './styles/GlobalStyles';
 import { rmmApi, connectDashboardSocket } from './services/api';
 import { DigitalTwin3D } from './components/DigitalTwin3D';
@@ -612,9 +612,9 @@ export default function App() {
                 }}
               >
                 <span className="u-code">
-                  [{u.code}] • {u.summary?.total || 0} NODES
+                  [{u.code}] • {u.summary?.total || 0} PC(S)
                 </span>
-                <span className="u-name">{u.name}</span>
+                <span className="u-name">{fixTextEncoding(u.name)}</span>
               </UnitSwitchBtn>
             ))}
           </UnitSwitcherPod>
@@ -686,7 +686,7 @@ export default function App() {
               <KpiMatrix>
                 <KpiCell $color={theme.colors.status.NORMAL}>
                   <div className="num">{totalSummary.NORMAL}</div>
-                  <div className="lbl">NOMINAL</div>
+                  <div className="lbl">ONLINE</div>
                 </KpiCell>
                 <KpiCell $color={theme.colors.status.WARNING}>
                   <div className="num">{totalSummary.WARNING}</div>
@@ -694,11 +694,11 @@ export default function App() {
                 </KpiCell>
                 <KpiCell $color={theme.colors.status.CRITICAL}>
                   <div className="num">{totalSummary.CRITICAL}</div>
-                  <div className="lbl">ANOMALIA</div>
+                  <div className="lbl">CRÍTICO</div>
                 </KpiCell>
                 <KpiCell $color={theme.colors.status.OFFLINE}>
                   <div className="num">{totalSummary.OFFLINE}</div>
-                  <div className="lbl">SILÊNCIO</div>
+                  <div className="lbl">OFFLINE</div>
                 </KpiCell>
               </KpiMatrix>
             </RadarCard>
@@ -758,7 +758,7 @@ export default function App() {
                 return (
                   <SectorMiniRow key={sec.id} $accent={accent}>
                     <div>
-                      <div className="s-name">{sec.name}</div>
+                      <div className="s-name">{fixTextEncoding(sec.name)}</div>
                       <div className="s-meta">[{sec.code}]</div>
                     </div>
                     <span className="s-meta">{secNodes.length} PC(S)</span>

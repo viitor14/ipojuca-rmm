@@ -3,11 +3,15 @@
 -- Responsavel: @dba (Fase 4 / Fase 11)
 -- =============================================================================
 
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 CREATE DATABASE IF NOT EXISTS ipojuca_rmm
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
 USE ipojuca_rmm;
+SET NAMES utf8mb4;
 
 -- 1. Unidades de Saude (USFs, Policlinicas, CAPS)
 CREATE TABLE IF NOT EXISTS health_units (

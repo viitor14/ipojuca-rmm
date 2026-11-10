@@ -23,9 +23,9 @@ const env = {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'ipojuca_rmm',
   },
-  // Limiar de presenca OFFLINE em tempo real (45s sem sinal leve de presenca/socket -> OFFLINE)
-  // A coleta pesada de WMI/Telemetria permanece a cada 4h + no boot + botao manual.
-  offlineThresholdSeconds: Number(process.env.OFFLINE_THRESHOLD_SECONDS || 45),
+  // Janela de ciclo de 4h (15000s) para manter maquinas ativas ONLINE entre os envios de 4h,
+  // enquanto desconexoes explicitas (/api/agent/disconnect ou WebSocket) marcam OFFLINE na hora.
+  offlineThresholdSeconds: Number(process.env.OFFLINE_THRESHOLD_SECONDS || 15000),
   n8nWebhookUrl: process.env.N8N_WEBHOOK_URL || '',
   dashboardPublicUrl: process.env.DASHBOARD_PUBLIC_URL || 'http://localhost:5173',
 };

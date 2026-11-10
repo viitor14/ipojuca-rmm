@@ -1,175 +1,243 @@
 import React, { useState, useMemo } from "react";
 import styled from "styled-components";
-import { STATUS_LABELS, theme } from "../styles/theme";
+import { STATUS_LABELS, RISK_LABELS, fixTextEncoding, theme } from "../styles/theme";
 
 const BladeContainer = styled.aside`
-  width: ${({ $collapsed }) => ($collapsed ? "275px" : "430px")};
-  max-height: calc(100vh - 118px);
-  background: ${({ theme }) => theme.colors.bgSurface};
+  width: ${({ $collapsed }) => ($collapsed ? "300px" : "450px")};
+  max-height: calc(100vh - 116px);
+  background: rgba(13, 16, 24, 0.92);
   backdrop-filter: blur(24px);
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  border-top: 2px solid ${({ $statusColor }) => $statusColor};
-  clip-path: polygon(
-    0 0,
-    calc(100% - 18px) 0,
-    100% 18px,
-    100% 100%,
-    14px 100%,
-    0 calc(100% - 14px)
-  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 3px solid ${({ $statusColor }) => $statusColor};
+  border-radius: 10px;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.78);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.82);
   pointer-events: auto;
   transition: width 0.2s ease;
 
   @media (max-width: 1100px) {
-    width: ${({ $collapsed }) => ($collapsed ? "240px" : "350px")};
+    width: ${({ $collapsed }) => ($collapsed ? "260px" : "375px")};
   }
 `;
 
 const HeaderBlock = styled.div`
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  padding-bottom: 12px;
+`;
+
+const HeaderTopRow = styled.div`
+  display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding-bottom: 10px;
+  align-items: center;
+  gap: 8px;
 `;
 
 const MicroSerial = styled.div`
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.63rem;
-  letter-spacing: 0.13em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: ${({ theme }) => theme.colors.brandPrimary};
-  text-transform: uppercase;
+`;
+
+const StatusBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #050609;
+  background: ${({ $color }) => $color};
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #050609;
+  }
 `;
 
 const HostHeading = styled.h2`
-  font-size: 1.2rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  margin-top: 2px;
-  color: ${({ theme }) => theme.colors.textPrimary};
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 1.32rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #f8fafc;
+  line-height: 1.2;
+  word-break: break-word;
 `;
 
 const SubLocation = styled.div`
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.7rem;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  margin-top: 3px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  line-height: 1.35;
 `;
 
-const UplinkRibbon = styled.div`
+const ActionToolbar = styled.div`
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 5px 9px;
-  background: rgba(0, 229, 255, 0.07);
-  border: 1px solid rgba(0, 229, 255, 0.28);
-  border-left: 2px solid #00e5ff;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.6rem;
-  letter-spacing: 0.08em;
-  color: #b9f6ff;
+  gap: 6px;
+  flex-wrap: wrap;
 `;
 
-const StatusStamp = styled.div`
-  padding: 4px 10px;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: #050507;
-  background: ${({ $color }) => $color};
-  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+const HeaderActionBtn = styled.button`
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.73rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: ${({ $variant }) =>
+    $variant === "danger"
+      ? "rgba(239, 68, 68, 0.14)"
+      : $variant === "accent"
+        ? "rgba(212, 255, 51, 0.12)"
+        : "rgba(255, 255, 255, 0.06)"};
+  color: ${({ $variant }) =>
+    $variant === "danger"
+      ? "#FCA5A5"
+      : $variant === "accent"
+        ? "#D4FF33"
+        : "#E2E8F0"};
+  border: 1px solid
+    ${({ $variant }) =>
+      $variant === "danger"
+        ? "rgba(239, 68, 68, 0.4)"
+        : $variant === "accent"
+          ? "rgba(212, 255, 51, 0.4)"
+          : "rgba(255, 255, 255, 0.14)"};
+
+  &:hover {
+    filter: brightness(1.18);
+    transform: translateY(-1px);
+  }
 `;
 
 const RadialGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 7px;
+  gap: 8px;
 `;
 
 const DialCard = styled.div`
-  background: rgba(5, 5, 7, 0.68);
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding: 7px 5px;
+  background: rgba(7, 9, 14, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  padding: 8px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 
   .dial-label {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.59rem;
-    letter-spacing: 0.08em;
-    color: ${({ theme }) => theme.colors.textSecondary};
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-align: center;
   }
 `;
 
 const OscilloscopeCard = styled.div`
-  background: rgba(4, 6, 10, 0.85);
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding: 8px 10px;
+  background: rgba(7, 9, 14, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  padding: 9px 12px;
 
   .osc-head {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.58rem;
-    letter-spacing: 0.1em;
-    color: ${({ theme }) => theme.colors.textSecondary};
-    margin-bottom: 5px;
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 6px;
   }
 
   .osc-legend {
     display: flex;
-    gap: 10px;
+    gap: 12px;
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.68rem;
     span {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
+      color: #e2e8f0;
     }
     i {
-      width: 7px;
-      height: 2px;
+      width: 8px;
+      height: 3px;
+      border-radius: 2px;
       display: inline-block;
     }
   }
 `;
 
 const SpecPlate = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px 12px;
-  padding: 9px 11px;
-  background: rgba(5, 5, 7, 0.72);
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  border-left: 2px solid ${({ theme }) => theme.colors.brandPrimary};
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.68rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(7, 9, 14, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 3px solid ${({ theme }) => theme.colors.brandPrimary};
+  border-radius: 8px;
+
+  .spec-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
 
   .spec-cell {
     display: flex;
     flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
     span {
-      font-size: 0.57rem;
-      color: ${({ theme }) => theme.colors.textSecondary};
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-    strong {
-      color: ${({ theme }) => theme.colors.textPrimary};
+      font-family: ${({ theme }) => theme.fonts.sans};
+      font-size: 0.68rem;
       font-weight: 600;
-      margin-top: 1px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
+
+    strong {
+      font-family: ${({ theme }) => theme.fonts.sans};
+      font-size: 0.82rem;
+      color: #f8fafc;
+      font-weight: 600;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    strong.mono {
+      font-family: ${({ theme }) => theme.fonts.mono};
+      font-size: 0.79rem;
+    }
+  }
+
+  .spec-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
   }
 `;
 
@@ -177,135 +245,177 @@ const SectionBar = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.63rem;
-  letter-spacing: 0.11em;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.textSecondary};
+  color: #94a3b8;
+  margin-top: 2px;
+`;
+
+const RefreshTelemetryBtn = styled.button`
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: ${({ $loading }) =>
+    $loading ? "rgba(212, 255, 51, 0.25)" : "#D4FF33"};
+  color: #050609;
+  border: 1px solid #d4ff33;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: ${({ disabled }) => (disabled ? "wait" : "pointer")};
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
 `;
 
 const KeycapMatrix = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 7px;
+  gap: 8px;
 `;
 
 const KeycapButton = styled.button`
   position: relative;
-  padding: 8px 10px;
+  padding: 10px 11px;
+  border-radius: 8px;
   text-align: left;
   background: ${({ disabled }) =>
-    disabled ? "rgba(10, 11, 15, 0.45)" : "rgba(19, 21, 28, 0.95)"};
-  color: ${({ disabled, theme }) =>
-    disabled ? "#434857" : theme.colors.textPrimary};
+    disabled ? "rgba(15, 18, 26, 0.5)" : "rgba(20, 25, 36, 0.95)"};
+  color: ${({ disabled }) => (disabled ? "#64748B" : "#F8FAFC")};
   border: 1px solid
     ${({ disabled, $risk }) =>
       disabled
-        ? "rgba(255,255,255,0.05)"
+        ? "rgba(255,255,255,0.06)"
         : $risk === "HIGH"
-          ? "rgba(255, 184, 0, 0.45)"
-          : "rgba(244, 244, 240, 0.16)"};
-  border-bottom-width: ${({ disabled }) => (disabled ? "1px" : "3px")};
+          ? "rgba(245, 158, 11, 0.45)"
+          : "rgba(255, 255, 255, 0.13)"};
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
   transition:
-    transform 0.1s ease,
-    border-color 0.15s ease;
+    transform 0.12s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
 
   &:hover:not(:disabled) {
     border-color: ${({ theme }) => theme.colors.brandPrimary};
+    background: rgba(28, 35, 50, 0.98);
     transform: translateY(-1px);
   }
 
-  &:active:not(:disabled) {
-    transform: translateY(1px);
-  }
-
-  .key-code {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.56rem;
-    letter-spacing: 0.08em;
-    color: ${({ $risk }) => ($risk === "HIGH" ? "#FFB800" : "#D4FF33")};
+  .key-head {
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .key-badge {
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.64rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: ${({ $risk }) =>
+      $risk === "HIGH"
+        ? "rgba(245, 158, 11, 0.18)"
+        : $risk === "MEDIUM"
+          ? "rgba(56, 189, 248, 0.16)"
+          : "rgba(16, 185, 129, 0.16)"};
+    color: ${({ $risk }) =>
+      $risk === "HIGH"
+        ? "#FBBF24"
+        : $risk === "MEDIUM"
+          ? "#38BDF8"
+          : "#34D399"};
   }
 
   .key-title {
-    font-size: 0.74rem;
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.79rem;
     font-weight: 700;
-    margin-top: 2px;
+    line-height: 1.3;
     display: block;
+    color: inherit;
   }
 `;
 
 const TerminalReadout = styled.div`
-  background: #040507;
-  border: 1px solid rgba(244, 244, 240, 0.12);
-  padding: 9px 10px;
+  background: #06080d;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  padding: 10px 12px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.65rem;
-  line-height: 1.45;
-  max-height: 125px;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  max-height: 135px;
   overflow-y: auto;
-  color: #b4bccf;
+  color: #cbd5e1;
 
   .line-ok {
-    color: #00f5a0;
+    color: #10b981;
   }
   .line-err {
-    color: #ff2a54;
+    color: #ef4444;
   }
   .line-n8n {
     color: #d4ff33;
-    margin-top: 5px;
-    padding-top: 5px;
+    margin-top: 6px;
+    padding-top: 6px;
     border-top: 1px dashed rgba(212, 255, 51, 0.25);
   }
 `;
 
 function RadialGauge({ value = 0, unit = "%", label }) {
   const clamped = Math.min(100, Math.max(0, Number(value || 0)));
-  const radius = 21;
+  const radius = 22;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (clamped / 100) * circumference;
 
   const strokeColor =
-    clamped >= 95
+    clamped >= 90
       ? theme.colors.status.CRITICAL
-      : clamped >= 80
+      : clamped >= 75
         ? theme.colors.status.WARNING
         : theme.colors.status.NORMAL;
 
   return (
     <DialCard>
-      <svg width="54" height="54" viewBox="0 0 54 54">
+      <svg width="56" height="56" viewBox="0 0 56 56">
         <circle
-          cx="27"
-          cy="27"
+          cx="28"
+          cy="28"
           r={radius}
           fill="none"
-          stroke="rgba(244,244,240,0.08)"
-          strokeWidth="4.2"
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth="4.5"
         />
         <circle
-          cx="27"
-          cy="27"
+          cx="28"
+          cy="28"
           r={radius}
           fill="none"
           stroke={strokeColor}
-          strokeWidth="4.2"
+          strokeWidth="4.5"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          strokeLinecap="butt"
-          transform="rotate(-90 27 27)"
+          strokeLinecap="round"
+          transform="rotate(-90 28 28)"
         />
         <text
           x="50%"
-          y="53%"
+          y="52%"
           textAnchor="middle"
           dominantBaseline="middle"
-          fill="#F4F4F0"
-          fontFamily="IBM Plex Mono, monospace"
-          fontSize="9.5"
+          fill="#F8FAFC"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="10.5"
           fontWeight="700"
         >
           {clamped.toFixed(1)}
@@ -319,26 +429,26 @@ function RadialGauge({ value = 0, unit = "%", label }) {
 
 function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
   const { cpuPath, ramPath } = useMemo(() => {
-    const baseCpu = Number(machine?.cpu_usage_pct || 24);
-    const baseRam = Number(machine?.ram_usage_pct || 48);
+    const baseCpu = Number(machine?.cpu_usage_pct || 18);
+    const baseRam = Number(machine?.ram_usage_pct || 42);
 
     const samples =
-      telemetryHistory && telemetryHistory.length >= 4
+      telemetryHistory && telemetryHistory.length >= 2
         ? telemetryHistory.slice(0, 12).reverse()
         : Array.from({ length: 12 }).map((_, i) => ({
             cpu_usage_pct: Math.max(
-              4,
+              2,
               Math.min(
                 100,
-                baseCpu + Math.sin(i * 0.9 + (machine?.id || 1)) * 7,
-              ),
+                baseCpu + Math.sin(i * 0.9 + (machine?.id || 1)) * 4
+              )
             ),
             ram_usage_pct: Math.max(
-              10,
+              5,
               Math.min(
                 100,
-                baseRam + Math.cos(i * 0.7 + (machine?.id || 1)) * 4,
-              ),
+                baseRam + Math.cos(i * 0.7 + (machine?.id || 1)) * 2
+              )
             ),
           }));
 
@@ -365,10 +475,10 @@ function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
   return (
     <OscilloscopeCard>
       <div className="osc-head">
-        <span>OSCILOSCÓPIO DE PULSO // SÉRIE TEMPORAL</span>
+        <span>Histórico de Uso em Tempo Real</span>
         <div className="osc-legend">
           <span>
-            <i style={{ background: "#00F5A0" }} /> CPU
+            <i style={{ background: "#10B981" }} /> CPU
           </span>
           <span>
             <i style={{ background: "#00E5FF" }} /> RAM
@@ -386,7 +496,7 @@ function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
           y1="12"
           x2="360"
           y2="12"
-          stroke="rgba(244,244,240,0.06)"
+          stroke="rgba(255,255,255,0.06)"
           strokeDasharray="3 3"
         />
         <line
@@ -394,7 +504,7 @@ function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
           y1="24"
           x2="360"
           y2="24"
-          stroke="rgba(244,244,240,0.06)"
+          stroke="rgba(255,255,255,0.06)"
           strokeDasharray="3 3"
         />
         <line
@@ -402,17 +512,17 @@ function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
           y1="36"
           x2="360"
           y2="36"
-          stroke="rgba(244,244,240,0.06)"
+          stroke="rgba(255,255,255,0.06)"
           strokeDasharray="3 3"
         />
         <path
           d={ramPath}
           fill="none"
           stroke="#00E5FF"
-          strokeWidth="1.5"
-          opacity="0.8"
+          strokeWidth="1.8"
+          opacity="0.85"
         />
-        <path d={cpuPath} fill="none" stroke="#00F5A0" strokeWidth="1.8" />
+        <path d={cpuPath} fill="none" stroke="#10B981" strokeWidth="2" />
       </svg>
     </OscilloscopeCard>
   );
@@ -436,23 +546,42 @@ export function DiagnosticDrawer({
     return (
       <BladeContainer $statusColor="#D4FF33" $collapsed={collapsed}>
         <HeaderBlock>
-          <div>
-            <MicroSerial>AGUARDANDO AGENTES REAIS</MicroSerial>
-            <HostHeading>Nenhuma Estação Nesta Unidade</HostHeading>
-            <SubLocation>
-              Inicie o Agente Windows na máquina física para auto-registro
-              imediato na malha 3D.
-            </SubLocation>
-          </div>
+          <MicroSerial>AGUARDANDO AGENTES REAIS</MicroSerial>
+          <HostHeading>Nenhuma Estação Nesta Unidade</HostHeading>
+          <SubLocation>
+            Instale e inicie o Agente Windows (IpojucaRMM-Setup.exe) na máquina
+            para registrá-la automaticamente nesta unidade.
+          </SubLocation>
         </HeaderBlock>
       </BladeContainer>
     );
   }
 
-  const { machine, tasks = [], alerts = [], telemetry = [], telemetryHistory = [] } = diagnostics;
-  const activeTelemetryHistory = telemetry.length > 0 ? telemetry : telemetryHistory;
+  const {
+    machine,
+    tasks = [],
+    alerts = [],
+    telemetry = [],
+    telemetryHistory = [],
+  } = diagnostics;
+  const activeTelemetryHistory =
+    telemetry.length > 0 ? telemetry : telemetryHistory;
+
+  // Se a máquina tiver histórico de telemetria recente mas CPU/RAM vieram zerados, exibe o último valor real medido
+  const latestSample = activeTelemetryHistory[0] || null;
+  const displayCpu =
+    Number(machine.cpu_usage_pct) > 0
+      ? Number(machine.cpu_usage_pct)
+      : Number(latestSample?.cpu_usage_pct || 0);
+  const displayRam =
+    Number(machine.ram_usage_pct) > 0
+      ? Number(machine.ram_usage_pct)
+      : Number(latestSample?.ram_usage_pct || 0);
+
   const statusColor =
     theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
+
+  const uptimeHours = (Number(machine.uptime_seconds || 0) / 3600).toFixed(1);
 
   async function handleManualRefresh() {
     setRefreshingNow(true);
@@ -461,10 +590,12 @@ export function DiagnosticDrawer({
       const res = await onRefreshTelemetryNow(machine.id);
       setFeedback({
         type: "ok",
-        text: `SYNC MANUAL // ${res.message || "Telemetria solicitada ao agente em tempo real."}`,
+        text:
+          res.message ||
+          "Telemetria atualizada com sucesso em tempo real.",
       });
     } catch (err) {
-      setFeedback({ type: "err", text: `FALHA SYNC // ${err.message}` });
+      setFeedback({ type: "err", text: `Falha na coleta: ${err.message}` });
     } finally {
       setRefreshingNow(false);
     }
@@ -487,14 +618,14 @@ export function DiagnosticDrawer({
         machineId: machine.id,
         taskCode: task.code,
         parameters: defaultParams,
-        reason: `Comando tático por ${currentUser.name}`,
+        reason: `Ação executada por ${currentUser.name}`,
       });
       setFeedback({
         type: "ok",
-        text: `EXEC // ${res.task.task_code} -> ${res.task.output_summary || "Ordem entregue ao Agente Windows."}`,
+        text: `${task.title}: ${res.task.output_summary || "Comando enviado ao Agente Windows."}`,
       });
     } catch (err) {
-      setFeedback({ type: "err", text: `BLOCKED // ${err.message}` });
+      setFeedback({ type: "err", text: `Erro: ${err.message}` });
     } finally {
       setBusyTask(null);
     }
@@ -503,192 +634,158 @@ export function DiagnosticDrawer({
   return (
     <BladeContainer $statusColor={statusColor} $collapsed={collapsed}>
       <HeaderBlock>
-        <div>
+        <HeaderTopRow>
           <MicroSerial>
-            SYS.NODE.{machine.id} //{" "}
-            {String(machine.agent_uuid || "").slice(0, 13)}
+            ESTAÇÃO #{machine.id} • {machine.ip_address}
           </MicroSerial>
-          <HostHeading>{machine.hostname}</HostHeading>
+          <StatusBadge $color={statusColor}>
+            <span className="dot" />
+            {STATUS_LABELS[machine.health_status] || machine.health_status}
+          </StatusBadge>
+        </HeaderTopRow>
+
+        <div>
+          <HostHeading>{fixTextEncoding(machine.hostname)}</HostHeading>
           <SubLocation>
-            {machine.unit_name} — {machine.sector_name}
+            {fixTextEncoding(machine.unit_name)} •{" "}
+            {fixTextEncoding(machine.sector_name)}
           </SubLocation>
         </div>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: "5px",
-          }}
-        >
-          <StatusStamp $color={statusColor}>
-            {STATUS_LABELS[machine.health_status]}
-          </StatusStamp>
-          <div style={{ display: "flex", gap: "4px" }}>
-            <button
-              onClick={onFocusCamera}
-              style={{
-                background: "transparent",
-                border: "1px solid rgba(212,255,51,0.45)",
-                color: "#D4FF33",
-                fontFamily: "IBM Plex Mono, monospace",
-                fontSize: "8.5px",
-                padding: "2px 6px",
-                cursor: "pointer",
-              }}
+
+        <ActionToolbar>
+          <HeaderActionBtn $variant="accent" onClick={onFocusCamera}>
+            Focar no Mapa 3D
+          </HeaderActionBtn>
+          <HeaderActionBtn onClick={() => setCollapsed((prev) => !prev)}>
+            {collapsed ? "Expandir Painel" : "Recolher Painel"}
+          </HeaderActionBtn>
+          {onDeleteMachine && currentUser?.role !== "VIEWER" && (
+            <HeaderActionBtn
+              $variant="danger"
+              onClick={() => onDeleteMachine(machine.id)}
+              title="Remover esta estação do painel"
             >
-              [MIRAR 3D]
-            </button>
-            {onDeleteMachine && currentUser?.role !== "VIEWER" && (
-              <button
-                onClick={() => onDeleteMachine(machine.id)}
-                style={{
-                  background: "rgba(255,42,84,0.12)",
-                  border: "1px solid rgba(255,42,84,0.45)",
-                  color: "#FF2A54",
-                  fontFamily: "IBM Plex Mono, monospace",
-                  fontSize: "8.5px",
-                  padding: "2px 6px",
-                  cursor: "pointer",
-                }}
-                title="Remover estação cadastrada do painel"
-              >
-                [REMOVER]
-              </button>
-            )}
-            <button
-              onClick={() => setCollapsed((prev) => !prev)}
-              style={{
-                background: "rgba(244,244,240,0.06)",
-                border: "1px solid rgba(244,244,240,0.2)",
-                color: "#F4F4F0",
-                fontFamily: "IBM Plex Mono, monospace",
-                fontSize: "8.5px",
-                padding: "2px 6px",
-                cursor: "pointer",
-              }}
-              title="Recolher ou expandir painel lateral para ampliar visão 3D"
-            >
-              {collapsed ? "[+ EXPANDIR]" : "[- COMPACTAR]"}
-            </button>
-          </div>
-        </div>
+              Remover PC
+            </HeaderActionBtn>
+          )}
+        </ActionToolbar>
       </HeaderBlock>
 
-      <UplinkRibbon>
-        <span>FIBRA GPON // CORE-SW-01</span>
-        <span>
-          POS 3D [{Number(machine.pos_x || 0).toFixed(1)},{" "}
-          {Number(machine.pos_z || 0).toFixed(1)}]
-        </span>
-      </UplinkRibbon>
-
       <RadialGrid>
-        <RadialGauge value={machine.cpu_usage_pct} unit="%" label="CPU LOAD" />
-        <RadialGauge value={machine.ram_usage_pct} unit="%" label="RAM MEM" />
-        <RadialGauge value={machine.disk_usage_pct} unit="%" label="NVMe/SSD" />
-        <RadialGauge value={machine.temperature_c} unit="°" label="THERMAL" />
+        <RadialGauge value={displayCpu} unit="%" label="Uso de CPU" />
+        <RadialGauge value={displayRam} unit="%" label="Memória RAM" />
+        <RadialGauge
+          value={machine.disk_usage_pct}
+          unit="%"
+          label="Disco SSD"
+        />
+        <RadialGauge
+          value={machine.temperature_c}
+          unit="°C"
+          label="Temperatura"
+        />
       </RadialGrid>
 
       {!collapsed && (
         <>
           <TelemetryOscilloscope
-            machine={machine}
+            machine={{
+              ...machine,
+              cpu_usage_pct: displayCpu,
+              ram_usage_pct: displayRam,
+            }}
             telemetryHistory={activeTelemetryHistory}
           />
 
           <SpecPlate>
+            <div className="spec-grid-2">
+              <div className="spec-cell">
+                <span>Endereço IPv4 / MAC</span>
+                <strong className="mono">
+                  {machine.ip_address} • {machine.mac_address || "N/A"}
+                </strong>
+              </div>
+              <div className="spec-cell">
+                <span>Fila de Impressão (Spooler)</span>
+                <strong
+                  style={{
+                    color: machine.spooler_running ? "#10B981" : "#EF4444",
+                  }}
+                >
+                  {machine.spooler_running
+                    ? "● Serviço Ativo (Normal)"
+                    : "● Serviço Parado (Falha)"}
+                </strong>
+              </div>
+            </div>
+
+            <div className="spec-divider" />
+
             <div className="spec-cell">
-              <span>IPV4 / MAC</span>
+              <span>Fabricante / Modelo / Número de Série</span>
               <strong>
-                {machine.ip_address} •{" "}
-                {String(machine.mac_address || "").slice(-8)}
+                {fixTextEncoding(machine.manufacturer)}{" "}
+                {fixTextEncoding(machine.model)} ({machine.serial_number})
               </strong>
             </div>
+
+            <div className="spec-divider" />
+
             <div className="spec-cell">
-              <span>IMPRESSORA / SPOOLER</span>
-              <strong
-                style={{
-                  color: machine.spooler_running ? "#00F5A0" : "#FF2A54",
-                }}
-              >
-                {machine.spooler_running
-                  ? "ONLINE (ACTIVE 3D)"
-                  : "STOPPED (FAULT)"}
-              </strong>
-            </div>
-            <div className="spec-cell">
-              <span>FABRICANTE / MODELO / BIOS</span>
+              <span>Processador (CPU)</span>
               <strong>
-                {machine.manufacturer} {machine.model} ({machine.serial_number})
+                {fixTextEncoding(machine.cpu_model || "Processador x64")}
               </strong>
             </div>
-            <div className="spec-cell">
-              <span>PROCESSADOR (CPU)</span>
-              <strong>{machine.cpu_model || 'x64 Processor'}</strong>
-            </div>
-            <div className="spec-cell">
-              <span>MEMÓRIA / DISCO</span>
-              <strong>
-                {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(1)}GB RAM •{' '}
-                {machine.disk_total_gb}GB {machine.disk_type}
-              </strong>
-            </div>
-            <div className="spec-cell">
-              <span>SISTEMA OPERACIONAL / UPTIME</span>
-              <strong>
-                {machine.os_version || 'Windows'} •{' '}
-                {Math.floor(Number(machine.uptime_seconds || 0) / 3600)}h ativo
-              </strong>
+
+            <div className="spec-divider" />
+
+            <div className="spec-grid-2">
+              <div className="spec-cell">
+                <span>Memória / Armazenamento</span>
+                <strong className="mono">
+                  {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(1)} GB
+                  RAM • {machine.disk_total_gb} GB {machine.disk_type}
+                </strong>
+              </div>
+              <div className="spec-cell">
+                <span>Sistema Operacional / Ativo</span>
+                <strong>
+                  {fixTextEncoding(machine.os_version || "Windows")} •{" "}
+                  {uptimeHours}h ligado
+                </strong>
+              </div>
             </div>
           </SpecPlate>
 
           <SectionBar>
             <span>
-              CICLO: BOOT + 4H • ÚLTIMO PULSO:{" "}
+              Última comunicação:{" "}
               {machine.last_seen_at
                 ? new Date(machine.last_seen_at).toLocaleTimeString("pt-BR")
-                : "AGORA"}
+                : "Agora"}
             </span>
+            <span>Ciclo: 4h + Tempo Real</span>
           </SectionBar>
 
-          <button
+          <RefreshTelemetryBtn
             onClick={handleManualRefresh}
-            disabled={refreshingNow || machine.health_status === "OFFLINE"}
-            style={{
-              width: "100%",
-              padding: "9px 12px",
-              background: refreshingNow
-                ? "rgba(212, 255, 51, 0.25)"
-                : "#D4FF33",
-              color: "#050507",
-              border: "1px solid #D4FF33",
-              fontFamily: "'IBM Plex Mono', monospace",
-              fontSize: "0.7rem",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              cursor:
-                machine.health_status === "OFFLINE" ? "not-allowed" : "pointer",
-              textTransform: "uppercase",
-              clipPath:
-                "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
-            }}
+            disabled={refreshingNow}
+            $loading={refreshingNow}
           >
             {refreshingNow
-              ? "⟳ COLETANDO TELEMETRIA EM TEMPO REAL..."
-              : "⟳ ATUALIZAR TELEMETRIA AGORA (SOB DEMANDA)"}
-          </button>
+              ? "⟳ Coletando dados em tempo real do Agente..."
+              : "⟳ Atualizar Telemetria Agora (Tempo Real)"}
+          </RefreshTelemetryBtn>
 
           <SectionBar>
-            <span>CATÁLOGO DE MANUTENÇÃO REMOTA</span>
-            <span>RBAC: {currentUser.role}</span>
+            <span>Ações de Manutenção Remota</span>
+            <span>Perfil: {currentUser.role}</span>
           </SectionBar>
 
           <KeycapMatrix>
             {taskCatalog.map((task) => {
-              const allowed =
-                task.permittedForCurrentUser &&
-                machine.health_status !== "OFFLINE";
+              const allowed = task.permittedForCurrentUser;
               return (
                 <KeycapButton
                   key={task.code}
@@ -697,38 +794,46 @@ export function DiagnosticDrawer({
                   onClick={() => handleRunTask(task)}
                   title={task.description}
                 >
-                  <div className="key-code">
-                    <span>{task.code.slice(0, 15)}</span>
-                    <span>[{task.riskLevel}]</span>
+                  <div className="key-head">
+                    <span className="key-badge">
+                      Risco {RISK_LABELS[task.riskLevel] || task.riskLevel}
+                    </span>
                   </div>
                   <span className="key-title">
-                    {busyTask === task.code ? "EXECUTANDO..." : task.title}
+                    {busyTask === task.code
+                      ? "Executando comando..."
+                      : fixTextEncoding(task.title)}
                   </span>
                 </KeycapButton>
               );
             })}
           </KeycapMatrix>
 
-          <TerminalReadout>
-            {feedback && (
-              <div className={feedback.type === "err" ? "line-err" : "line-ok"}>
-                &gt; {feedback.text}
-              </div>
-            )}
-            {tasks.slice(0, 4).map((t) => (
-              <div key={t.task_id}>
-                [{new Date(t.issued_at).toLocaleTimeString("pt-BR")}]{" "}
-                {t.task_code} :: <span className="line-ok">{t.status}</span> —{" "}
-                {t.output_summary}
-              </div>
-            ))}
-            {alerts.length > 0 && (
-              <div className="line-n8n">
-                [N8N // WHATSAPP DISPATCH] PROTOCOLO #
-                {alerts[0].external_ticket_id || "ATIVO"} — {alerts[0].message}
-              </div>
-            )}
-          </TerminalReadout>
+          {(feedback || tasks.length > 0 || alerts.length > 0) && (
+            <TerminalReadout>
+              {feedback && (
+                <div
+                  className={feedback.type === "err" ? "line-err" : "line-ok"}
+                >
+                  &gt; {feedback.text}
+                </div>
+              )}
+              {tasks.slice(0, 4).map((t) => (
+                <div key={t.task_id}>
+                  [{new Date(t.issued_at).toLocaleTimeString("pt-BR")}]{" "}
+                  {t.task_code} :: <span className="line-ok">{t.status}</span> —{" "}
+                  {fixTextEncoding(t.output_summary)}
+                </div>
+              ))}
+              {alerts.length > 0 && (
+                <div className="line-n8n">
+                  [N8N // WHATSAPP] Protocolo #
+                  {alerts[0].external_ticket_id || "ATIVO"} —{" "}
+                  {fixTextEncoding(alerts[0].message)}
+                </div>
+              )}
+            </TerminalReadout>
+          )}
         </>
       )}
     </BladeContainer>

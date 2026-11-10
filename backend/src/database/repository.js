@@ -102,6 +102,7 @@ class RmmRepository {
         user: env.db.user,
         password: env.db.password,
         database: env.db.database,
+        charset: 'utf8mb4',
         waitForConnections: true,
         connectionLimit: 10,
         connectTimeout: 2500,
@@ -122,12 +123,61 @@ class RmmRepository {
 
   async ensureMysqlSeedData() {
     if (this.mode !== 'mysql' || !this.pool) return;
+    await this.pool.query('SET NAMES utf8mb4');
+
+    // Garante acentuação UTF-8 limpa nas Unidades e Setores já existentes no MySQL
+    for (const unit of this.units) {
+      await this.pool.execute(
+        `UPDATE health_units SET name = ?, address = ? WHERE id = ?`,
+        [unit.name, unit.address, unit.id]
+      );
+    }
+    for (const sec of this.sectors) {
+      await this.pool.execute(
+        `UPDATE sectors SET name = ? WHERE id = ?`,
+        [sec.name, sec.id]
+      );
+    }
+
     for (const u of this.users) {
       await this.pool.execute(
         `INSERT IGNORE INTO users (id, name, email, password_hash, role, is_active)
          VALUES (?, ?, ?, ?, ?, 1)`,
         [u.id, u.name, u.email, u.password_hash, u.role]
       );
+    }
+
+    // Restaura métricas reais do histórico caso alguma estação ativa tenha sido zerada por timeout curto anterior
+    try {
+      const [machines] = await this.pool.query('SELECT * FROM machines');
+      for (const m of machines) {
+        if (Number(m.cpu_usage_pct) === 0 && Number(m.ram_usage_pct) === 0) {
+          const [lastTel] = await this.pool.execute(
+            `SELECT * FROM telemetry_history WHERE machine_id = ? AND (cpu_usage_pct > 0 OR ram_usage_pct > 0) ORDER BY recorded_at DESC LIMIT 1`,
+            [m.id]
+          );
+          if (lastTel.length > 0) {
+            await this.pool.execute(
+              `UPDATE machines SET cpu_usage_pct = ?, ram_usage_pct = ?, disk_usage_pct = ?, temperature_c = ?, health_status = ? WHERE id = ?`,
+              [
+                lastTel[0].cpu_usage_pct,
+                lastTel[0].ram_usage_pct,
+                lastTel[0].disk_usage_pct,
+                lastTel[0].temperature_c,
+                lastTel[0].health_status === 'OFFLINE' ? 'NORMAL' : lastTel[0].health_status,
+                m.id,
+              ]
+            );
+          } else {
+            await this.pool.execute(
+              `UPDATE machines SET health_status = 'NORMAL' WHERE id = ? AND TIMESTAMPDIFF(SECOND, last_seen_at, NOW()) < ?`,
+              [m.id, env.offlineThresholdSeconds]
+            );
+          }
+        }
+      }
+    } catch {
+      // Ignora caso não haja histórico prévio
     }
   }
 
@@ -736,7 +786,7 @@ class RmmRepository {
       );
       for (const m of staleRows) {
         await this.pool.execute(
-          `UPDATE machines SET health_status = 'OFFLINE', cpu_usage_pct = 0, ram_usage_pct = 0 WHERE id = ?`,
+          `UPDATE machines SET health_status = 'OFFLINE' WHERE id = ?`,
           [m.id]
         );
         transitioned.push(await this.findMachineById(m.id));
@@ -748,8 +798,6 @@ class RmmRepository {
       const lastSeenMs = new Date(m.last_seen_at).getTime();
       if (m.health_status !== 'OFFLINE' && lastSeenMs < cutoffMs) {
         m.health_status = 'OFFLINE';
-        m.cpu_usage_pct = 0;
-        m.ram_usage_pct = 0;
         m.updated_at = new Date().toISOString();
         transitioned.push(await this.findMachineById(m.id));
       }
@@ -792,7 +840,7 @@ class RmmRepository {
     const id = Number(machineId);
     if (this.mode === 'mysql') {
       await this.pool.execute(
-        `UPDATE machines SET health_status = 'OFFLINE', cpu_usage_pct = 0, ram_usage_pct = 0 WHERE id = ?`,
+        `UPDATE machines SET health_status = 'OFFLINE' WHERE id = ?`,
         [id]
       );
       return this.findMachineById(id);
@@ -800,8 +848,6 @@ class RmmRepository {
     const m = this.machines.find((x) => x.id === id);
     if (!m) return null;
     m.health_status = 'OFFLINE';
-    m.cpu_usage_pct = 0;
-    m.ram_usage_pct = 0;
     m.updated_at = new Date().toISOString();
     return this.findMachineById(id);
   }
