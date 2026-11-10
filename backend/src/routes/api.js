@@ -509,12 +509,6 @@ router.post(
           .status(404)
           .json({ error: "Computador de destino não encontrado." });
       }
-      if (machine.health_status === "OFFLINE") {
-        return res.status(409).json({
-          error:
-            "O computador está OFFLINE no momento e não pode receber tarefas em tempo real.",
-        });
-      }
 
       const taskId = `tsk_${crypto.randomBytes(6).toString("hex")}`;
       const issuedAt = new Date().toISOString();
@@ -562,28 +556,49 @@ router.post(
       });
 
       // Enfileira também para o Super Agente Nativo (.exe) executar de verdade no Windows
-      const agentTaskQueue = pendingTasksByAgent.get(machine.agent_uuid) || [];
-      agentTaskQueue.push({
-        task_id: taskId,
-        machine_id: machine.id,
-        task_code: taskSpec.code,
-        parameters: paramValidation.sanitized,
-      });
-      pendingTasksByAgent.set(machine.agent_uuid, agentTaskQueue);
-
-      if (taskSpec.code === "UPDATE_AGENT") {
+      if (taskSpec.code === "SYNC_TELEMETRY_NOW") {
+        pendingRefreshByAgent.add(machine.agent_uuid);
+        socketHub.requestImmediateTelemetry(machine.id);
+      } else if (taskSpec.code === "UPDATE_AGENT") {
         pendingUpdateByAgent.add(machine.agent_uuid);
+      } else {
+        const agentTaskQueue = pendingTasksByAgent.get(machine.agent_uuid) || [];
+        agentTaskQueue.push({
+          task_id: taskId,
+          machine_id: machine.id,
+          task_code: taskSpec.code,
+          parameters: paramValidation.sanitized,
+        });
+        pendingTasksByAgent.set(machine.agent_uuid, agentTaskQueue);
       }
 
       if (!dispatchOutcome.deliveredToSocket) {
-        // Aguarda até 4.5s pelo resultado real executado pelo Agente C# (.exe) no computador
-        const waitMs = process.env.FORCE_NATIVE_ROUTER === "1" ? 30 : 4500;
-        const liveCompletedTask = await waitForLiveAgentTaskResult(taskId, waitMs);
-        if (liveCompletedTask) {
-          return res.status(202).json({
-            task: liveCompletedTask,
-            delivery_mode: "native_agent_live_executed",
-          });
+        if (taskSpec.code === "SYNC_TELEMETRY_NOW") {
+          const waitMs = process.env.FORCE_NATIVE_ROUTER === "1" ? 30 : 2800;
+          const liveMachine = await waitForLiveAgentHeartbeat(machine.agent_uuid, waitMs);
+          if (liveMachine) {
+            const completedLive = await repository.completeRemoteTask({
+              taskId,
+              status: "COMPLETED",
+              exitCode: 0,
+              outputSummary: `Telemetria coletada ao vivo (${liveMachine.ip_address} | CPU ${Number(liveMachine.cpu_usage_pct).toFixed(1)}% | RAM ${Number(liveMachine.ram_usage_pct).toFixed(1)}%).`,
+            });
+            socketHub.broadcastToDashboard("task:updated", completedLive);
+            return res.status(202).json({
+              task: completedLive,
+              delivery_mode: "native_agent_live_executed",
+            });
+          }
+        } else if (taskSpec.code !== "UPDATE_AGENT") {
+          // Aguarda até 2.8s pelo resultado real executado pelo Agente C# (.exe) no computador
+          const waitMs = process.env.FORCE_NATIVE_ROUTER === "1" ? 30 : 2800;
+          const liveCompletedTask = await waitForLiveAgentTaskResult(taskId, waitMs);
+          if (liveCompletedTask) {
+            return res.status(202).json({
+              task: liveCompletedTask,
+              delivery_mode: "native_agent_live_executed",
+            });
+          }
         }
 
         const simulatedOutputByCode = {
@@ -761,7 +776,10 @@ router.get("/agent/pending", async (req, res) => {
 
   // Atualiza presença leve do agente (mantém máquina ONLINE enquanto o agente estiver aberto)
   try {
-    const reactivatedMachine = await repository.touchAgentPresence(agentUuid);
+    const reactivatedMachine = await repository.touchAgentPresence(
+      agentUuid,
+      currentAgentVersion,
+    );
     if (reactivatedMachine) {
       socketHub.broadcastToDashboard("machine:updated", reactivatedMachine);
     }

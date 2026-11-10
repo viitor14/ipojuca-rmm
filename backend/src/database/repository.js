@@ -805,32 +805,49 @@ class RmmRepository {
     return transitioned;
   }
 
-  async touchAgentPresence(agentUuid) {
+  async touchAgentPresence(agentUuid, currentAgentVersion = '') {
     const machine = await this.findMachineByAgentUuid(agentUuid);
     if (!machine) return null;
     const nowIso = new Date().toISOString();
     const wasOffline = machine.health_status === 'OFFLINE';
+    const nextVersion = String(currentAgentVersion || '').trim();
+    const versionChanged = Boolean(nextVersion) && nextVersion !== machine.agent_version;
 
     if (this.mode === 'mysql') {
-      if (wasOffline) {
+      if (wasOffline && versionChanged) {
+        await this.pool.execute(
+          `UPDATE machines SET health_status = 'NORMAL', agent_version = ?, last_seen_at = NOW() WHERE id = ?`,
+          [nextVersion, machine.id]
+        );
+      } else if (wasOffline) {
         await this.pool.execute(
           `UPDATE machines SET health_status = 'NORMAL', last_seen_at = NOW() WHERE id = ?`,
           [machine.id]
+        );
+      } else if (versionChanged) {
+        await this.pool.execute(
+          `UPDATE machines SET agent_version = ?, last_seen_at = NOW() WHERE id = ?`,
+          [nextVersion, machine.id]
         );
       } else {
         await this.pool.execute(`UPDATE machines SET last_seen_at = NOW() WHERE id = ?`, [
           machine.id,
         ]);
       }
-      return wasOffline ? this.findMachineById(machine.id) : null;
+      return wasOffline || versionChanged ? this.findMachineById(machine.id) : null;
     }
 
     const memMachine = this.machines.find((m) => m.id === machine.id);
     if (!memMachine) return null;
     memMachine.last_seen_at = nowIso;
     memMachine.updated_at = nowIso;
+    if (versionChanged) {
+      memMachine.agent_version = nextVersion;
+    }
     if (wasOffline) {
       memMachine.health_status = 'NORMAL';
+    }
+    if (wasOffline || versionChanged) {
       return this.findMachineById(memMachine.id);
     }
     return null;

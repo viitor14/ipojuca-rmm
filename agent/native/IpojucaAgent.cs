@@ -80,8 +80,19 @@ namespace IpojucaRMM
                 return;
             }
 
-            bool createdNew;
-            _singleInstanceMutex = new Mutex(true, "Global\\IpojucaRMMAgent_SingleInstance_Mutex", out createdNew);
+            bool createdNew = false;
+            int maxMutexRetries = isBackgroundMode ? 12 : 1;
+            for (int i = 0; i < maxMutexRetries; i++)
+            {
+                _singleInstanceMutex = new Mutex(true, "Global\\IpojucaRMMAgent_SingleInstance_Mutex", out createdNew);
+                if (createdNew) break;
+                try { _singleInstanceMutex.Close(); } catch { }
+                if (i + 1 < maxMutexRetries)
+                {
+                    Thread.Sleep(500);
+                }
+            }
+
             if (!createdNew)
             {
                 if (!isBackgroundMode)
@@ -99,6 +110,16 @@ namespace IpojucaRMM
             Application.Run(new TrayAgentContext(installDir, customUrl));
         }
 
+        public static void ReleaseSingleInstanceMutex()
+        {
+            if (_singleInstanceMutex != null)
+            {
+                try { _singleInstanceMutex.ReleaseMutex(); } catch { }
+                try { _singleInstanceMutex.Close(); } catch { }
+                _singleInstanceMutex = null;
+            }
+        }
+
         private static void RunInstaller(string sourceExe, string installDir, string targetExe, string customUrl, bool silent, bool isOtaUpdate)
         {
             try
@@ -109,19 +130,23 @@ namespace IpojucaRMM
                 }
 
                 // Aguarda encerramento de instância anterior caso esteja atualizando
-                for (int attempt = 0; attempt < 6; attempt++)
+                string[] runningNames = new string[] { "IpojucaRMM-Agent", "IpojucaRMM-Setup", "IpojucaRMM-Updater-Temp" };
+                for (int attempt = 0; attempt < 8; attempt++)
                 {
-                    foreach (Process proc in Process.GetProcessesByName("IpojucaRMM-Agent"))
+                    foreach (string pName in runningNames)
                     {
-                        try
+                        foreach (Process proc in Process.GetProcessesByName(pName))
                         {
-                            if (proc.Id != Process.GetCurrentProcess().Id)
+                            try
                             {
-                                proc.Kill();
-                                proc.WaitForExit(2000);
+                                if (proc.Id != Process.GetCurrentProcess().Id)
+                                {
+                                    proc.Kill();
+                                    proc.WaitForExit(2000);
+                                }
                             }
+                            catch { }
                         }
-                        catch { }
                     }
                     try
                     {
@@ -130,7 +155,7 @@ namespace IpojucaRMM
                     }
                     catch
                     {
-                        Thread.Sleep(600);
+                        Thread.Sleep(500);
                     }
                 }
 
@@ -224,6 +249,7 @@ namespace IpojucaRMM
         private DateTime _lastSyncTime = DateTime.MinValue;
         private bool _isSending = false;
         private bool _isUpdating = false;
+        private bool _suppressDisconnectOnExit = false;
 
         public TrayAgentContext(string installDir, string customUrl)
         {
@@ -270,7 +296,13 @@ namespace IpojucaRMM
             menu.Items.Add(exitItem);
 
             SystemEvents.SessionEnding += (s, e) => SendDisconnectSignal();
-            Application.ApplicationExit += (s, e) => SendDisconnectSignal();
+            Application.ApplicationExit += (s, e) =>
+            {
+                if (!_suppressDisconnectOnExit)
+                {
+                    SendDisconnectSignal();
+                }
+            };
 
             _trayIcon = new NotifyIcon();
             _trayIcon.Icon = CreateCustomIcon();
@@ -365,8 +397,10 @@ namespace IpojucaRMM
                         );
                         UpdateProgressForm updateForm = new UpdateProgressForm(_config, _installDir, isManualClick, () =>
                         {
+                            _suppressDisconnectOnExit = true;
+                            Program.ReleaseSingleInstanceMutex();
                             _trayIcon.Visible = false;
-                            Application.Exit();
+                            Environment.Exit(0);
                         }, () =>
                         {
                             _isUpdating = false;
@@ -1541,7 +1575,8 @@ namespace IpojucaRMM
                     try { File.Delete(tempUpdaterPath); } catch { }
                 }
 
-                HttpWebRequest dlReq = (HttpWebRequest)WebRequest.Create(config.BackendUrl.TrimEnd('/') + "/api/agent/download");
+                string downloadUrl = config.BackendUrl.TrimEnd('/') + "/api/agent/download";
+                HttpWebRequest dlReq = (HttpWebRequest)WebRequest.Create(downloadUrl);
                 dlReq.Method = "GET";
                 dlReq.Timeout = 30000;
                 using (HttpWebResponse dlResp = (HttpWebResponse)dlReq.GetResponse())
@@ -1550,11 +1585,9 @@ namespace IpojucaRMM
                 {
                     byte[] buffer = new byte[16384];
                     int read;
-                    long totalRead = 0;
                     while ((read = netStream.Read(buffer, 0, buffer.Length)) > 0)
                     {
                         fileStream.Write(buffer, 0, read);
-                        totalRead += read;
                     }
                 }
 

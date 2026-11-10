@@ -347,22 +347,45 @@ const KeycapButton = styled.button`
 `;
 
 const TerminalReadout = styled.div`
-  background: #06080d;
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: #060911;
+  border: 1px solid
+    ${({ $highlight }) =>
+      $highlight ? "rgba(0, 229, 255, 0.65)" : "rgba(255, 255, 255, 0.16)"};
+  box-shadow: ${({ $highlight }) =>
+    $highlight ? "0 0 16px rgba(0, 229, 255, 0.18)" : "none"};
   border-radius: 8px;
   padding: 10px 12px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   line-height: 1.5;
-  max-height: 135px;
+  max-height: 165px;
   overflow-y: auto;
   color: #cbd5e1;
 
+  .console-head {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #00e5ff;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 4px;
+  }
+
   .line-ok {
     color: #10b981;
+    font-weight: 600;
+  }
+  .line-busy {
+    color: #00e5ff;
+    font-weight: 600;
   }
   .line-err {
     color: #ef4444;
+    font-weight: 600;
   }
   .line-n8n {
     color: #d4ff33;
@@ -664,8 +687,29 @@ export function DiagnosticDrawer({
 
   async function handleRunTask(task) {
     setBusyTask(task.code);
-    setFeedback(null);
+    setFeedback({
+      type: "busy",
+      text: `⏳ Executando "${fixTextEncoding(task.title)}" em ${machine.hostname}... aguarde resposta do Agente.`,
+    });
     try {
+      if (task.code === "SYNC_TELEMETRY_NOW" && onRefreshTelemetryNow) {
+        const res = await onRefreshTelemetryNow(machine.id);
+        setFeedback({
+          type: "ok",
+          text: `✅ ${fixTextEncoding(task.title)}: ${res.message || "Telemetria coletada em tempo real."}`,
+        });
+        return;
+      }
+
+      if (task.code === "UPDATE_AGENT" && onUpdateMachineAgent) {
+        const res = await onUpdateMachineAgent(machine.id);
+        setFeedback({
+          type: "ok",
+          text: `✅ ${fixTextEncoding(task.title)}: ${res.message || "Ordem de atualização OTA enviada ao PC com barra de progresso na tela."}`,
+        });
+        return;
+      }
+
       const defaultParams =
         task.code === "INSTALL_APPROVED_PRINTER"
           ? { printer_ip: "10.14.1.250", printer_name: "IMP_USF_RECEPCAO" }
@@ -683,10 +727,10 @@ export function DiagnosticDrawer({
       });
       setFeedback({
         type: "ok",
-        text: `${task.title}: ${res.task.output_summary || "Comando enviado ao Agente Windows."}`,
+        text: `✅ ${fixTextEncoding(task.title)}: ${fixTextEncoding(res.task?.output_summary || "Comando executado no Agente Windows.")}`,
       });
     } catch (err) {
-      setFeedback({ type: "err", text: `Erro: ${err.message}` });
+      setFeedback({ type: "err", text: `❌ Erro ao executar "${fixTextEncoding(task.title)}": ${err.message}` });
     } finally {
       setBusyTask(null);
     }
@@ -892,16 +936,66 @@ export function DiagnosticDrawer({
             <span>Perfil: {currentUser.role}</span>
           </SectionBar>
 
+          <TerminalReadout $highlight={Boolean(feedback || busyTask)}>
+            <div className="console-head">
+              <span>⚡ Retorno de Execução Remota</span>
+              <span>{busyTask ? "EXECUTANDO..." : "PRONTO"}</span>
+            </div>
+            {feedback ? (
+              <div
+                className={
+                  feedback.type === "err"
+                    ? "line-err"
+                    : feedback.type === "busy"
+                      ? "line-busy"
+                      : "line-ok"
+                }
+                style={{ marginBottom: tasks.length > 0 ? "6px" : 0 }}
+              >
+                &gt; {feedback.text}
+              </div>
+            ) : (
+              tasks.length === 0 && (
+                <div style={{ color: "#94A3B8" }}>
+                  &gt; Clique em qualquer botão abaixo para executar no PC selecionado.
+                </div>
+              )
+            )}
+            {tasks.slice(0, 4).map((t) => (
+              <div key={t.task_id}>
+                [{new Date(t.issued_at).toLocaleTimeString("pt-BR")}]{" "}
+                {t.task_code} :: <span className="line-ok">{t.status}</span> —{" "}
+                {fixTextEncoding(t.output_summary)}
+              </div>
+            ))}
+            {alerts.length > 0 && (
+              <div className="line-n8n">
+                [N8N // WHATSAPP] Protocolo #
+                {alerts[0].external_ticket_id || "ATIVO"} —{" "}
+                {fixTextEncoding(alerts[0].message)}
+              </div>
+            )}
+          </TerminalReadout>
+
           <KeycapMatrix>
             {taskCatalog.map((task) => {
               const allowed = task.permittedForCurrentUser;
+              const isBusy = busyTask === task.code;
               return (
                 <KeycapButton
                   key={task.code}
                   $risk={task.riskLevel}
-                  disabled={!allowed || busyTask === task.code}
+                  disabled={!allowed || isBusy}
                   onClick={() => handleRunTask(task)}
                   title={task.description}
+                  style={
+                    isBusy
+                      ? {
+                          borderColor: "#00E5FF",
+                          background: "rgba(0, 229, 255, 0.14)",
+                        }
+                      : undefined
+                  }
                 >
                   <div className="key-head">
                     <span className="key-badge">
@@ -909,40 +1003,14 @@ export function DiagnosticDrawer({
                     </span>
                   </div>
                   <span className="key-title">
-                    {busyTask === task.code
-                      ? "Executando comando..."
+                    {isBusy
+                      ? "⏳ Executando no PC..."
                       : fixTextEncoding(task.title)}
                   </span>
                 </KeycapButton>
               );
             })}
           </KeycapMatrix>
-
-          {(feedback || tasks.length > 0 || alerts.length > 0) && (
-            <TerminalReadout>
-              {feedback && (
-                <div
-                  className={feedback.type === "err" ? "line-err" : "line-ok"}
-                >
-                  &gt; {feedback.text}
-                </div>
-              )}
-              {tasks.slice(0, 4).map((t) => (
-                <div key={t.task_id}>
-                  [{new Date(t.issued_at).toLocaleTimeString("pt-BR")}]{" "}
-                  {t.task_code} :: <span className="line-ok">{t.status}</span> —{" "}
-                  {fixTextEncoding(t.output_summary)}
-                </div>
-              ))}
-              {alerts.length > 0 && (
-                <div className="line-n8n">
-                  [N8N // WHATSAPP] Protocolo #
-                  {alerts[0].external_ticket_id || "ATIVO"} —{" "}
-                  {fixTextEncoding(alerts[0].message)}
-                </div>
-              )}
-            </TerminalReadout>
-          )}
 
           {onSendMessage && (
             <div
