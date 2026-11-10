@@ -192,10 +192,45 @@ Eliminar a necessidade de ir fisicamente ou acessar manualmente cada computador 
 
 ---
 
-## 9. Gate de Aprovação — FASE 1 (Ciclo #04)
+## 9. Ciclo #05 — Execução Real de Funções Remotas no Super Agente Windows (`v2.2.0`) & Interação Cliente-Servidor (`@pm` + `@security` + `@engineer`)
+
+### 9.1. Objetivo e Problema Resolvido
+Agora que o Agente Windows possui atualização automática OTA com aviso na tela, o próximo passo é fazer com que **todas as ações de manutenção do painel e novas funções de suporte executem de verdade dentro do Agente C# (`.exe`) na máquina Windows** (com retorno real do que foi limpo, reiniciado ou diagnosticado no PC) e integrar o **Chat / Aviso na Tela Cliente ↔ Central de TI** direto no painel.
+
+### 9.2. Novas Funções Reais do Agente Windows (`v2.2.0-native-exe`)
+
+1. **RF-23 (Motor Real de Execução de Tarefas Homologadas no Agente `.exe`):**
+   Quando o operador clicar em qualquer cartão de manutenção no painel (`POST /api/command`), o backend enviará a tarefa assinada na fila do Agente (`/api/agent/pending`) e aguarda o **resultado real executado pelo `IpojucaAgent.exe` no Windows** (`POST /api/agent/task-result`):
+   - **`CLEAR_TEMP_CACHE` (Limpar Arquivos Temporários Reais):** Varre `%TEMP%` do usuário e `C:\Windows\Temp`, remove arquivos temporários desbloqueados e retorna a quantidade exata de arquivos apagados e megabytes liberados no PC (ex.: `"Limpeza real concluída em DESKTOP-TCIIVHG: 148 arquivos removidos (84.6 MB liberados)."`).
+   - **`RESTART_SPOOLER` (Reiniciar Fila de Impressão Real):** Executa `net stop spooler`, limpa arquivos travados em `C:\Windows\System32\spool\PRINTERS` e executa `net start spooler`, destravando impressoras nas USFs e atualizando o status do Spooler na hora.
+   - **`FLUSH_DNS_WINSOCK` (Limpar Cache DNS e Rede):** Executa `ipconfig /flushdns` e `arp -d *` real no Windows e retorna a saída real do comando.
+   - **`COLLECT_NETWORK_DIAG` (Diagnóstico Real de Rede e Latência):** Mede o ping real (`Ping` nativo .NET) para o Gateway da unidade, DNS (`8.8.8.8`) e Servidor VPS (`31.97.86.253`), listando IP, Máscara, Gateway, DNS ativos e velocidade do link em Mbps.
+   - **`CHECK_DISK_HEALTH` (Saúde Real de Disco e Espaço Livre):** Consulta via WMI (`Win32_DiskDrive` Status SMART `OK`/`Pred Fail`) e `DriveInfo` o espaço total, livre e usado em GB de todas as partições (`C:`, `D:`, etc.).
+   - **`LIST_TOP_PROCESSES` (NOVO — Listar Top Processos Consumindo CPU/RAM):** Coleta em tempo real os 8 processos do Windows que mais estão consumindo Memória RAM e CPU na máquina (ex.: `chrome.exe (1.2 GB)`, `esus-pec.exe (640 MB)`) para o técnico saber na hora o que está travando o PC.
+   - **`SEND_SCREEN_ALERT` / Chat Bidirecional (NOVO — Mensagem / Pop-up na Tela do Usuário + Resposta):** Permite ao técnico digitar um aviso no painel (ex.: *"Olá Recepção, estamos reiniciando a fila da impressora, aguarde 1 minuto"*) que salta na tela do computador com alerta sonoro/visual e permite ao funcionário responder pelo Super Agente direto para a gaveta do painel.
+   - **`REBOOT_WORKSTATION` (NOVO — Reiniciar ou Bloquear Computador Remotamente com Aviso):** Permite ao `ADMIN_N2` agendar reinicialização controlada (`shutdown /r /t 30 /c "Reinicialização programada pela Central de TI - RMM Ipojuca"`) mostrando contagem regressiva para o usuário salvar seu trabalho.
+
+2. **RF-24 (Seletor de Unidade e Setor no Agente e no Painel):**
+   - Permite alterar em qual **Unidade de Saúde** e **Setor** aquele computador está alocado diretamente pela gaveta do painel (`DiagnosticDrawer`) ou na janela local do Agente, posicionando a máquina no setor correto do mapa 3D.
+
+### 9.3. Regras de Segurança (`@security`)
+- **RN-05 (Assinatura HMAC-SHA256 e Lista Fechada):** O Agente `.exe` continuará executando **exclusivamente** códigos constantes no ` switch (taskCode)` interno compilado em C#, jamais executando comandos livres enviados pela rede.
+- **RN-06 (Transparência ao Usuário Local):** Sempre que uma manutenção for executada na máquina, o Agente exibirá uma notificação clara na bandeja do Windows informando qual ação de suporte a Central de TI realizou.
+
+### 9.4. Critérios de Aceitação do Ciclo #05 (`@pm`)
+
+| ID | Cenário | Dado que (Contexto) | Quando (Ação) | Então (Resultado Esperado) |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-13** | Execução Real de Limpeza/Rede/Processos no PC | O Agente `v2.2.0` está rodando na máquina Windows | O técnico clica em `Limpar Cache Temporário`, `Diagnóstico de Rede` ou `Top Processos (CPU/RAM)` no painel | O Agente executa a rotina real no Windows em até 3 segundos e devolve ao terminal do painel os dados reais medidos naquela máquina (MB liberados, latência em ms, processos reais abertos). |
+| **CA-14** | Chat e Alerta na Tela Cliente ↔ Servidor | O técnico seleciona a máquina no painel | Envia uma mensagem pela caixa de Chat/Aviso na gaveta direita | A mensagem salta na tela do PC do cliente e qualquer resposta enviada pelo cliente no Super Agente aparece em tempo real no painel web. |
+
+---
+
+## 10. Gate de Aprovação — FASE 1 (Ciclo #05)
 
 Conforme definido em `.agents/workflows/startcycle.md`:
 - O pipeline encontra-se **pausado no Gate de Aprovação da Fase 1**.
-- Responda **`Approved`** para aprovar esta especificação e autorizar o desenvolvimento imediato do sistema de Auto-Update OTA + Botão de Atualização Remota no Painel e no Agente Windows.
+- Responda **`Approved`** (ou informe se deseja incluir mais alguma função específica no Agente) para eu implementar todas essas funções reais na versão `2.2.0-native-exe`, integrá-las ao painel e publicar para você testar usando a atualização automática!
+
 
 

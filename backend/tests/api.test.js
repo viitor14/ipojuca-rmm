@@ -327,7 +327,7 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
 
   const verRes = await requestJson('GET', '/api/agent/version');
   assert.equal(verRes.status, 200);
-  assert.equal(verRes.data.latest_version, '2.1.0-native-exe');
+  assert.equal(verRes.data.latest_version, '2.2.0-native-exe');
 
   const updateRes = await requestJson(
     'POST',

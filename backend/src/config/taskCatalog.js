@@ -79,6 +79,16 @@ const TASK_CATALOG = Object.freeze({
       return { valid: true, sanitized: { drive: String(drive) } };
     },
   },
+  LIST_TOP_PROCESSES: {
+    code: 'LIST_TOP_PROCESSES',
+    title: 'Listar Top Processos (CPU / RAM)',
+    description: 'Coleta em tempo real os processos do Windows que mais consomem memória RAM e CPU na máquina.',
+    riskLevel: 'LOW',
+    allowedRoles: ['TECH_N1', 'ADMIN_N2'],
+    validateParams() {
+      return { valid: true, sanitized: {} };
+    },
+  },
   INSTALL_APPROVED_PRINTER: {
     code: 'INSTALL_APPROVED_PRINTER',
     title: 'Instalar Impressora Homologada',
@@ -106,6 +116,16 @@ const TASK_CATALOG = Object.freeze({
         valid: true,
         sanitized: { printer_ip: printerIp, printer_name: printerName },
       };
+    },
+  },
+  REBOOT_WORKSTATION: {
+    code: 'REBOOT_WORKSTATION',
+    title: 'Reiniciar Computador (Aviso 30s)',
+    description: 'Agenda reinicialização controlada do Windows com aviso de 30 segundos na tela para o usuário salvar seu trabalho.',
+    riskLevel: 'HIGH',
+    allowedRoles: ['ADMIN_N2'],
+    validateParams() {
+      return { valid: true, sanitized: {} };
     },
   },
   UPDATE_AGENT: {

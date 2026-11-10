@@ -412,6 +412,7 @@ export default function App() {
   const [machines, setMachines] = useState([]);
   const [selectedMachineId, setSelectedMachineId] = useState(null);
   const [diagnostics, setDiagnostics] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
   const [taskCatalog, setTaskCatalog] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [socketConnected, setSocketConnected] = useState(false);
@@ -447,10 +448,15 @@ export default function App() {
         : loadedMachines[0]?.id || null;
 
     if (targetId) {
-      const diagRes = await rmmApi.getMachineDiagnostics(token, targetId);
+      const [diagRes, msgRes] = await Promise.all([
+        rmmApi.getMachineDiagnostics(token, targetId),
+        rmmApi.getMachineMessages(token, targetId).catch(() => ({ messages: [] })),
+      ]);
       setDiagnostics(diagRes);
+      setChatMessages(msgRes.messages || []);
     } else {
       setDiagnostics(null);
+      setChatMessages([]);
     }
   }, []);
 
@@ -499,6 +505,9 @@ export default function App() {
                 .then(setDiagnostics)
                 .catch(() => {});
             }
+          },
+          onAgentMessage: (newMsg) => {
+            setChatMessages((prev) => [...prev, newMsg]);
           },
         });
       })
@@ -567,6 +576,19 @@ export default function App() {
     const res = await rmmApi.updateAllAgents(auth.token);
     window.alert(res.message || 'Ordem de atualização enviada para todas as máquinas.');
     await loadAllData(auth.token, selectedUnitId, selectedMachineId);
+    return res;
+  }
+
+  async function handleSendMessage(machineId, text) {
+    const res = await rmmApi.sendMachineMessage(auth.token, machineId, text);
+    await loadAllData(auth.token, selectedUnitId, machineId);
+    return res;
+  }
+
+  async function handleUpdateLocation(machineId, { unitId, sectorId }) {
+    const res = await rmmApi.updateMachineLocation(auth.token, machineId, { unitId, sectorId });
+    setSelectedUnitId(Number(unitId));
+    await loadAllData(auth.token, Number(unitId), machineId);
     return res;
   }
 
@@ -835,11 +857,15 @@ export default function App() {
 
           <DiagnosticDrawer
             diagnostics={diagnostics}
+            units={units}
+            chatMessages={chatMessages}
             taskCatalog={taskCatalog}
             currentUser={auth.user || { name: 'Operador', role: 'ADMIN_N2' }}
             onDispatchTask={handleDispatchTask}
             onRefreshTelemetryNow={handleRefreshTelemetryNow}
             onUpdateMachineAgent={handleUpdateMachineAgent}
+            onSendMessage={handleSendMessage}
+            onUpdateLocation={handleUpdateLocation}
             onDeleteMachine={handleDeleteMachine}
             onFocusCamera={() => setCameraMode('FOCUS')}
           />

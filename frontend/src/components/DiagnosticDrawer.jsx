@@ -530,17 +530,23 @@ function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
 
 export function DiagnosticDrawer({
   diagnostics,
+  units = [],
+  chatMessages = [],
   taskCatalog,
   currentUser,
   onDispatchTask,
   onRefreshTelemetryNow,
   onUpdateMachineAgent,
+  onSendMessage,
+  onUpdateLocation,
   onDeleteMachine,
   onFocusCamera,
 }) {
   const [busyTask, setBusyTask] = useState(null);
   const [refreshingNow, setRefreshingNow] = useState(false);
   const [updatingAgent, setUpdatingAgent] = useState(false);
+  const [chatText, setChatText] = useState("");
+  const [sendingChat, setSendingChat] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -622,6 +628,40 @@ export function DiagnosticDrawer({
     }
   }
 
+  async function handleSendChatMessage(e) {
+    e.preventDefault();
+    if (!chatText.trim() || !onSendMessage) return;
+    setSendingChat(true);
+    try {
+      await onSendMessage(machine.id, chatText.trim());
+      setFeedback({
+        type: "ok",
+        text: `Mensagem enviada para a tela de ${machine.hostname}: "${chatText.trim()}"`,
+      });
+      setChatText("");
+    } catch (err) {
+      setFeedback({ type: "err", text: `Falha ao enviar mensagem: ${err.message}` });
+    } finally {
+      setSendingChat(false);
+    }
+  }
+
+  async function handleSectorChange(e) {
+    const val = e.target.value;
+    if (!val || !onUpdateLocation) return;
+    const [uId, sId] = val.split(":").map(Number);
+    if (!uId || !sId) return;
+    try {
+      await onUpdateLocation(machine.id, { unitId: uId, sectorId: sId });
+      setFeedback({
+        type: "ok",
+        text: "Unidade e setor da estação atualizados no mapa 3D.",
+      });
+    } catch (err) {
+      setFeedback({ type: "err", text: `Erro ao mover estação: ${err.message}` });
+    }
+  }
+
   async function handleRunTask(task) {
     setBusyTask(task.code);
     setFeedback(null);
@@ -672,6 +712,33 @@ export function DiagnosticDrawer({
             {fixTextEncoding(machine.unit_name)} •{" "}
             {fixTextEncoding(machine.sector_name)}
           </SubLocation>
+          {units.length > 0 && onUpdateLocation && currentUser?.role !== "VIEWER" && (
+            <select
+              value={`${machine.unit_id}:${machine.sector_id}`}
+              onChange={handleSectorChange}
+              style={{
+                marginTop: "6px",
+                width: "100%",
+                padding: "5px 8px",
+                borderRadius: "6px",
+                background: "rgba(15, 23, 42, 0.85)",
+                color: "#CBD5E1",
+                border: "1px solid rgba(255,255,255,0.14)",
+                fontFamily: "inherit",
+                fontSize: "0.75rem",
+                cursor: "pointer",
+              }}
+              title="Alterar em qual Unidade de Saúde e Setor esta máquina está alocada"
+            >
+              {units.map((u) =>
+                (u.sectors || []).map((s) => (
+                  <option key={`${u.id}:${s.id}`} value={`${u.id}:${s.id}`}>
+                    📍 {fixTextEncoding(u.name)} — {fixTextEncoding(s.name)}
+                  </option>
+                ))
+              )}
+            </select>
+          )}
         </div>
 
         <ActionToolbar>
@@ -875,6 +942,98 @@ export function DiagnosticDrawer({
                 </div>
               )}
             </TerminalReadout>
+          )}
+
+          {onSendMessage && (
+            <div
+              style={{
+                background: "rgba(7, 9, 14, 0.85)",
+                border: "1px solid rgba(0, 229, 255, 0.25)",
+                borderRadius: "8px",
+                padding: "10px 12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <SectionBar style={{ marginTop: 0, color: "#00E5FF" }}>
+                <span>💬 Chat / Aviso na Tela do PC</span>
+                <span>Super Agente</span>
+              </SectionBar>
+
+              {chatMessages.length > 0 && (
+                <div
+                  style={{
+                    maxHeight: "95px",
+                    overflowY: "auto",
+                    fontSize: "0.75rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                    padding: "6px 8px",
+                    background: "rgba(3, 5, 9, 0.7)",
+                    borderRadius: "6px",
+                  }}
+                >
+                  {chatMessages.slice(-6).map((m) => (
+                    <div key={m.id} style={{ lineHeight: 1.35 }}>
+                      <strong
+                        style={{
+                          color:
+                            m.direction === "SERVER_TO_CLIENT"
+                              ? "#D4FF33"
+                              : "#00E5FF",
+                        }}
+                      >
+                        [{m.sender}]:
+                      </strong>{" "}
+                      <span style={{ color: "#F1F5F9" }}>
+                        {fixTextEncoding(m.message)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <form
+                onSubmit={handleSendChatMessage}
+                style={{ display: "flex", gap: "6px" }}
+              >
+                <input
+                  type="text"
+                  placeholder="Enviar mensagem para abrir na tela do usuário..."
+                  value={chatText}
+                  onChange={(e) => setChatText(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: "7px 10px",
+                    borderRadius: "6px",
+                    background: "rgba(15, 23, 42, 0.9)",
+                    border: "1px solid rgba(255,255,255,0.16)",
+                    color: "#F8FAFC",
+                    fontFamily: "inherit",
+                    fontSize: "0.78rem",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={sendingChat || !chatText.trim()}
+                  style={{
+                    padding: "7px 12px",
+                    borderRadius: "6px",
+                    background: "#00E5FF",
+                    color: "#050609",
+                    border: "none",
+                    fontWeight: 700,
+                    fontSize: "0.76rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Enviar
+                </button>
+              </form>
+            </div>
           )}
         </>
       )}

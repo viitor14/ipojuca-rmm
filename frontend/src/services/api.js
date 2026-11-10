@@ -67,6 +67,23 @@ export const rmmApi = {
       token,
     });
   },
+  getMachineMessages(token, machineId) {
+    return request(`/api/machines/${machineId}/messages`, { token });
+  },
+  sendMachineMessage(token, machineId, message) {
+    return request(`/api/machines/${machineId}/messages`, {
+      method: 'POST',
+      token,
+      body: { message },
+    });
+  },
+  updateMachineLocation(token, machineId, { unitId, sectorId }) {
+    return request(`/api/machines/${machineId}/location`, {
+      method: 'POST',
+      token,
+      body: { unit_id: unitId, sector_id: sectorId },
+    });
+  },
   getTaskCatalog(token) {
     return request('/api/catalog/tasks', { token });
   },
@@ -119,6 +136,9 @@ export function connectDashboardSocket(token, handlers = {}) {
   }
   if (handlers.onTaskUpdated) {
     socket.on('task:updated', handlers.onTaskUpdated);
+  }
+  if (handlers.onAgentMessage) {
+    socket.on('agent:message', handlers.onAgentMessage);
   }
   if (handlers.onConnect) {
     socket.on('connect', handlers.onConnect);

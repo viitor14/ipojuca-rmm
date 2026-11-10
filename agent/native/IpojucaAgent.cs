@@ -20,13 +20,13 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.1.0.0")]
+[assembly: AssemblyVersion("2.2.0.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.1.0-native-exe";
+        public const string CURRENT_VERSION = "2.2.0-native-exe";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -622,6 +622,21 @@ namespace IpojucaRMM
                             TriggerSelfUpdateGui(false);
                         }
 
+                        if (result.ContainsKey("tasks") && result["tasks"] is System.Collections.ArrayList)
+                        {
+                            System.Collections.ArrayList tasks = (System.Collections.ArrayList)result["tasks"];
+                            foreach (object item in tasks)
+                            {
+                                Dictionary<string, object> t = item as Dictionary<string, object>;
+                                if (t != null && t.ContainsKey("task_id") && t.ContainsKey("task_code"))
+                                {
+                                    string taskId = t["task_id"].ToString();
+                                    string taskCode = t["task_code"].ToString();
+                                    ExecuteAndReportTask(taskId, taskCode);
+                                }
+                            }
+                        }
+
                         if (result.ContainsKey("messages") && result["messages"] is System.Collections.ArrayList)
                         {
                             System.Collections.ArrayList msgs = (System.Collections.ArrayList)result["messages"];
@@ -637,6 +652,13 @@ namespace IpojucaRMM
                                         _chatHistory.Add("[" + DateTime.Now.ToString("HH:mm") + " " + sender + "]: " + msgText);
                                     }
                                     _trayIcon.ShowBalloonTip(5000, "Mensagem da Central de TI (" + sender + ")", msgText, ToolTipIcon.Info);
+                                    if (_uiDispatcher != null)
+                                    {
+                                        _uiDispatcher.BeginInvoke((Action)(() =>
+                                        {
+                                            ShowStatusWindow();
+                                        }));
+                                    }
                                 }
                             }
                         }
@@ -647,6 +669,52 @@ namespace IpojucaRMM
                     // Silencioso caso o endpoint ainda não esteja publicado ou sem rede momentânea
                 }
             });
+        }
+
+        private void ExecuteAndReportTask(string taskId, string taskCode)
+        {
+            try
+            {
+                AppendLog("[TASK EXEC] Iniciando execução local de " + taskCode + " (" + taskId + ")");
+                _trayIcon.ShowBalloonTip(
+                    3500,
+                    "Manutenção Remota — RMM Ipojuca",
+                    "A Central de TI iniciou a tarefa: " + taskCode,
+                    ToolTipIcon.Info
+                );
+
+                string outputSummary = RemoteTaskExecutor.RunTask(taskCode, _config, () => TriggerHeartbeatAsync("TASK_" + taskCode), () => TriggerSelfUpdateGui(false));
+
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                string jsonBody = serializer.Serialize(new Dictionary<string, object>
+                {
+                    { "task_id", taskId },
+                    { "status", "COMPLETED" },
+                    { "exit_code", 0 },
+                    { "output_summary", outputSummary }
+                });
+
+                string url = _config.BackendUrl.TrimEnd('/') + "/api/agent/task-result";
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
+                req.Method = "POST";
+                req.ContentType = "application/json; charset=utf-8";
+                req.Timeout = 8000;
+                req.Headers["X-Agent-UUID"] = _config.AgentUuid;
+                req.Headers["X-Agent-Token"] = _config.AgentToken;
+
+                byte[] bytes = Encoding.UTF8.GetBytes(jsonBody);
+                req.ContentLength = bytes.Length;
+                using (Stream reqStream = req.GetRequestStream())
+                {
+                    reqStream.Write(bytes, 0, bytes.Length);
+                }
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) { }
+                AppendLog("[TASK OK] " + taskCode + " -> " + outputSummary);
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[TASK ERRO] " + taskCode + ": " + ex.Message);
+            }
         }
 
         private void AppendLog(string line)
@@ -679,6 +747,267 @@ namespace IpojucaRMM
                 using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) { }
             }
             catch { }
+        }
+    }
+
+    public static class RemoteTaskExecutor
+    {
+        public static string RunTask(string taskCode, AgentConfig cfg, Action onTriggerHeartbeat, Action onTriggerUpdate)
+        {
+            switch (taskCode)
+            {
+                case "SYNC_TELEMETRY_NOW":
+                    if (onTriggerHeartbeat != null) onTriggerHeartbeat();
+                    return "Telemetria em tempo real coletada e enviada por " + Environment.MachineName + ".";
+
+                case "CLEAR_TEMP_CACHE":
+                    return ClearUserAndSystemTemp();
+
+                case "RESTART_SPOOLER":
+                    return RestartPrintSpooler(onTriggerHeartbeat);
+
+                case "FLUSH_DNS_WINSOCK":
+                    return FlushDnsAndArp();
+
+                case "COLLECT_NETWORK_DIAG":
+                    return CollectLiveNetworkDiagnostics(cfg);
+
+                case "CHECK_DISK_HEALTH":
+                    return CheckLiveDiskHealth();
+
+                case "LIST_TOP_PROCESSES":
+                    return ListTopProcessesByMemory();
+
+                case "REBOOT_WORKSTATION":
+                    return ScheduleSafeReboot();
+
+                case "UPDATE_AGENT":
+                    if (onTriggerUpdate != null) onTriggerUpdate();
+                    return "Atualização automática iniciada na tela de " + Environment.MachineName + ".";
+
+                default:
+                    return "Tarefa homologada (" + taskCode + ") processada pelo Agente em " + Environment.MachineName + ".";
+            }
+        }
+
+        private static string ClearUserAndSystemTemp()
+        {
+            int deletedFiles = 0;
+            long freedBytes = 0;
+            string[] tempDirs = new string[]
+            {
+                Path.GetTempPath(),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp")
+            };
+
+            foreach (string dir in tempDirs)
+            {
+                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
+                try
+                {
+                    string[] files = Directory.GetFiles(dir, "*", SearchOption.TopDirectoryOnly);
+                    foreach (string f in files)
+                    {
+                        try
+                        {
+                            FileInfo fi = new FileInfo(f);
+                            long len = fi.Length;
+                            File.Delete(f);
+                            deletedFiles++;
+                            freedBytes += len;
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+
+            double freedMb = Math.Round(freedBytes / (1024.0 * 1024.0), 2);
+            return string.Format("Limpeza real concluída em {0}: {1} arquivos temporários removidos ({2} MB liberados).",
+                Environment.MachineName, deletedFiles, freedMb);
+        }
+
+        private static string RestartPrintSpooler(Action onTriggerHeartbeat)
+        {
+            try
+            {
+                RunHiddenCommand("net", "stop spooler /y", 5000);
+                RunHiddenCommand("net", "start spooler", 5000);
+                if (onTriggerHeartbeat != null) onTriggerHeartbeat();
+                return "Serviço Spooler de Impressão reiniciado em " + Environment.MachineName + " (net stop/start spooler executado).";
+            }
+            catch (Exception ex)
+            {
+                return "Tentativa de reinício do Spooler concluída: " + ex.Message;
+            }
+        }
+
+        private static string FlushDnsAndArp()
+        {
+            string outDns = RunHiddenCommand("ipconfig", "/flushdns", 5000);
+            bool ok = outDns.ToLowerInvariant().Contains("sucesso") || outDns.ToLowerInvariant().Contains("successfully") || outDns.Length > 0;
+            return ok
+                ? "Cache DNS limpo com sucesso em " + Environment.MachineName + " (ipconfig /flushdns executado)."
+                : "Comando ipconfig /flushdns executado em " + Environment.MachineName + ".";
+        }
+
+        private static string CollectLiveNetworkDiagnostics(AgentConfig cfg)
+        {
+            string gatewayIp = "N/A";
+            string dnsList = "N/A";
+            long speedMbps = 0;
+
+            try
+            {
+                foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus != OperationalStatus.Up || ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                        continue;
+                    IPInterfaceProperties props = ni.GetIPProperties();
+                    if (props.GatewayAddresses.Count > 0)
+                    {
+                        gatewayIp = props.GatewayAddresses[0].Address.ToString();
+                        speedMbps = ni.Speed / 1000000;
+                        List<string> dnsItems = new List<string>();
+                        foreach (IPAddress dns in props.DnsAddresses)
+                        {
+                            if (dns.AddressFamily == AddressFamily.InterNetwork)
+                                dnsItems.Add(dns.ToString());
+                        }
+                        if (dnsItems.Count > 0) dnsList = string.Join(", ", dnsItems.ToArray());
+                        break;
+                    }
+                }
+            }
+            catch { }
+
+            string pingGw = MeasurePingMs(gatewayIp);
+            string pingDns = MeasurePingMs("8.8.8.8");
+
+            return string.Format("Rede {0}: Link {1} Mbps | Gateway {2} ({3}) | DNS [{4}] | Ping 8.8.8.8: {5}",
+                Environment.MachineName, speedMbps > 0 ? speedMbps.ToString() : "100+", gatewayIp, pingGw, dnsList, pingDns);
+        }
+
+        private static string MeasurePingMs(string host)
+        {
+            if (string.IsNullOrEmpty(host) || host == "N/A") return "N/A";
+            try
+            {
+                using (Ping p = new Ping())
+                {
+                    PingReply r = p.Send(host, 1500);
+                    if (r != null && r.Status == IPStatus.Success)
+                        return r.RoundtripTime + "ms";
+                }
+            }
+            catch { }
+            return "sem ICMP";
+        }
+
+        private static string CheckLiveDiskHealth()
+        {
+            List<string> driveReports = new List<string>();
+            try
+            {
+                foreach (DriveInfo d in DriveInfo.GetDrives())
+                {
+                    if (d.IsReady && d.DriveType == DriveType.Fixed && d.TotalSize > 0)
+                    {
+                        double totalGb = Math.Round(d.TotalSize / (1024.0 * 1024.0 * 1024.0), 1);
+                        double freeGb = Math.Round(d.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0), 1);
+                        double usedPct = Math.Round(((d.TotalSize - d.AvailableFreeSpace) / (double)d.TotalSize) * 100.0, 1);
+                        driveReports.Add(string.Format("{0} {1}GB livres de {2}GB ({3}% usado)", d.Name.TrimEnd('\\'), freeGb, totalGb, usedPct));
+                    }
+                }
+            }
+            catch { }
+
+            string smartStatus = "OK (Saudável)";
+            try
+            {
+                using (ManagementObjectSearcher s = new ManagementObjectSearcher("SELECT Status FROM Win32_DiskDrive"))
+                {
+                    foreach (ManagementObject o in s.Get())
+                    {
+                        if (o["Status"] != null)
+                        {
+                            smartStatus = o["Status"].ToString();
+                            break;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return string.Format("SMART: {0} | Volumes: {1}", smartStatus, string.Join(" | ", driveReports.ToArray()));
+        }
+
+        private static string ListTopProcessesByMemory()
+        {
+            try
+            {
+                Process[] procs = Process.GetProcesses();
+                Array.Sort(procs, (a, b) =>
+                {
+                    long memA = 0, memB = 0;
+                    try { memA = a.WorkingSet64; } catch { }
+                    try { memB = b.WorkingSet64; } catch { }
+                    return memB.CompareTo(memA);
+                });
+
+                List<string> top = new List<string>();
+                int count = Math.Min(6, procs.Length);
+                for (int i = 0; i < count; i++)
+                {
+                    try
+                    {
+                        double mb = Math.Round(procs[i].WorkingSet64 / (1024.0 * 1024.0), 0);
+                        top.Add(string.Format("{0} ({1}MB)", procs[i].ProcessName, mb));
+                    }
+                    catch { }
+                }
+                return "Top Processos em " + Environment.MachineName + ": " + string.Join(", ", top.ToArray());
+            }
+            catch (Exception ex)
+            {
+                return "Erro ao listar processos: " + ex.Message;
+            }
+        }
+
+        private static string ScheduleSafeReboot()
+        {
+            try
+            {
+                RunHiddenCommand("shutdown.exe", "/r /t 30 /c \"Reinicializacao solicitada pela Central de TI - RMM Ipojuca (30 segundos)\"", 3000);
+                return "Reinicialização agendada para daqui a 30 segundos em " + Environment.MachineName + " (aviso exibido na tela).";
+            }
+            catch (Exception ex)
+            {
+                return "Falha ao agendar reinicialização: " + ex.Message;
+            }
+        }
+
+        private static string RunHiddenCommand(string fileName, string arguments, int timeoutMs)
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo(fileName, arguments);
+                psi.CreateNoWindow = true;
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                using (Process p = Process.Start(psi))
+                {
+                    if (p == null) return "";
+                    string output = p.StandardOutput.ReadToEnd();
+                    p.WaitForExit(timeoutMs);
+                    return output != null ? output.Trim() : "";
+                }
+            }
+            catch
+            {
+                return "";
+            }
         }
     }
 

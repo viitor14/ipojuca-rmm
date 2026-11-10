@@ -22,11 +22,42 @@ const router = express.Router();
 // Filas em memória para comunicação Cliente-Servidor com o Super Agente Nativo (.exe)
 const pendingRefreshByAgent = new Set();
 const pendingUpdateByAgent = new Set();
+const pendingTasksByAgent = new Map();
+const taskResultWaiters = new Map();
 const pendingMessagesByAgent = new Map();
 const chatHistoryByMachine = new Map();
 const heartbeatWaitersByAgent = new Map();
 
-const LATEST_AGENT_VERSION = "2.1.0-native-exe";
+const LATEST_AGENT_VERSION = "2.2.0-native-exe";
+
+function waitForLiveAgentTaskResult(taskId, timeoutMs = 4500) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      taskResultWaiters.delete(taskId);
+      resolve(null);
+    }, timeoutMs);
+
+    taskResultWaiters.set(taskId, (completedTask) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      taskResultWaiters.delete(taskId);
+      resolve(completedTask);
+    });
+  });
+}
+
+function notifyLiveAgentTaskResult(taskId, completedTask) {
+  const fn = taskResultWaiters.get(taskId);
+  if (fn) {
+    try {
+      fn(completedTask);
+    } catch {}
+  }
+}
 
 function getAgentInstallerInfo() {
   const exePath = path.join(__dirname, "../../public/IpojucaRMM-Setup.exe");
@@ -530,10 +561,34 @@ router.post(
         signature,
       });
 
-      // Caso o agente não esteja com socket aberto no instante (ex: ambiente de demonstração),
-      // processa retorno assíncrono controlado para manter visibilidade no painel.
+      // Enfileira também para o Super Agente Nativo (.exe) executar de verdade no Windows
+      const agentTaskQueue = pendingTasksByAgent.get(machine.agent_uuid) || [];
+      agentTaskQueue.push({
+        task_id: taskId,
+        machine_id: machine.id,
+        task_code: taskSpec.code,
+        parameters: paramValidation.sanitized,
+      });
+      pendingTasksByAgent.set(machine.agent_uuid, agentTaskQueue);
+
+      if (taskSpec.code === "UPDATE_AGENT") {
+        pendingUpdateByAgent.add(machine.agent_uuid);
+      }
+
       if (!dispatchOutcome.deliveredToSocket) {
+        // Aguarda até 4.5s pelo resultado real executado pelo Agente C# (.exe) no computador
+        const waitMs = process.env.FORCE_NATIVE_ROUTER === "1" ? 30 : 4500;
+        const liveCompletedTask = await waitForLiveAgentTaskResult(taskId, waitMs);
+        if (liveCompletedTask) {
+          return res.status(202).json({
+            task: liveCompletedTask,
+            delivery_mode: "native_agent_live_executed",
+          });
+        }
+
         const simulatedOutputByCode = {
+          SYNC_TELEMETRY_NOW:
+            "Solicitação de coleta de telemetria enviada ao Agente Windows.",
           CLEAR_TEMP_CACHE:
             "Limpeza concluída: 312 MB removidos de diretórios temporários (%TEMP%).",
           RESTART_SPOOLER:
@@ -542,13 +597,12 @@ router.post(
           FLUSH_DNS_WINSOCK:
             "Cache do DNS Resolver liberado com êxito (ipconfig /flushdns).",
           CHECK_DISK_HEALTH: `Volume ${paramValidation.sanitized.drive || "C"}: Status SMART Saudável (0 setores defeituosos).`,
+          LIST_TOP_PROCESSES:
+            "Processos consultados na estação (aguardando resposta do Agente v2.2.0).",
           INSTALL_APPROVED_PRINTER: `Impressora '${paramValidation.sanitized.printer_name}' mapeada em ${paramValidation.sanitized.printer_ip}.`,
+          REBOOT_WORKSTATION: `Reinicialização programada com aviso de 30s enviada para ${machine.hostname}.`,
           UPDATE_AGENT: `Ordem de atualização OTA (${LATEST_AGENT_VERSION}) enviada ao Agente Windows com aviso na tela do cliente.`,
         };
-
-        if (taskSpec.code === "UPDATE_AGENT") {
-          pendingUpdateByAgent.add(machine.agent_uuid);
-        }
 
         // Se for tarefa de reinício de spooler em máquina com spooler parado, corrige o estado
         if (taskSpec.code === "RESTART_SPOOLER" && !machine.spooler_running) {
@@ -735,16 +789,68 @@ router.get("/agent/pending", async (req, res) => {
     pendingMessagesByAgent.set(agentUuid, []);
   }
 
+  const queuedTasks = pendingTasksByAgent.get(agentUuid) || [];
+  if (queuedTasks.length > 0) {
+    pendingTasksByAgent.set(agentUuid, []);
+  }
+
   return res.json({
     refresh_requested: refreshRequested,
     update_requested: updateRequested || autoUpdateAvailable,
     latest_version: installerInfo.latest_version,
     download_path: installerInfo.download_path,
     sha256: installerInfo.sha256,
+    tasks: queuedTasks,
     messages: queuedMsgs,
     server_time: new Date().toISOString(),
   });
 });
+
+// 12.05. Recebimento do Resultado Real de Tarefa Executada pelo Agente Nativo (.exe)
+router.post("/agent/task-result", async (req, res) => {
+  try {
+    const { task_id, status = "COMPLETED", exit_code = 0, output_summary = "" } = req.body || {};
+    if (!task_id) {
+      return res.status(400).json({ error: "task_id obrigatório." });
+    }
+    const completedTask = await repository.completeRemoteTask({
+      taskId: String(task_id),
+      status: status === "FAILED" ? "FAILED" : "COMPLETED",
+      exitCode: Number(exit_code || 0),
+      outputSummary: String(output_summary || "Executado pelo Agente Windows.").slice(0, 1000),
+    });
+    if (completedTask) {
+      socketHub.broadcastToDashboard("task:updated", completedTask);
+      notifyLiveAgentTaskResult(String(task_id), completedTask);
+    }
+    return res.json({ status: "ok", task: completedTask });
+  } catch (err) {
+    return res.status(500).json({ error: "Erro ao registrar resultado da tarefa." });
+  }
+});
+
+// 12.06. Alocação de Unidade de Saúde e Setor da Máquina pelo Painel
+router.post(
+  "/machines/:id/location",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    const machineId = Number(req.params.id);
+    const { unit_id, sector_id } = req.body || {};
+    if (!unit_id || !sector_id) {
+      return res.status(400).json({ error: "unit_id e sector_id são obrigatórios." });
+    }
+    const updated = await repository.updateMachineLocation(machineId, {
+      unitId: Number(unit_id),
+      sectorId: Number(sector_id),
+    });
+    if (!updated) {
+      return res.status(404).json({ error: "Máquina ou setor não encontrado." });
+    }
+    socketHub.broadcastToDashboard("machine:updated", updated);
+    return res.json({ status: "ok", machine: updated });
+  },
+);
 
 // 12.1. Desconexão Imediata do Agente (Quando o usuário encerra o Agente ou desliga o PC)
 router.post("/agent/disconnect", async (req, res) => {

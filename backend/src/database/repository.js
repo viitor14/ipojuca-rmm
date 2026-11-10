@@ -869,6 +869,51 @@ class RmmRepository {
     this.machines.splice(idx, 1);
     return true;
   }
+
+  async updateMachineLocation(machineId, { unitId, sectorId }) {
+    const id = Number(machineId);
+    const nextUnitId = Number(unitId);
+    const nextSectorId = Number(sectorId);
+
+    if (this.mode === 'mysql') {
+      const [secRows] = await this.pool.execute(
+        'SELECT * FROM sectors WHERE id = ? AND unit_id = ? LIMIT 1',
+        [nextSectorId, nextUnitId]
+      );
+      if (secRows.length === 0) return null;
+      const sector = secRows[0];
+      const [existingInSector] = await this.pool.execute(
+        'SELECT COUNT(*) AS cnt FROM machines WHERE sector_id = ? AND id != ?',
+        [nextSectorId, id]
+      );
+      const countInSector = Number(existingInSector[0]?.cnt || 0);
+      const posX = Number(sector.bounds_x || 0) + (countInSector % 2 === 0 ? -1.4 : 1.4);
+      const posZ = Number(sector.bounds_z || 0) + (countInSector > 1 ? 1.2 : -0.7);
+
+      await this.pool.execute(
+        'UPDATE machines SET unit_id = ?, sector_id = ?, pos_x = ?, pos_z = ?, updated_at = NOW() WHERE id = ?',
+        [nextUnitId, nextSectorId, posX, posZ, id]
+      );
+      return this.findMachineById(id);
+    }
+
+    const machine = this.machines.find((m) => m.id === id);
+    if (!machine) return null;
+    const sector = this.sectors.find(
+      (s) => s.id === nextSectorId && s.unit_id === nextUnitId
+    );
+    if (!sector) return null;
+
+    const countInSector = this.machines.filter(
+      (m) => m.sector_id === nextSectorId && m.id !== id
+    ).length;
+    machine.unit_id = nextUnitId;
+    machine.sector_id = nextSectorId;
+    machine.pos_x = Number(sector.bounds_x || 0) + (countInSector % 2 === 0 ? -1.4 : 1.4);
+    machine.pos_z = Number(sector.bounds_z || 0) + (countInSector > 1 ? 1.2 : -0.7);
+    machine.updated_at = new Date().toISOString();
+    return this.findMachineById(id);
+  }
 }
 
 const repository = new RmmRepository();
