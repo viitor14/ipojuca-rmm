@@ -17,15 +17,16 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 
 [assembly: AssemblyTitle("Ipojuca RMM - Super Agente Windows")]
-[assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota e Comunicacao Client-Server")]
+[assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyVersion("2.1.0.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
+        public const string CURRENT_VERSION = "2.1.0-native-exe";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -47,6 +48,7 @@ namespace IpojucaRMM
 
             bool isBackgroundMode = false;
             bool isSilentInstall = false;
+            bool isOtaUpdate = false;
             string customUrl = null;
 
             foreach (string arg in args)
@@ -55,6 +57,8 @@ namespace IpojucaRMM
                     isBackgroundMode = true;
                 else if (arg.Equals("--silent", StringComparison.OrdinalIgnoreCase))
                     isSilentInstall = true;
+                else if (arg.Equals("--ota-update", StringComparison.OrdinalIgnoreCase))
+                    isOtaUpdate = true;
                 else if (arg.StartsWith("--url=", StringComparison.OrdinalIgnoreCase))
                     customUrl = arg.Substring(6).Trim();
             }
@@ -66,13 +70,13 @@ namespace IpojucaRMM
             string installedExePath = Path.Combine(installDir, "IpojucaRMM-Agent.exe");
             string currentExePath = Application.ExecutablePath;
 
-            // Se não foi iniciado com --background e não está rodando da pasta instalada, executa o modo Instalador
-            if (!isBackgroundMode && !string.Equals(
+            // Se não foi iniciado com --background e não está rodando da pasta instalada, executa o modo Instalador/Atualizador
+            if (isOtaUpdate || (!isBackgroundMode && !string.Equals(
                 Path.GetFullPath(currentExePath).TrimEnd('\\'),
                 Path.GetFullPath(installedExePath).TrimEnd('\\'),
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase)))
             {
-                RunInstaller(currentExePath, installDir, installedExePath, customUrl, isSilentInstall);
+                RunInstaller(currentExePath, installDir, installedExePath, customUrl, isSilentInstall, isOtaUpdate);
                 return;
             }
 
@@ -95,7 +99,7 @@ namespace IpojucaRMM
             Application.Run(new TrayAgentContext(installDir, customUrl));
         }
 
-        private static void RunInstaller(string sourceExe, string installDir, string targetExe, string customUrl, bool silent)
+        private static void RunInstaller(string sourceExe, string installDir, string targetExe, string customUrl, bool silent, bool isOtaUpdate)
         {
             try
             {
@@ -104,23 +108,33 @@ namespace IpojucaRMM
                     Directory.CreateDirectory(installDir);
                 }
 
-                // Encerra instância anterior caso esteja atualizando
-                foreach (Process proc in Process.GetProcessesByName("IpojucaRMM-Agent"))
+                // Aguarda encerramento de instância anterior caso esteja atualizando
+                for (int attempt = 0; attempt < 6; attempt++)
                 {
+                    foreach (Process proc in Process.GetProcessesByName("IpojucaRMM-Agent"))
+                    {
+                        try
+                        {
+                            if (proc.Id != Process.GetCurrentProcess().Id)
+                            {
+                                proc.Kill();
+                                proc.WaitForExit(2000);
+                            }
+                        }
+                        catch { }
+                    }
                     try
                     {
-                        if (proc.Id != Process.GetCurrentProcess().Id)
-                        {
-                            proc.Kill();
-                            proc.WaitForExit(3000);
-                        }
+                        File.Copy(sourceExe, targetExe, true);
+                        break;
                     }
-                    catch { }
+                    catch
+                    {
+                        Thread.Sleep(600);
+                    }
                 }
 
-                File.Copy(sourceExe, targetExe, true);
-
-                // Salva ou atualiza configuração
+                // Salva ou atualiza configuração preservando AgentUuid e AgentToken
                 AgentConfig cfg = TrayAgentContext.LoadOrCreateConfig(installDir, customUrl);
 
                 // Registra inicialização automática no Registro do Windows (HKCU\...\Run)
@@ -150,10 +164,25 @@ namespace IpojucaRMM
                 psiStart.UseShellExecute = false;
                 Process.Start(psiStart);
 
-                if (!silent)
+                if (isOtaUpdate)
+                {
+                    MessageBox.Show(
+                        "O Agente RMM Ipojuca foi atualizado automaticamente pela Central de TI!\n\n" +
+                        "• Nova Versão Instalada: " + AgentConfig.CURRENT_VERSION + "\n" +
+                        "• Computador: " + Environment.MachineName + "\n" +
+                        "• Identificador Mantido: " + cfg.AgentUuid + "\n" +
+                        "• Servidor Central: " + cfg.BackendUrl + "\n\n" +
+                        "O monitoramento em segundo plano já foi reiniciado com sucesso.",
+                        "Atualização Concluída — RMM Ipojuca",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    );
+                }
+                else if (!silent)
                 {
                     MessageBox.Show(
                         "Agente RMM Ipojuca instalado e iniciado em segundo plano com sucesso!\n\n" +
+                        "• Versão: " + AgentConfig.CURRENT_VERSION + "\n" +
                         "• Computador: " + Environment.MachineName + "\n" +
                         "• Identificador: " + cfg.AgentUuid + "\n" +
                         "• Servidor VPS: " + cfg.BackendUrl + "\n" +
@@ -170,7 +199,7 @@ namespace IpojucaRMM
                 if (!silent)
                 {
                     MessageBox.Show(
-                        "Erro ao instalar o Agente RMM Ipojuca:\n" + ex.Message,
+                        "Erro ao instalar/atualizar o Agente RMM Ipojuca:\n" + ex.Message,
                         "Erro na Instalação",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error
@@ -190,9 +219,11 @@ namespace IpojucaRMM
         private readonly System.Windows.Forms.Timer _commandPollTimer;
         private readonly List<string> _chatHistory = new List<string>();
         private SuperAgentForm _statusForm;
+        private readonly Control _uiDispatcher;
         private string _lastSyncStatus = "Iniciando coleta...";
         private DateTime _lastSyncTime = DateTime.MinValue;
         private bool _isSending = false;
+        private bool _isUpdating = false;
 
         public TrayAgentContext(string installDir, string customUrl)
         {
@@ -200,12 +231,14 @@ namespace IpojucaRMM
             if (!Directory.Exists(_installDir)) Directory.CreateDirectory(_installDir);
             _logFile = Path.Combine(_installDir, "agent.log");
             _config = LoadOrCreateConfig(_installDir, customUrl);
+            _uiDispatcher = new Control();
+            _uiDispatcher.CreateControl();
 
-            _chatHistory.Add("[SISTEMA] Super Agente conectado ao servidor " + _config.BackendUrl);
-            _chatHistory.Add("[SISTEMA] Canal pronto para comandos homologados e conversa Cliente-Servidor com a Central de TI.");
+            _chatHistory.Add("[SISTEMA] Super Agente (" + AgentConfig.CURRENT_VERSION + ") conectado ao servidor " + _config.BackendUrl);
+            _chatHistory.Add("[SISTEMA] Canal pronto para comandos homologados, Auto-Update OTA e conversa Cliente-Servidor com a Central de TI.");
 
             ContextMenuStrip menu = new ContextMenuStrip();
-            ToolStripMenuItem titleItem = new ToolStripMenuItem("RMM Ipojuca — " + Environment.MachineName);
+            ToolStripMenuItem titleItem = new ToolStripMenuItem("RMM Ipojuca — " + Environment.MachineName + " (" + AgentConfig.CURRENT_VERSION + ")");
             titleItem.Enabled = false;
             menu.Items.Add(titleItem);
             menu.Items.Add(new ToolStripSeparator());
@@ -213,6 +246,10 @@ namespace IpojucaRMM
             ToolStripMenuItem sendNowItem = new ToolStripMenuItem("⟳ Enviar Telemetria Agora (Manual)");
             sendNowItem.Click += (s, e) => TriggerHeartbeatAsync("MANUAL_TRAY_CLICK");
             menu.Items.Add(sendNowItem);
+
+            ToolStripMenuItem checkUpdateItem = new ToolStripMenuItem("⬆ Buscar e Instalar Atualização Agora");
+            checkUpdateItem.Click += (s, e) => TriggerSelfUpdateGui(true);
+            menu.Items.Add(checkUpdateItem);
 
             ToolStripMenuItem openPanelItem = new ToolStripMenuItem("💬 Abrir Painel Super Agente (Status / Chat TI)");
             openPanelItem.Click += (s, e) => ShowStatusWindow();
@@ -298,6 +335,7 @@ namespace IpojucaRMM
                 _statusForm = new SuperAgentForm(
                     _config,
                     () => TriggerHeartbeatAsync("MANUAL_UI_BUTTON"),
+                    () => TriggerSelfUpdateGui(true),
                     SendClientMessageAsync,
                     () => _lastSyncStatus,
                     () => _chatHistory
@@ -306,6 +344,56 @@ namespace IpojucaRMM
             _statusForm.Show();
             _statusForm.BringToFront();
             _statusForm.Activate();
+        }
+
+        private void TriggerSelfUpdateGui(bool isManualClick)
+        {
+            if (_isUpdating) return;
+            _isUpdating = true;
+
+            try
+            {
+                Action openUpdater = () =>
+                {
+                    try
+                    {
+                        _trayIcon.ShowBalloonTip(
+                            5000,
+                            "Atualização do Agente RMM Ipojuca",
+                            "Baixando e instalando a nova versão oficial da Central de TI...",
+                            ToolTipIcon.Info
+                        );
+                        UpdateProgressForm updateForm = new UpdateProgressForm(_config, _installDir, isManualClick, () =>
+                        {
+                            _trayIcon.Visible = false;
+                            Application.Exit();
+                        }, () =>
+                        {
+                            _isUpdating = false;
+                        });
+                        updateForm.Show();
+                        updateForm.BringToFront();
+                        updateForm.Activate();
+                    }
+                    catch
+                    {
+                        _isUpdating = false;
+                    }
+                };
+
+                if (_uiDispatcher != null && _uiDispatcher.InvokeRequired)
+                {
+                    _uiDispatcher.BeginInvoke(openUpdater);
+                }
+                else
+                {
+                    openUpdater();
+                }
+            }
+            catch
+            {
+                _isUpdating = false;
+            }
         }
 
         public static AgentConfig LoadOrCreateConfig(string installDir, string overrideUrl)
@@ -412,7 +500,7 @@ namespace IpojucaRMM
                 Dictionary<string, object> payload = new Dictionary<string, object>
                 {
                     { "agent_uuid", _config.AgentUuid },
-                    { "agent_version", "2.0.0-native-exe" },
+                    { "agent_version", AgentConfig.CURRENT_VERSION },
                     { "unit_id", _config.UnitId },
                     { "sector_id", _config.SectorId },
                     { "trigger_reason", reason },
@@ -504,12 +592,15 @@ namespace IpojucaRMM
             {
                 try
                 {
-                    string url = _config.BackendUrl.TrimEnd('/') + "/api/agent/pending?agent_uuid=" + Uri.EscapeDataString(_config.AgentUuid);
+                    string url = _config.BackendUrl.TrimEnd('/') +
+                        "/api/agent/pending?agent_uuid=" + Uri.EscapeDataString(_config.AgentUuid) +
+                        "&agent_version=" + Uri.EscapeDataString(AgentConfig.CURRENT_VERSION);
                     HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
                     req.Method = "GET";
                     req.Timeout = 7000;
                     req.Headers["X-Agent-UUID"] = _config.AgentUuid;
                     req.Headers["X-Agent-Token"] = _config.AgentToken;
+                    req.Headers["X-Agent-Version"] = AgentConfig.CURRENT_VERSION;
 
                     using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
                     using (StreamReader reader = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
@@ -523,6 +614,12 @@ namespace IpojucaRMM
                         {
                             AppendLog("[COMANDO] Coleta sob demanda solicitada pelo Dashboard!");
                             SendHeartbeat("ON_DEMAND_DASHBOARD");
+                        }
+
+                        if (result.ContainsKey("update_requested") && Convert.ToBoolean(result["update_requested"]))
+                        {
+                            AppendLog("[OTA UPDATE] Ordem de atualização automática recebida da Central de TI!");
+                            TriggerSelfUpdateGui(false);
                         }
 
                         if (result.ContainsKey("messages") && result["messages"] is System.Collections.ArrayList)
@@ -973,6 +1070,210 @@ namespace IpojucaRMM
         }
     }
 
+    public class UpdateProgressForm : Form
+    {
+        private readonly Label _lblStep;
+        private readonly Label _lblDetail;
+        private readonly ProgressBar _progressBar;
+        private readonly Button _btnClose;
+
+        public UpdateProgressForm(
+            AgentConfig config,
+            string installDir,
+            bool isManualCheck,
+            Action onLaunchAndExit,
+            Action onAborted)
+        {
+            this.Text = "RMM Ipojuca — Atualização do Agente (" + Environment.MachineName + ")";
+            this.Size = new Size(490, 235);
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.BackColor = Color.FromArgb(11, 15, 25);
+            this.ForeColor = Color.FromArgb(241, 245, 249);
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+            this.TopMost = true;
+
+            Label lblTitle = new Label();
+            lblTitle.Text = "⬆ ATUALIZAÇÃO AUTOMÁTICA — RMM IPOJUCA";
+            lblTitle.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+            lblTitle.ForeColor = Color.FromArgb(212, 255, 51);
+            lblTitle.Location = new Point(18, 16);
+            lblTitle.AutoSize = true;
+            this.Controls.Add(lblTitle);
+
+            _lblStep = new Label();
+            _lblStep.Text = "Conectando ao servidor central (" + config.BackendUrl + ")...";
+            _lblStep.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            _lblStep.ForeColor = Color.FromArgb(248, 250, 252);
+            _lblStep.Location = new Point(18, 48);
+            _lblStep.Size = new Size(440, 22);
+            this.Controls.Add(_lblStep);
+
+            _progressBar = new ProgressBar();
+            _progressBar.Location = new Point(18, 78);
+            _progressBar.Size = new Size(438, 24);
+            _progressBar.Style = ProgressBarStyle.Continuous;
+            _progressBar.Value = 15;
+            this.Controls.Add(_progressBar);
+
+            _lblDetail = new Label();
+            _lblDetail.Text = "Versão atual: " + AgentConfig.CURRENT_VERSION + " — Verificando pacote oficial da Central de TI...";
+            _lblDetail.Font = new Font("Consolas", 8.5f, FontStyle.Regular);
+            _lblDetail.ForeColor = Color.FromArgb(148, 163, 184);
+            _lblDetail.Location = new Point(18, 112);
+            _lblDetail.Size = new Size(440, 38);
+            this.Controls.Add(_lblDetail);
+
+            _btnClose = new Button();
+            _btnClose.Text = "Fechar";
+            _btnClose.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+            _btnClose.BackColor = Color.FromArgb(30, 41, 59);
+            _btnClose.ForeColor = Color.White;
+            _btnClose.FlatStyle = FlatStyle.Flat;
+            _btnClose.Location = new Point(356, 154);
+            _btnClose.Size = new Size(100, 30);
+            _btnClose.Enabled = false;
+            _btnClose.Click += (s, e) =>
+            {
+                onAborted();
+                this.Close();
+            };
+            this.Controls.Add(_btnClose);
+
+            this.FormClosed += (s, e) => onAborted();
+
+            this.Shown += (s, e) =>
+            {
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    RunUpdatePipeline(config, installDir, isManualCheck, onLaunchAndExit);
+                });
+            };
+        }
+
+        private void UpdateUi(int progress, string stepText, string detailText, bool enableClose)
+        {
+            if (this.IsDisposed) return;
+            try
+            {
+                this.BeginInvoke((Action)(() =>
+                {
+                    if (this.IsDisposed) return;
+                    _progressBar.Value = Math.Max(0, Math.Min(100, progress));
+                    _lblStep.Text = stepText;
+                    _lblDetail.Text = detailText;
+                    _btnClose.Enabled = enableClose;
+                }));
+            }
+            catch { }
+        }
+
+        private void RunUpdatePipeline(
+            AgentConfig config,
+            string installDir,
+            bool isManualCheck,
+            Action onLaunchAndExit)
+        {
+            try
+            {
+                UpdateUi(25, "Consultando manifesto de versão na Central de TI...", "Servidor: " + config.BackendUrl, false);
+                Thread.Sleep(400);
+
+                string expectedSha256 = "";
+                string latestVer = AgentConfig.CURRENT_VERSION;
+                try
+                {
+                    HttpWebRequest vReq = (HttpWebRequest)WebRequest.Create(config.BackendUrl.TrimEnd('/') + "/api/agent/version");
+                    vReq.Method = "GET";
+                    vReq.Timeout = 8000;
+                    using (HttpWebResponse vResp = (HttpWebResponse)vReq.GetResponse())
+                    using (StreamReader sr = new StreamReader(vResp.GetResponseStream(), Encoding.UTF8))
+                    {
+                        string vJson = sr.ReadToEnd();
+                        JavaScriptSerializer ser = new JavaScriptSerializer();
+                        Dictionary<string, object> vData = ser.Deserialize<Dictionary<string, object>>(vJson);
+                        if (vData != null)
+                        {
+                            if (vData.ContainsKey("latest_version") && vData["latest_version"] != null)
+                                latestVer = vData["latest_version"].ToString();
+                            if (vData.ContainsKey("sha256") && vData["sha256"] != null)
+                                expectedSha256 = vData["sha256"].ToString().ToLowerInvariant();
+                        }
+                    }
+                }
+                catch { }
+
+                UpdateUi(55, "Baixando nova versão do Agente (" + latestVer + ")...", "Transferindo instalador oficial /api/agent/download...", false);
+
+                string tempUpdaterPath = Path.Combine(installDir, "IpojucaRMM-Updater-Temp.exe");
+                if (File.Exists(tempUpdaterPath))
+                {
+                    try { File.Delete(tempUpdaterPath); } catch { }
+                }
+
+                HttpWebRequest dlReq = (HttpWebRequest)WebRequest.Create(config.BackendUrl.TrimEnd('/') + "/api/agent/download");
+                dlReq.Method = "GET";
+                dlReq.Timeout = 30000;
+                using (HttpWebResponse dlResp = (HttpWebResponse)dlReq.GetResponse())
+                using (Stream netStream = dlResp.GetResponseStream())
+                using (FileStream fileStream = new FileStream(tempUpdaterPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    byte[] buffer = new byte[16384];
+                    int read;
+                    long totalRead = 0;
+                    while ((read = netStream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        fileStream.Write(buffer, 0, read);
+                        totalRead += read;
+                    }
+                }
+
+                FileInfo fi = new FileInfo(tempUpdaterPath);
+                if (!fi.Exists || fi.Length < 10240)
+                {
+                    throw new Exception("O arquivo baixado está incompleto ou inválido.");
+                }
+
+                UpdateUi(82, "Verificando assinatura criptográfica SHA-256...", "Tamanho recebido: " + (fi.Length / 1024) + " KB", false);
+                Thread.Sleep(350);
+
+                if (!string.IsNullOrEmpty(expectedSha256))
+                {
+                    using (SHA256 sha = SHA256.Create())
+                    using (FileStream fs = File.OpenRead(tempUpdaterPath))
+                    {
+                        byte[] hashBytes = sha.ComputeHash(fs);
+                        StringBuilder sbHash = new StringBuilder();
+                        foreach (byte b in hashBytes) sbHash.Append(b.ToString("x2"));
+                        string actualSha = sbHash.ToString().ToLowerInvariant();
+                        if (actualSha != expectedSha256)
+                        {
+                            throw new Exception("Falha na verificação de integridade SHA-256 do instalador.");
+                        }
+                    }
+                }
+
+                UpdateUi(100, "Aplicando atualização e reiniciando o Agente...", "Nova versão pronta: " + latestVer, false);
+                Thread.Sleep(600);
+
+                ProcessStartInfo psi = new ProcessStartInfo(tempUpdaterPath, "--ota-update");
+                psi.WorkingDirectory = installDir;
+                psi.UseShellExecute = false;
+                Process.Start(psi);
+
+                this.BeginInvoke((Action)(() =>
+                {
+                    onLaunchAndExit();
+                }));
+            }
+            catch (Exception ex)
+            {
+                UpdateUi(0, "Falha ao atualizar o Agente Windows", ex.Message, true);
+            }
+        }
+    }
+
     public class SuperAgentForm : Form
     {
         private readonly Label _lblStatus;
@@ -984,12 +1285,13 @@ namespace IpojucaRMM
         public SuperAgentForm(
             AgentConfig config,
             Action onManualSync,
+            Action onManualUpdate,
             Action<string> onSendMessage,
             Func<string> getStatus,
             Func<List<string>> getChatHistory)
         {
-            this.Text = "RMM Ipojuca — Super Agente Windows (" + Environment.MachineName + ")";
-            this.Size = new Size(520, 440);
+            this.Text = "RMM Ipojuca — Super Agente Windows (" + Environment.MachineName + " | " + AgentConfig.CURRENT_VERSION + ")";
+            this.Size = new Size(520, 445);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(10, 14, 24);
             this.ForeColor = Color.FromArgb(230, 238, 248);
@@ -997,7 +1299,7 @@ namespace IpojucaRMM
             this.MaximizeBox = false;
 
             Label lblHeader = new Label();
-            lblHeader.Text = "IPOJUCA RMM // SUPER AGENTE CLIENT-SERVER";
+            lblHeader.Text = "IPOJUCA RMM // SUPER AGENTE (" + AgentConfig.CURRENT_VERSION + ")";
             lblHeader.Font = new Font("Consolas", 11, FontStyle.Bold);
             lblHeader.ForeColor = Color.FromArgb(0, 229, 255);
             lblHeader.Location = new Point(16, 14);
@@ -1005,7 +1307,7 @@ namespace IpojucaRMM
             this.Controls.Add(lblHeader);
 
             Label lblInfo = new Label();
-            lblInfo.Text = string.Format("Host: {0}  |  UUID: {1}\nServidor VPS: {2}  |  Ciclo: Boot + 4h",
+            lblInfo.Text = string.Format("Host: {0}  |  UUID: {1}\nServidor VPS: {2}  |  Ciclo: Boot + 4h + Auto-Update OTA",
                 Environment.MachineName, config.AgentUuid, config.BackendUrl);
             lblInfo.Font = new Font("Consolas", 8.5f, FontStyle.Regular);
             lblInfo.ForeColor = Color.FromArgb(148, 163, 184);
@@ -1022,19 +1324,33 @@ namespace IpojucaRMM
             this.Controls.Add(_lblStatus);
 
             Button btnSyncNow = new Button();
-            btnSyncNow.Text = "⟳ ENVIAR TELEMETRIA AGORA (SOB DEMANDA)";
-            btnSyncNow.Font = new Font("Consolas", 9, FontStyle.Bold);
+            btnSyncNow.Text = "⟳ ENVIAR TELEMETRIA AGORA";
+            btnSyncNow.Font = new Font("Consolas", 8.5f, FontStyle.Bold);
             btnSyncNow.BackColor = Color.FromArgb(14, 116, 144);
             btnSyncNow.ForeColor = Color.White;
             btnSyncNow.FlatStyle = FlatStyle.Flat;
             btnSyncNow.Location = new Point(16, 110);
-            btnSyncNow.Size = new Size(470, 34);
+            btnSyncNow.Size = new Size(230, 34);
             btnSyncNow.Click += (s, e) =>
             {
                 _lblStatus.Text = "Status: Enviando telemetria agora...";
                 onManualSync();
             };
             this.Controls.Add(btnSyncNow);
+
+            Button btnUpdateNow = new Button();
+            btnUpdateNow.Text = "⬆ BUSCAR ATUALIZAÇÃO";
+            btnUpdateNow.Font = new Font("Consolas", 8.5f, FontStyle.Bold);
+            btnUpdateNow.BackColor = Color.FromArgb(212, 255, 51);
+            btnUpdateNow.ForeColor = Color.Black;
+            btnUpdateNow.FlatStyle = FlatStyle.Flat;
+            btnUpdateNow.Location = new Point(256, 110);
+            btnUpdateNow.Size = new Size(230, 34);
+            btnUpdateNow.Click += (s, e) =>
+            {
+                onManualUpdate();
+            };
+            this.Controls.Add(btnUpdateNow);
 
             Label lblChat = new Label();
             lblChat.Text = "CANAL DE COMUNICAÇÃO CLIENTE-SERVIDOR (SUPER AGENTE TI):";

@@ -52,6 +52,21 @@ export const rmmApi = {
       token,
     });
   },
+  getAgentVersionInfo() {
+    return request('/api/agent/version');
+  },
+  updateMachineAgent(token, machineId) {
+    return request(`/api/machines/${machineId}/update-agent`, {
+      method: 'POST',
+      token,
+    });
+  },
+  updateAllAgents(token) {
+    return request('/api/agent/update-all', {
+      method: 'POST',
+      token,
+    });
+  },
   getTaskCatalog(token) {
     return request('/api/catalog/tasks', { token });
   },

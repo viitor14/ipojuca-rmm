@@ -108,6 +108,16 @@ const TASK_CATALOG = Object.freeze({
       };
     },
   },
+  UPDATE_AGENT: {
+    code: 'UPDATE_AGENT',
+    title: 'Atualizar Agente Windows (OTA)',
+    description: 'Envia ordem de atualização remota para o computador baixar e instalar a versão mais recente do Agente mostrando aviso na tela.',
+    riskLevel: 'MEDIUM',
+    allowedRoles: ['TECH_N1', 'ADMIN_N2'],
+    validateParams() {
+      return { valid: true, sanitized: {} };
+    },
+  },
 });
 
 function signTaskPayload({ task_id, machine_id, task_code, expires_at }) {

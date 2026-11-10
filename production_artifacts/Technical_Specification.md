@@ -146,9 +146,56 @@ Elevar o nível de realismo arquitetônico 3D e a sofisticação do HUD Tático 
 
 ---
 
-## 8. Gate de Aprovação — FASE 1 (Ciclo #03)
+## 8. Ciclo #04 — Sistema de Atualização Remota e Auto-Update OTA do Agente Windows (`@pm` + `@security` + `@engineer`)
+
+### 8.1. Objetivo e Problema Resolvido
+Eliminar a necessidade de ir fisicamente ou acessar manualmente cada computador das Unidades de Saúde sempre que uma nova versão do Agente (`IpojucaRMM-Setup.exe`) for lançada. O sistema permitirá tanto **atualização automática verificada pelo próprio agente** quanto **disparo de atualização sob demanda pelo painel web** (individual por máquina ou em lote para todas as máquinas da rede).
+
+### 8.2. Requisitos Funcionais do Ciclo #04 (`@pm`)
+
+1. **RF-20 (Manifesto Oficial de Versão e Integridade no Backend — `GET /api/agent/version`):**
+   - O backend servirá o manifesto oficial da versão atual do Agente Windows contendo:
+     - `latest_version` (ex.: `"2.1.0"`).
+     - `download_url` (`/IpojucaRMM-Setup.exe`).
+     - `sha256` (hash criptográfico SHA-256 calculado automaticamente pelo servidor sobre o binário `public/IpojucaRMM-Setup.exe` atual).
+     - `released_at` e `mandatory: true`.
+   - Toda resposta de `POST /api/heartbeat` e `GET /api/agent/pending-commands` também informará `latest_agent_version` e se há ordem de atualização pendente (`update_requested: true`).
+
+2. **RF-21 (Auto-Update com Interface Visual para o Cliente no Agente Windows — OTA):**
+   - **Verificação Automática:** Ao iniciar, a cada ciclo de comunicação e ao receber sinalização do servidor, o Agente compara sua `agent_version` local com a `latest_version` do servidor (ou atende ao comando forçado `UPDATE_AGENT_NOW`).
+   - **Opção Manual na Bandeja do Windows:** No menu do ícone perto do relógio (System Tray) e na janela do Super Agente, haverá também o botão **"⬆ Verificar e Atualizar Agente Agora"**.
+   - **Feedback Visual Claro para o Usuário da Máquina (Requisito Expresso do Cliente):**
+     1. Quando a atualização iniciar, o Agente exibe uma **Janela Visual de Atualização (`UpdateProgressForm`)** moderna na tela do computador (junto com notificação na bandeja do sistema), informando: *"RMM Ipojuca — Atualizando Agente para a nova versão (v2.1.0)... Baixando e verificando pacote oficial da Central de TI"*.
+     2. O Agente baixa o novo binário de `/api/agent/download` para `%LOCALAPPDATA%\IpojucaRMM\IpojucaRMM-Update.exe` atualizando a barra de progresso na tela.
+     3. Valida o tamanho do arquivo e o hash **SHA-256** contra o manifesto do servidor.
+     4. Inicia `IpojucaRMM-Update.exe --update-from=<versao_antiga>` e encerra a instância antiga.
+     5. O instalador substitui `IpojucaRMM-Agent.exe`, **preserva integralmente o `agent-identity.json`** (`AgentUuid`, `AgentToken`, Unidade e Setor da máquina), reinicia o agente atualizado em segundo plano, envia um heartbeat imediato reportando a nova `agent_version` ao painel e **mostra o aviso de conclusão na tela do cliente** (*"Agente RMM Ipojuca atualizado com sucesso para a versão 2.1.0!"*).
+
+3. **RF-22 (Comando de Atualização pelo Painel Web — Individual e Global):**
+   - **Por Máquina (`DiagnosticDrawer`):**
+     - Exibe a versão instalada no computador (`v2.0.0`, `v2.1.0`, etc.) e um indicador caso esteja desatualizada frente à versão atual do servidor.
+     - Botão direto **"⬆ Enviar Atualização do Agente"** (e tarefa homologada `UPDATE_AGENT` no catálogo para `ADMIN_N2`), que ordena ao agente da máquina baixar e instalar a versão nova imediatamente.
+   - **Em Lote / Todas as Máquinas (`POST /api/agent/trigger-update-all`):**
+     - Botão no topo/radar do painel para `ADMIN_N2`: **"⬆ Atualizar Todos os Agentes"** que enfileira a ordem de atualização para todas as estações cadastradas na rede de uma só vez.
+
+### 8.3. Regras de Segurança (`@security`)
+- **RN-03 (Verificação de Integridade SHA-256):** O agente jamais executará um binário baixado cujo hash SHA-256 divirja do manifesto autenticado do servidor ou cujo tamanho seja inválido (< 10 KB).
+- **RN-04 (Controle de Acesso RBAC):** Apenas operadores com perfil `ADMIN_N2` podem disparar o comando forçado de atualização de agente (`UPDATE_AGENT` / atualização em massa), com registro obrigatório em `audit_logs`.
+
+### 8.4. Critérios de Aceitação do Ciclo #04 (`@pm`)
+
+| ID | Cenário | Dado que (Contexto) | Quando (Ação) | Então (Resultado Esperado) |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-10** | Manifesto de Versão e SHA-256 Dinâmico | O arquivo `public/IpojucaRMM-Setup.exe` está disponível no backend | O agente ou painel consulta `GET /api/agent/version` | O backend retorna HTTP `200` com `latest_version`, `sha256` real do executável, tamanho em bytes e URL de download. |
+| **CA-11** | Disparo de Atualização pelo Painel (Individual ou Global) | Uma máquina está com agente ativo na rede | O administrador `ADMIN_N2` clica em **"⬆ Atualizar Agente"** na gaveta da máquina ou em **"⬆ Atualizar Todos"** | O backend registra a ordem de atualização, o agente detecta no próximo pulso (em até 3 segundos), baixa o novo `.exe`, valida o SHA-256, atualiza-se silenciosamente com `--silent` e volta a reportar a nova versão no painel sem perder seu `agent_uuid`. |
+| **CA-12** | Auto-Update Automático por Diferença de Versão | O administrador publica uma nova versão do agente na VPS | Qualquer PC da rede faz comunicação com o backend | O backend sinaliza `update_available: true`, e o agente faz o auto-update silencioso em segundo plano sem nenhuma intervenção humana no PC. |
+
+---
+
+## 9. Gate de Aprovação — FASE 1 (Ciclo #04)
 
 Conforme definido em `.agents/workflows/startcycle.md`:
 - O pipeline encontra-se **pausado no Gate de Aprovação da Fase 1**.
-- Responda **`Approved`** para aprovar esta especificação e autorizar o avanço para a modelagem arquitetônica/visual e implementação do novo Digital Twin 3D & HUD Holográfico, ou informe quaisquer ajustes desejados.
+- Responda **`Approved`** para aprovar esta especificação e autorizar o desenvolvimento imediato do sistema de Auto-Update OTA + Botão de Atualização Remota no Painel e no Agente Windows.
+
 

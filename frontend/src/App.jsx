@@ -557,6 +557,19 @@ export default function App() {
     return res;
   }
 
+  async function handleUpdateMachineAgent(machineId) {
+    const res = await rmmApi.updateMachineAgent(auth.token, machineId);
+    await loadAllData(auth.token, selectedUnitId, machineId);
+    return res;
+  }
+
+  async function handleUpdateAllAgents() {
+    const res = await rmmApi.updateAllAgents(auth.token);
+    window.alert(res.message || 'Ordem de atualização enviada para todas as máquinas.');
+    await loadAllData(auth.token, selectedUnitId, selectedMachineId);
+    return res;
+  }
+
   async function handleDeleteMachine(machineId) {
     await rmmApi.deleteMachine(auth.token, machineId);
     setSelectedMachineId(null);
@@ -662,6 +675,20 @@ export default function App() {
             >
               ⬇ AGENTE (.EXE)
             </CamModeBtn>
+
+            {auth.user?.role === 'ADMIN_N2' && (
+              <CamModeBtn
+                onClick={handleUpdateAllAgents}
+                style={{
+                  borderColor: 'rgba(0, 229, 255, 0.55)',
+                  color: '#00E5FF',
+                  background: 'rgba(0, 229, 255, 0.12)',
+                }}
+                title="Enviar atualização automática (OTA) do Agente para todas as máquinas cadastradas na rede"
+              >
+                ⬆ ATUALIZAR TODOS
+              </CamModeBtn>
+            )}
 
             <RoleSelect
               value={selectedProfileIdx}
@@ -812,6 +839,7 @@ export default function App() {
             currentUser={auth.user || { name: 'Operador', role: 'ADMIN_N2' }}
             onDispatchTask={handleDispatchTask}
             onRefreshTelemetryNow={handleRefreshTelemetryNow}
+            onUpdateMachineAgent={handleUpdateMachineAgent}
             onDeleteMachine={handleDeleteMachine}
             onFocusCamera={() => setCameraMode('FOCUS')}
           />

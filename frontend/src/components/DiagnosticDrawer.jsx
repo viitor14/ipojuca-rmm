@@ -534,11 +534,13 @@ export function DiagnosticDrawer({
   currentUser,
   onDispatchTask,
   onRefreshTelemetryNow,
+  onUpdateMachineAgent,
   onDeleteMachine,
   onFocusCamera,
 }) {
   const [busyTask, setBusyTask] = useState(null);
   const [refreshingNow, setRefreshingNow] = useState(false);
+  const [updatingAgent, setUpdatingAgent] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -601,6 +603,25 @@ export function DiagnosticDrawer({
     }
   }
 
+  async function handleUpdateAgentNow() {
+    if (!onUpdateMachineAgent) return;
+    setUpdatingAgent(true);
+    setFeedback(null);
+    try {
+      const res = await onUpdateMachineAgent(machine.id);
+      setFeedback({
+        type: "ok",
+        text:
+          res.message ||
+          "Ordem de atualização enviada ao Agente Windows com aviso na tela do cliente.",
+      });
+    } catch (err) {
+      setFeedback({ type: "err", text: `Falha ao atualizar agente: ${err.message}` });
+    } finally {
+      setUpdatingAgent(false);
+    }
+  }
+
   async function handleRunTask(task) {
     setBusyTask(task.code);
     setFeedback(null);
@@ -636,7 +657,8 @@ export function DiagnosticDrawer({
       <HeaderBlock>
         <HeaderTopRow>
           <MicroSerial>
-            ESTAÇÃO #{machine.id} • {machine.ip_address}
+            ESTAÇÃO #{machine.id} • {machine.ip_address} • AGENTE{" "}
+            {machine.agent_version || "2.1.0"}
           </MicroSerial>
           <StatusBadge $color={statusColor}>
             <span className="dot" />
@@ -777,6 +799,26 @@ export function DiagnosticDrawer({
               ? "⟳ Coletando dados em tempo real do Agente..."
               : "⟳ Atualizar Telemetria Agora (Tempo Real)"}
           </RefreshTelemetryBtn>
+
+          {onUpdateMachineAgent && currentUser?.role !== "VIEWER" && (
+            <RefreshTelemetryBtn
+              onClick={handleUpdateAgentNow}
+              disabled={updatingAgent}
+              $loading={updatingAgent}
+              style={{
+                background: updatingAgent
+                  ? "rgba(0, 229, 255, 0.2)"
+                  : "rgba(0, 229, 255, 0.14)",
+                color: "#00E5FF",
+                borderColor: "rgba(0, 229, 255, 0.55)",
+              }}
+              title="Envia a nova versão do Agente para este computador e mostra o progresso na tela do cliente"
+            >
+              {updatingAgent
+                ? "⬆ Enviando atualização ao Agente..."
+                : "⬆ Enviar Atualização do Agente (Mostrar na Tela do PC)"}
+            </RefreshTelemetryBtn>
+          )}
 
           <SectionBar>
             <span>Ações de Manutenção Remota</span>

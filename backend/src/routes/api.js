@@ -21,9 +21,32 @@ const router = express.Router();
 
 // Filas em memória para comunicação Cliente-Servidor com o Super Agente Nativo (.exe)
 const pendingRefreshByAgent = new Set();
+const pendingUpdateByAgent = new Set();
 const pendingMessagesByAgent = new Map();
 const chatHistoryByMachine = new Map();
 const heartbeatWaitersByAgent = new Map();
+
+const LATEST_AGENT_VERSION = "2.1.0-native-exe";
+
+function getAgentInstallerInfo() {
+  const exePath = path.join(__dirname, "../../public/IpojucaRMM-Setup.exe");
+  let sha256 = "";
+  let sizeBytes = 0;
+  try {
+    if (fs.existsSync(exePath)) {
+      const buf = fs.readFileSync(exePath);
+      sizeBytes = buf.length;
+      sha256 = crypto.createHash("sha256").update(buf).digest("hex");
+    }
+  } catch {}
+  return {
+    latest_version: LATEST_AGENT_VERSION,
+    download_path: "/api/agent/download",
+    sha256,
+    size_bytes: sizeBytes,
+    released_at: "2026-11-10T14:55:00Z",
+  };
+}
 
 function waitForLiveAgentHeartbeat(agentUuid, timeoutMs = 3800) {
   return new Promise((resolve) => {
@@ -279,12 +302,14 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
       await repository.resolveMachineAlertsIfHealthy(updatedMachine.id);
     }
 
+    const installerInfo = getAgentInstallerInfo();
     return res.json({
       status: "ok",
       machine_id: updatedMachine.id,
       health_status: updatedMachine.health_status,
       reason: evaluation.reason,
       alert: alertTriggered,
+      latest_agent_version: installerInfo.latest_version,
       server_time: new Date().toISOString(),
     });
   } catch (err) {
@@ -518,7 +543,12 @@ router.post(
             "Cache do DNS Resolver liberado com êxito (ipconfig /flushdns).",
           CHECK_DISK_HEALTH: `Volume ${paramValidation.sanitized.drive || "C"}: Status SMART Saudável (0 setores defeituosos).`,
           INSTALL_APPROVED_PRINTER: `Impressora '${paramValidation.sanitized.printer_name}' mapeada em ${paramValidation.sanitized.printer_ip}.`,
+          UPDATE_AGENT: `Ordem de atualização OTA (${LATEST_AGENT_VERSION}) enviada ao Agente Windows com aviso na tela do cliente.`,
         };
+
+        if (taskSpec.code === "UPDATE_AGENT") {
+          pendingUpdateByAgent.add(machine.agent_uuid);
+        }
 
         // Se for tarefa de reinício de spooler em máquina com spooler parado, corrige o estado
         if (taskSpec.code === "RESTART_SPOOLER" && !machine.spooler_running) {
@@ -590,7 +620,11 @@ router.get(
   },
 );
 
-// 11. Download Direto do Instalador Executável Nativo do Agente Windows (.exe)
+// 11. Download Direto e Manifesto de Versão do Instalador Executável Nativo (.exe)
+router.get("/agent/version", (req, res) => {
+  return res.json(getAgentInstallerInfo());
+});
+
 router.get("/agent/download", (req, res) => {
   const exePath = path.join(__dirname, "../../public/IpojucaRMM-Setup.exe");
   if (!fs.existsSync(exePath)) {
@@ -606,10 +640,66 @@ router.get("/agent/download", (req, res) => {
   return res.sendFile(exePath);
 });
 
+// 11.1. Disparo de Atualização Remota do Agente (Individual ou Global em Todas as Máquinas)
+router.post(
+  "/machines/:id/update-agent",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    const machine = await repository.findMachineById(req.params.id);
+    if (!machine) {
+      return res.status(404).json({ error: "Computador não encontrado." });
+    }
+    pendingUpdateByAgent.add(machine.agent_uuid);
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      machineId: machine.id,
+      actionType: "AGENT_OTA_UPDATE_REQUESTED",
+      ipAddress: req.ip,
+      details: { targetVersion: LATEST_AGENT_VERSION, hostname: machine.hostname },
+    });
+    return res.json({
+      status: "ok",
+      target_version: LATEST_AGENT_VERSION,
+      machine_id: machine.id,
+      message: `Ordem de atualização (${LATEST_AGENT_VERSION}) enviada para ${machine.hostname}. A atualização será exibida na tela do cliente.`,
+    });
+  },
+);
+
+router.post(
+  "/agent/update-all",
+  requireAuth,
+  requireRole(["ADMIN_N2"]),
+  async (req, res) => {
+    const machines = await repository.listMachines({});
+    for (const m of machines) {
+      if (m.agent_uuid) {
+        pendingUpdateByAgent.add(m.agent_uuid);
+      }
+    }
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      actionType: "AGENT_OTA_UPDATE_ALL_REQUESTED",
+      ipAddress: req.ip,
+      details: { targetVersion: LATEST_AGENT_VERSION, count: machines.length },
+    });
+    return res.json({
+      status: "ok",
+      target_version: LATEST_AGENT_VERSION,
+      queued_machines: machines.length,
+      message: `Atualização automática (${LATEST_AGENT_VERSION}) enviada para todas as ${machines.length} máquina(s) cadastradas.`,
+    });
+  },
+);
+
 // 12. Poll de Comandos e Mensagens para o Super Agente Nativo (.exe em segundo plano)
 router.get("/agent/pending", async (req, res) => {
   const agentUuid = String(
     req.headers["x-agent-uuid"] || req.query.agent_uuid || "",
+  ).trim();
+  const currentAgentVersion = String(
+    req.headers["x-agent-version"] || req.query.agent_version || "",
   ).trim();
   if (!agentUuid) {
     return res.status(400).json({ error: "agent_uuid obrigatório." });
@@ -630,6 +720,16 @@ router.get("/agent/pending", async (req, res) => {
     pendingRefreshByAgent.delete(agentUuid);
   }
 
+  let updateRequested = pendingUpdateByAgent.has(agentUuid);
+  if (updateRequested) {
+    pendingUpdateByAgent.delete(agentUuid);
+  }
+
+  const installerInfo = getAgentInstallerInfo();
+  const autoUpdateAvailable =
+    Boolean(currentAgentVersion) &&
+    currentAgentVersion !== installerInfo.latest_version;
+
   const queuedMsgs = pendingMessagesByAgent.get(agentUuid) || [];
   if (queuedMsgs.length > 0) {
     pendingMessagesByAgent.set(agentUuid, []);
@@ -637,6 +737,10 @@ router.get("/agent/pending", async (req, res) => {
 
   return res.json({
     refresh_requested: refreshRequested,
+    update_requested: updateRequested || autoUpdateAvailable,
+    latest_version: installerInfo.latest_version,
+    download_path: installerInfo.download_path,
+    sha256: installerInfo.sha256,
     messages: queuedMsgs,
     server_time: new Date().toISOString(),
   });
