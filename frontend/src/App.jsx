@@ -423,12 +423,18 @@ export default function App() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [cameraMode, setCameraMode] = useState('ISO');
   const [searchQuery, setSearchQuery] = useState('');
+  const [nowTimestamp, setNowTimestamp] = useState(Date.now());
   const [sceneLayers, setSceneLayers] = useState({
     furniture: true,
     network: true,
     labels: true,
     volumetric: true,
   });
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTimestamp(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const toggleLayer = (key) => {
     setSceneLayers((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -940,8 +946,9 @@ export default function App() {
             const ram = Math.min(100, Math.max(0, Number(m.ram_usage_pct || 0)));
             const dsk = Math.min(100, Math.max(0, Number(m.disk_usage_pct || 0)));
             const idleSec = Math.max(0, Math.floor(Number(m.idle_seconds || 0)));
+            const isLegacy = Boolean(m.agent_version) && !m.agent_version.startsWith('2.3');
             const offSec = m.last_seen_at
-              ? Math.max(0, Math.floor((Date.now() - new Date(m.last_seen_at).getTime()) / 1000))
+              ? Math.max(0, Math.floor((nowTimestamp - new Date(m.last_seen_at).getTime()) / 1000))
               : 0;
             const fmtShort = (s) => {
               if (s < 60) return `${s}s`;
@@ -954,9 +961,11 @@ export default function App() {
             const activityLabel =
               m.health_status === 'OFFLINE'
                 ? `🔌 Desligado há ${fmtShort(offSec)}`
-                : idleSec < 180
-                  ? `🟢 Em uso (${fmtShort(idleSec)})`
-                  : `⏳ Ocioso há ${fmtShort(idleSec)}`;
+                : isLegacy
+                  ? `⚡ Ativo (${m.agent_version || '2.2.0'})`
+                  : idleSec < 180
+                    ? `🟢 Em uso (${fmtShort(idleSec)})`
+                    : `⏳ Ocioso há ${fmtShort(idleSec)}`;
 
             return (
               <NodeKeycap

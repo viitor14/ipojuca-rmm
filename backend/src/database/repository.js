@@ -59,6 +59,7 @@ class RmmRepository {
     this.telemetryHistory = [];
     this.remoteTasks = [];
     this.auditLogs = [];
+    this.lastBroadcastedIdleByMachine = new Map();
 
     this.users = [
       {
@@ -829,11 +830,18 @@ class RmmRepository {
     const hasIdle = idleSeconds !== null && idleSeconds !== '' && !Number.isNaN(Number(idleSeconds));
     const parsedIdle = hasIdle ? Math.max(0, Math.round(Number(idleSeconds))) : Number(machine.idle_seconds || 0);
     const prevIdle = Number(machine.idle_seconds || 0);
+    const lastBroadcastIdle = this.lastBroadcastedIdleByMachine.get(machine.id);
     const idleChangedSignificantly =
       hasIdle &&
-      (Math.abs(parsedIdle - prevIdle) >= 15 ||
-        (parsedIdle < 10 && prevIdle >= 10) ||
-        (parsedIdle >= 300 && prevIdle < 300));
+      (lastBroadcastIdle === undefined ||
+        Math.abs(parsedIdle - lastBroadcastIdle) >= 5 ||
+        (parsedIdle < 5 && prevIdle >= 5) ||
+        (parsedIdle >= 180 && prevIdle < 180) ||
+        (parsedIdle >= 1800 && prevIdle < 1800));
+
+    if (idleChangedSignificantly) {
+      this.lastBroadcastedIdleByMachine.set(machine.id, parsedIdle);
+    }
 
     if (this.mode === 'mysql') {
       const nextStatus = wasOffline ? 'NORMAL' : machine.health_status;

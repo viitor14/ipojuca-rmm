@@ -1143,6 +1143,9 @@ namespace IpojucaRMM
         [DllImport("kernel32.dll")]
         private static extern ulong GetTickCount64();
 
+        [DllImport("kernel32.dll")]
+        private static extern uint GetTickCount();
+
         [StructLayout(LayoutKind.Sequential)]
         private struct LASTINPUTINFO
         {
@@ -1161,7 +1164,8 @@ namespace IpojucaRMM
                 lii.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
                 if (GetLastInputInfo(ref lii))
                 {
-                    uint elapsedTicks = unchecked((uint)Environment.TickCount - lii.dwTime);
+                    uint nowTicks = GetTickCount();
+                    uint elapsedTicks = unchecked(nowTicks - lii.dwTime);
                     return (long)(elapsedTicks / 1000U);
                 }
             }

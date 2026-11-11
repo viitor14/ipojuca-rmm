@@ -466,11 +466,14 @@ const DiagItemBox = styled.div`
   }
 `;
 
-function formatDurationPt(totalSeconds) {
+function formatDurationPt(totalSeconds, includeSeconds = true) {
   const sec = Math.max(0, Math.floor(Number(totalSeconds || 0)));
   if (sec < 60) return `${sec}s`;
   const mins = Math.floor(sec / 60);
-  if (mins < 60) return `${mins} min`;
+  const remSec = sec % 60;
+  if (mins < 60) {
+    return includeSeconds && remSec > 0 ? `${mins}m ${remSec}s` : `${mins} min`;
+  }
   const hours = Math.floor(mins / 60);
   const remMins = mins % 60;
   if (hours < 24) {
@@ -681,6 +684,12 @@ export function DiagnosticDrawer({
   const [feedback, setFeedback] = useState(null);
   const [activeReport, setActiveReport] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [nowTimestamp, setNowTimestamp] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTimestamp(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const latestTask = diagnostics?.tasks?.[0] || null;
   useEffect(() => {
@@ -749,13 +758,22 @@ export function DiagnosticDrawer({
     theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
 
   const uptimeHours = (Number(machine.uptime_seconds || 0) / 3600).toFixed(1);
-  const idleSeconds = Math.max(0, Number(machine.idle_seconds || 0));
+  const baseIdle = Math.max(0, Number(machine.idle_seconds || 0));
   const isOffline = machine.health_status === "OFFLINE";
   const offlineSeconds = useMemo(() => {
     if (!machine.last_seen_at) return 0;
-    const diffMs = Date.now() - new Date(machine.last_seen_at).getTime();
+    const diffMs = nowTimestamp - new Date(machine.last_seen_at).getTime();
     return Math.max(0, Math.floor(diffMs / 1000));
-  }, [machine.last_seen_at, machine.health_status]);
+  }, [machine.last_seen_at, machine.health_status, nowTimestamp]);
+
+  const secondsSinceSeen = useMemo(() => {
+    if (!machine.last_seen_at) return 0;
+    const diffMs = nowTimestamp - new Date(machine.last_seen_at).getTime();
+    return Math.max(0, Math.floor(diffMs / 1000));
+  }, [machine.last_seen_at, nowTimestamp]);
+
+  const liveIdleSeconds = !isOffline && baseIdle > 0 ? baseIdle + Math.min(secondsSinceSeen, 3) : baseIdle;
+  const isLegacyAgent = Boolean(machine.agent_version) && !machine.agent_version.startsWith("2.3");
 
   const activityState = useMemo(() => {
     if (isOffline) {
@@ -768,26 +786,40 @@ export function DiagnosticDrawer({
         subline: machine.last_seen_at
           ? `Último contato: ${new Date(machine.last_seen_at).toLocaleString("pt-BR")}`
           : "Sem registro recente",
+        needsUpdate: false,
       };
     }
-    if (idleSeconds < 180) {
+    if (isLegacyAgent) {
+      return {
+        badge: "⚠️ AGENTE LEGADO (" + (machine.agent_version || "2.2.0") + ")",
+        color: "#F59E0B",
+        bg: "rgba(245, 158, 11, 0.14)",
+        border: "rgba(245, 158, 11, 0.55)",
+        headline: `Estação Ativa • Requer Atualização 2.3.0`,
+        subline: `Clique no botão "Enviar Atualização do Agente" abaixo para ativar telemetria de ociosidade em tempo real.`,
+        needsUpdate: true,
+      };
+    }
+    if (liveIdleSeconds < 180) {
       return {
         badge: "🟢 EM USO ATIVO",
         color: "#10B981",
         bg: "rgba(16, 185, 129, 0.12)",
         border: "rgba(16, 185, 129, 0.45)",
-        headline: `Em uso agora (Ocioso há ${formatDurationPt(idleSeconds)})`,
-        subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0)} (${uptimeHours}h)`,
+        headline: `Em uso agora (Ocioso há ${formatDurationPt(liveIdleSeconds)})`,
+        subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} (${uptimeHours}h)`,
+        needsUpdate: false,
       };
     }
-    if (idleSeconds < 1800) {
+    if (liveIdleSeconds < 1800) {
       return {
         badge: "🟡 OCIOSO / AUSENTE",
         color: "#F59E0B",
         bg: "rgba(245, 158, 11, 0.12)",
         border: "rgba(245, 158, 11, 0.45)",
-        headline: `Ocioso há ${formatDurationPt(idleSeconds)} sem uso`,
-        subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0)} (${uptimeHours}h)`,
+        headline: `Ocioso há ${formatDurationPt(liveIdleSeconds)} sem uso`,
+        subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} (${uptimeHours}h)`,
+        needsUpdate: false,
       };
     }
     return {
@@ -795,10 +827,11 @@ export function DiagnosticDrawer({
       color: "#F97316",
       bg: "rgba(249, 115, 22, 0.14)",
       border: "rgba(249, 115, 22, 0.5)",
-      headline: `Parado / Ocioso há ${formatDurationPt(idleSeconds)}`,
-      subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0)} sem atividade de usuário`,
+      headline: `Parado / Ocioso há ${formatDurationPt(liveIdleSeconds)}`,
+      subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} sem atividade de usuário`,
+      needsUpdate: false,
     };
-  }, [isOffline, offlineSeconds, idleSeconds, machine.last_seen_at, machine.uptime_seconds, uptimeHours]);
+  }, [isOffline, isLegacyAgent, offlineSeconds, liveIdleSeconds, machine.last_seen_at, machine.uptime_seconds, uptimeHours, machine.agent_version]);
 
   async function handleManualRefresh() {
     setRefreshingNow(true);
@@ -1177,6 +1210,39 @@ export function DiagnosticDrawer({
                 <strong>
                   {fixTextEncoding(machine.os_version || "Windows")} •{" "}
                   {uptimeHours}h ligado
+                </strong>
+              </div>
+            </div>
+
+            <div className="spec-divider" />
+
+            <div className="spec-grid-2">
+              <div className="spec-cell">
+                <span>⏱️ Tempo de Ociosidade (Sem Uso)</span>
+                <strong
+                  style={{
+                    color: isOffline
+                      ? "#94A3B8"
+                      : liveIdleSeconds >= 180
+                        ? "#F59E0B"
+                        : "#10B981",
+                  }}
+                >
+                  {isOffline
+                    ? "Computador Desligado"
+                    : isLegacyAgent
+                      ? "Requer Agente v2.3"
+                      : liveIdleSeconds === 0
+                        ? "0s (Em uso contínuo)"
+                        : `${formatDurationPt(liveIdleSeconds)} sem uso`}
+                </strong>
+              </div>
+              <div className="spec-cell">
+                <span>🔌 Estado Ligado / Desligado</span>
+                <strong style={{ color: isOffline ? "#EF4444" : "#00E5FF" }}>
+                  {isOffline
+                    ? `Desligado há ${formatDurationPt(offlineSeconds)}`
+                    : `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)}`}
                 </strong>
               </div>
             </div>
