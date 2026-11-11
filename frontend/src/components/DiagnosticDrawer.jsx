@@ -466,6 +466,21 @@ const DiagItemBox = styled.div`
   }
 `;
 
+function formatDurationPt(totalSeconds) {
+  const sec = Math.max(0, Math.floor(Number(totalSeconds || 0)));
+  if (sec < 60) return `${sec}s`;
+  const mins = Math.floor(sec / 60);
+  if (mins < 60) return `${mins} min`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours < 24) {
+    return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days}d ${remHours}h` : `${days} dia(s)`;
+}
+
 function parseDiagnosticSummary(rawText) {
   const clean = fixTextEncoding(rawText || "");
   if (!clean) return [];
@@ -734,6 +749,56 @@ export function DiagnosticDrawer({
     theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
 
   const uptimeHours = (Number(machine.uptime_seconds || 0) / 3600).toFixed(1);
+  const idleSeconds = Math.max(0, Number(machine.idle_seconds || 0));
+  const isOffline = machine.health_status === "OFFLINE";
+  const offlineSeconds = useMemo(() => {
+    if (!machine.last_seen_at) return 0;
+    const diffMs = Date.now() - new Date(machine.last_seen_at).getTime();
+    return Math.max(0, Math.floor(diffMs / 1000));
+  }, [machine.last_seen_at, machine.health_status]);
+
+  const activityState = useMemo(() => {
+    if (isOffline) {
+      return {
+        badge: "🔌 DESLIGADO / OFFLINE",
+        color: "#EF4444",
+        bg: "rgba(239, 68, 68, 0.12)",
+        border: "rgba(239, 68, 68, 0.45)",
+        headline: `Desligado há ${formatDurationPt(offlineSeconds)}`,
+        subline: machine.last_seen_at
+          ? `Último contato: ${new Date(machine.last_seen_at).toLocaleString("pt-BR")}`
+          : "Sem registro recente",
+      };
+    }
+    if (idleSeconds < 180) {
+      return {
+        badge: "🟢 EM USO ATIVO",
+        color: "#10B981",
+        bg: "rgba(16, 185, 129, 0.12)",
+        border: "rgba(16, 185, 129, 0.45)",
+        headline: `Em uso agora (Ocioso há ${formatDurationPt(idleSeconds)})`,
+        subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0)} (${uptimeHours}h)`,
+      };
+    }
+    if (idleSeconds < 1800) {
+      return {
+        badge: "🟡 OCIOSO / AUSENTE",
+        color: "#F59E0B",
+        bg: "rgba(245, 158, 11, 0.12)",
+        border: "rgba(245, 158, 11, 0.45)",
+        headline: `Ocioso há ${formatDurationPt(idleSeconds)} sem uso`,
+        subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0)} (${uptimeHours}h)`,
+      };
+    }
+    return {
+      badge: "🟠 OCIOSIDADE PROLONGADA",
+      color: "#F97316",
+      bg: "rgba(249, 115, 22, 0.14)",
+      border: "rgba(249, 115, 22, 0.5)",
+      headline: `Parado / Ocioso há ${formatDurationPt(idleSeconds)}`,
+      subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0)} sem atividade de usuário`,
+    };
+  }, [isOffline, offlineSeconds, idleSeconds, machine.last_seen_at, machine.uptime_seconds, uptimeHours]);
 
   async function handleManualRefresh() {
     setRefreshingNow(true);
@@ -997,6 +1062,53 @@ export function DiagnosticDrawer({
           label="Temperatura"
         />
       </RadialGrid>
+
+      <div
+        style={{
+          flexShrink: 0,
+          background: activityState.bg,
+          border: `1.5px solid ${activityState.border}`,
+          borderRadius: "10px",
+          padding: "11px 14px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontSize: "0.7rem",
+            fontWeight: 800,
+            letterSpacing: "0.05em",
+            color: activityState.color,
+          }}
+        >
+          <span>⏱️ ESTADO DE ATIVIDADE &amp; OCIOSIDADE</span>
+          <span>{activityState.badge}</span>
+        </div>
+        <div
+          style={{
+            fontSize: "0.95rem",
+            fontWeight: 800,
+            color: "#F8FAFC",
+            marginTop: "2px",
+          }}
+        >
+          {activityState.headline}
+        </div>
+        <div
+          style={{
+            fontSize: "0.76rem",
+            color: "#CBD5E1",
+            fontFamily: "JetBrains Mono, monospace",
+          }}
+        >
+          {activityState.subline}
+        </div>
+      </div>
 
       {!collapsed && (
         <>

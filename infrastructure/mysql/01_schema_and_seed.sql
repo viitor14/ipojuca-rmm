@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS machines (
   disk_usage_pct DECIMAL(5,2) NOT NULL DEFAULT 0.00,
   temperature_c DECIMAL(5,2) NOT NULL DEFAULT 45.00,
   uptime_seconds BIGINT NOT NULL DEFAULT 0,
+  idle_seconds BIGINT NOT NULL DEFAULT 0,
   spooler_running TINYINT(1) NOT NULL DEFAULT 1,
   pos_x FLOAT NOT NULL DEFAULT 0,
   pos_y FLOAT NOT NULL DEFAULT 0.6,

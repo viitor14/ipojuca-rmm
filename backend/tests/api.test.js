@@ -327,7 +327,7 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
 
   const verRes = await requestJson('GET', '/api/agent/version');
   assert.equal(verRes.status, 200);
-  assert.equal(verRes.data.latest_version, '2.2.0-native-exe');
+  assert.equal(verRes.data.latest_version, '2.3.0-native-exe');
 
   const updateRes = await requestJson(
     'POST',
@@ -341,8 +341,14 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
 
   const pollRes = await requestJson(
     'GET',
-    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.0.0-native-exe'
+    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.0.0-native-exe&idle_seconds=420'
   );
   assert.equal(pollRes.status, 200);
   assert.equal(pollRes.data.update_requested, true);
+
+  const diagRes = await requestJson('GET', `/api/machines/${newMachineId}/diagnostics`, {
+    headers: { Authorization: `Bearer ${techLogin.data.token}` },
+  });
+  assert.equal(diagRes.status, 200);
+  assert.equal(diagRes.data.machine.idle_seconds, 420);
 });

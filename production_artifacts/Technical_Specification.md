@@ -226,11 +226,57 @@ Agora que o Agente Windows possui atualização automática OTA com aviso na tel
 
 ---
 
-## 10. Gate de Aprovação — FASE 1 (Ciclo #05)
+## 10. Ciclo #06 — Monitoramento de Tempo de Ociosidade (Idle Time) e Tempo Desligado (Offline Duration) (`@pm` + `@security` + `@dba` + `@engineer` + `@frontend`)
+
+### 10.1. Viabilidade Técnica e Objetivo
+**Sim, é 100% possível!**
+O objetivo deste ciclo é permitir que a equipe de TI e a Gestão da Secretaria de Saúde visualizem em tempo real:
+1. **Tempo de Ociosidade da Máquina (`idle_seconds` — Usuário sem mexer no mouse/teclado):** Quando o computador está ligado (`ONLINE`), mostrar há quanto tempo ninguém utiliza o PC (ex.: *"Em uso ativo agora"*, *"Ocioso há 18 min"*, *"Ocioso há 2h 15m"*).
+2. **Tempo Desligado / Sem Comunicação (`offline_duration`):** Quando o computador está desligado (`OFFLINE`), mostrar exatamente há quanto tempo ele foi desligado ou perdeu conexão e qual foi a data/hora exata do último contato (ex.: *"Desligado há 3h 42m (desde 09:30)"* ou *"Desligado há 2 dias"*).
+
+### 10.2. Requisitos Funcionais do Ciclo #06 (`@pm`)
+
+1. **RF-25 (Coleta Nativa de Ociosidade no Windows via Win32 API `user32.dll` — `GetLastInputInfo`):**
+   - O Agente Windows (`v2.3.0-native-exe`) consultará a função nativa do Windows `GetLastInputInfo` (`user32.dll`) combinada com `Environment.TickCount`.
+   - Essa API retorna o instante exato do último movimento de mouse ou tecla pressionada na sessão do usuário, permitindo calcular `idle_seconds` (segundos de ociosidade) com precisão de segundos e **sem capturar nenhuma tecla digitada (100% compatível com LGPD)**.
+   - O valor `idle_seconds` será enviado tanto no `POST /api/heartbeat` quanto no poll rápido a cada `1.5s` (`GET /api/agent/pending?idle_seconds=...`), mantendo o status de uso atualizado em tempo real no painel.
+
+2. **RF-26 (Persistência e Cálculo de Tempo Ocioso e Tempo Desligado no Backend/MySQL):**
+   - Adição automática da coluna `idle_seconds INT NOT NULL DEFAULT 0` na tabela `machines` (com *auto-migration* segura no startup do MySQL para não exigir recriação de banco).
+   - Classificação automática de atividade da estação quando `ONLINE`:
+     - **🟢 Em Uso Ativo:** `idle_seconds < 300` (menos de 5 minutos sem interação).
+     - **🟡 Ausente / Ocioso:** `300 <= idle_seconds < 1800` (entre 5 e 30 minutos sem uso).
+     - **🟠 Ociosidade Prolongada:** `idle_seconds >= 1800` (mais de 30 minutos ligado sem ninguém usar).
+   - Quando a máquina estiver `OFFLINE`, cálculo dinâmico do **Tempo Desligado** com base em `NOW() - last_seen_at` (ex.: `Desligado há 1h 25m`).
+
+3. **RF-27 (Exibição no Painel Principal, Dock Inferior e Gaveta de Diagnóstico):**
+   - **Na Gaveta de Diagnóstico (`DiagnosticDrawer`):**
+     - Novo cartão dedicado **"Estado de Uso / Atividade"** mostrando:
+       - Se **Ligado**: Tempo Ligado (`Uptime`) + Status de Uso (`🟢 Em uso agora` ou `🟡 Ocioso há X min / Xh`).
+       - Se **Desligado (`OFFLINE`)**: Banner destacado em vermelho/âmbar mostrando **`🔌 Desligado há Xh Ym (Último sinal: DD/MM às HH:mm)`**.
+   - **Nos Cartões da Barra Inferior (`BottomMatrixDock`):**
+     - Exibição rápida do indicador de ociosidade (`ATIV` / `OCIOSO 25m`) ou do tempo desligado (`OFF há 3h`).
+   - **No Diagnóstico Remoto:**
+     - Inclusão do tempo de ociosidade e tempo ligado no relatório instantâneo da máquina.
+
+### 10.3. Regras de Segurança e Privacidade LGPD (`@security`)
+- **RN-07 (Proibição de Keylogging):** A detecção de ociosidade deve usar **exclusivamente** o contador de tempo `LASTINPUTINFO.dwTime` da API `GetLastInputInfo` (`user32.dll`), que informa apenas o timestamp do último evento de entrada sem ler qual tecla ou clique foi realizado.
+
+### 10.4. Critérios de Aceitação do Ciclo #06 (`@pm`)
+
+| ID | Cenário | Dado que (Contexto) | Quando (Ação) | Então (Resultado Esperado) |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-15** | Medição de Ociosidade em Tempo Real | O computador está ligado com o Agente ativo | O usuário fica sem mexer no mouse/teclado | O painel exibe o tempo exato de ociosidade (`Ocioso há X min`) atualizado continuamente, e volta para `🟢 Em uso agora (0m)` assim que o usuário mexe no mouse ou teclado. |
+| **CA-16** | Exibição de Tempo Desligado (`OFFLINE`) | O computador foi desligado ou o agente encerrado | O operador visualiza a máquina no painel ou na gaveta lateral | O painel exibe claramente há quanto tempo aquele PC está desligado (`Desligado há Xh Ym`) junto com o horário da última comunicação. |
+
+---
+
+## 11. Gate de Aprovação — FASE 1 (Ciclo #06)
 
 Conforme definido em `.agents/workflows/startcycle.md`:
 - O pipeline encontra-se **pausado no Gate de Aprovação da Fase 1**.
-- Responda **`Approved`** (ou informe se deseja incluir mais alguma função específica no Agente) para eu implementar todas essas funções reais na versão `2.2.0-native-exe`, integrá-las ao painel e publicar para você testar usando a atualização automática!
+- Responda **`Approved`** para que eu inicie imediatamente a implementação no Agente Windows (`v2.3.0-native-exe`), Backend/MySQL e Painel React!
+
 
 
 

@@ -28,7 +28,7 @@ const pendingMessagesByAgent = new Map();
 const chatHistoryByMachine = new Map();
 const heartbeatWaitersByAgent = new Map();
 
-const LATEST_AGENT_VERSION = "2.2.0-native-exe";
+const LATEST_AGENT_VERSION = "2.3.0-native-exe";
 
 function waitForLiveAgentTaskResult(taskId, timeoutMs = 4500) {
   return new Promise((resolve) => {
@@ -269,6 +269,7 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
         Math.max(0, Number(metrics.temperature_c ?? 45)),
       ),
       uptime_seconds: Math.max(0, Number(metrics.uptime_seconds ?? 0)),
+      idle_seconds: Math.max(0, Number(metrics.idle_seconds ?? 0)),
       spooler_running:
         metrics.spooler_running === undefined
           ? true
@@ -770,15 +771,18 @@ router.get("/agent/pending", async (req, res) => {
   const currentAgentVersion = String(
     req.headers["x-agent-version"] || req.query.agent_version || "",
   ).trim();
+  const rawIdleSeconds =
+    req.headers["x-agent-idle-seconds"] ?? req.query.idle_seconds ?? null;
   if (!agentUuid) {
     return res.status(400).json({ error: "agent_uuid obrigatório." });
   }
 
-  // Atualiza presença leve do agente (mantém máquina ONLINE enquanto o agente estiver aberto)
+  // Atualiza presença leve e ociosidade em tempo real do agente (mantém máquina ONLINE enquanto o agente estiver aberto)
   try {
     const reactivatedMachine = await repository.touchAgentPresence(
       agentUuid,
       currentAgentVersion,
+      rawIdleSeconds,
     );
     if (reactivatedMachine) {
       socketHub.broadcastToDashboard("machine:updated", reactivatedMachine);

@@ -125,6 +125,15 @@ class RmmRepository {
     if (this.mode !== 'mysql' || !this.pool) return;
     await this.pool.query('SET NAMES utf8mb4');
 
+    // Auto-migration segura para adicionar coluna idle_seconds em bancos já existentes na VPS
+    try {
+      await this.pool.query(
+        'ALTER TABLE machines ADD COLUMN idle_seconds BIGINT NOT NULL DEFAULT 0 AFTER uptime_seconds'
+      );
+    } catch {
+      // Coluna já existe
+    }
+
     // Garante acentuação UTF-8 limpa nas Unidades e Setores já existentes no MySQL
     for (const unit of this.units) {
       await this.pool.execute(
@@ -450,6 +459,10 @@ class RmmRepository {
       disk_usage_pct: Number(metrics.disk_usage_pct ?? machine.disk_usage_pct),
       temperature_c: Number(metrics.temperature_c ?? machine.temperature_c),
       uptime_seconds: Number(metrics.uptime_seconds ?? machine.uptime_seconds),
+      idle_seconds: Math.max(
+        0,
+        Number(metrics.idle_seconds ?? machine.idle_seconds ?? 0)
+      ),
       spooler_running:
         metrics.spooler_running === undefined
           ? machine.spooler_running
@@ -466,7 +479,7 @@ class RmmRepository {
           hostname=?, manufacturer=?, model=?, serial_number=?, mac_address=?, ip_address=?,
           cpu_model=?, ram_total_mb=?, disk_type=?, disk_total_gb=?, os_version=?, agent_version=?,
           health_status=?, cpu_usage_pct=?, ram_usage_pct=?, disk_usage_pct=?, temperature_c=?,
-          uptime_seconds=?, spooler_running=?, last_seen_at=NOW()
+          uptime_seconds=?, idle_seconds=?, spooler_running=?, last_seen_at=NOW()
         WHERE id=?`,
         [
           updatedFields.hostname,
@@ -487,6 +500,7 @@ class RmmRepository {
           updatedFields.disk_usage_pct,
           updatedFields.temperature_c,
           updatedFields.uptime_seconds,
+          updatedFields.idle_seconds,
           updatedFields.spooler_running,
           machine.id,
         ]
@@ -805,49 +819,48 @@ class RmmRepository {
     return transitioned;
   }
 
-  async touchAgentPresence(agentUuid, currentAgentVersion = '') {
+  async touchAgentPresence(agentUuid, currentAgentVersion = '', idleSeconds = null) {
     const machine = await this.findMachineByAgentUuid(agentUuid);
     if (!machine) return null;
     const nowIso = new Date().toISOString();
     const wasOffline = machine.health_status === 'OFFLINE';
     const nextVersion = String(currentAgentVersion || '').trim();
     const versionChanged = Boolean(nextVersion) && nextVersion !== machine.agent_version;
+    const hasIdle = idleSeconds !== null && idleSeconds !== '' && !Number.isNaN(Number(idleSeconds));
+    const parsedIdle = hasIdle ? Math.max(0, Math.round(Number(idleSeconds))) : Number(machine.idle_seconds || 0);
+    const prevIdle = Number(machine.idle_seconds || 0);
+    const idleChangedSignificantly =
+      hasIdle &&
+      (Math.abs(parsedIdle - prevIdle) >= 15 ||
+        (parsedIdle < 10 && prevIdle >= 10) ||
+        (parsedIdle >= 300 && prevIdle < 300));
 
     if (this.mode === 'mysql') {
-      if (wasOffline && versionChanged) {
-        await this.pool.execute(
-          `UPDATE machines SET health_status = 'NORMAL', agent_version = ?, last_seen_at = NOW() WHERE id = ?`,
-          [nextVersion, machine.id]
-        );
-      } else if (wasOffline) {
-        await this.pool.execute(
-          `UPDATE machines SET health_status = 'NORMAL', last_seen_at = NOW() WHERE id = ?`,
-          [machine.id]
-        );
-      } else if (versionChanged) {
-        await this.pool.execute(
-          `UPDATE machines SET agent_version = ?, last_seen_at = NOW() WHERE id = ?`,
-          [nextVersion, machine.id]
-        );
-      } else {
-        await this.pool.execute(`UPDATE machines SET last_seen_at = NOW() WHERE id = ?`, [
-          machine.id,
-        ]);
-      }
-      return wasOffline || versionChanged ? this.findMachineById(machine.id) : null;
+      const nextStatus = wasOffline ? 'NORMAL' : machine.health_status;
+      const resolvedVer = versionChanged ? nextVersion : machine.agent_version;
+      await this.pool.execute(
+        `UPDATE machines SET health_status = ?, agent_version = ?, idle_seconds = ?, last_seen_at = NOW() WHERE id = ?`,
+        [nextStatus, resolvedVer, parsedIdle, machine.id]
+      );
+      return wasOffline || versionChanged || idleChangedSignificantly
+        ? this.findMachineById(machine.id)
+        : null;
     }
 
     const memMachine = this.machines.find((m) => m.id === machine.id);
     if (!memMachine) return null;
     memMachine.last_seen_at = nowIso;
     memMachine.updated_at = nowIso;
+    if (hasIdle) {
+      memMachine.idle_seconds = parsedIdle;
+    }
     if (versionChanged) {
       memMachine.agent_version = nextVersion;
     }
     if (wasOffline) {
       memMachine.health_status = 'NORMAL';
     }
-    if (wasOffline || versionChanged) {
+    if (wasOffline || versionChanged || idleChangedSignificantly) {
       return this.findMachineById(memMachine.id);
     }
     return null;

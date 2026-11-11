@@ -939,6 +939,24 @@ export default function App() {
             const cpu = Math.min(100, Math.max(0, Number(m.cpu_usage_pct || 0)));
             const ram = Math.min(100, Math.max(0, Number(m.ram_usage_pct || 0)));
             const dsk = Math.min(100, Math.max(0, Number(m.disk_usage_pct || 0)));
+            const idleSec = Math.max(0, Math.floor(Number(m.idle_seconds || 0)));
+            const offSec = m.last_seen_at
+              ? Math.max(0, Math.floor((Date.now() - new Date(m.last_seen_at).getTime()) / 1000))
+              : 0;
+            const fmtShort = (s) => {
+              if (s < 60) return `${s}s`;
+              const mins = Math.floor(s / 60);
+              if (mins < 60) return `${mins}m`;
+              const hrs = Math.floor(mins / 60);
+              if (hrs < 24) return `${hrs}h ${mins % 60}m`;
+              return `${Math.floor(hrs / 24)}d ${hrs % 24}h`;
+            };
+            const activityLabel =
+              m.health_status === 'OFFLINE'
+                ? `🔌 Desligado há ${fmtShort(offSec)}`
+                : idleSec < 180
+                  ? `🟢 Em uso (${fmtShort(idleSec)})`
+                  : `⏳ Ocioso há ${fmtShort(idleSec)}`;
 
             return (
               <NodeKeycap
@@ -970,6 +988,22 @@ export default function App() {
                 </div>
                 <div className="n-metrics">
                   CPU {cpu.toFixed(0)}% • RAM {ram.toFixed(0)}% • {m.ip_address}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: '0.58rem',
+                    color:
+                      m.health_status === 'OFFLINE'
+                        ? '#EF4444'
+                        : idleSec < 180
+                          ? '#10B981'
+                          : '#F59E0B',
+                    marginBottom: '4px',
+                    fontWeight: 600,
+                  }}
+                >
+                  {activityLabel}
                 </div>
                 <div className="n-bars">
                   <div className="bar-track" title={`CPU: ${cpu.toFixed(0)}%`}>

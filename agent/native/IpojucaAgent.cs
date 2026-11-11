@@ -20,13 +20,13 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.2.0.0")]
+[assembly: AssemblyVersion("2.3.0.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.2.0-native-exe";
+        public const string CURRENT_VERSION = "2.3.0-native-exe";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -626,15 +626,18 @@ namespace IpojucaRMM
             {
                 try
                 {
+                    long currentIdleSeconds = HardwareCollector.GetIdleSeconds();
                     string url = _config.BackendUrl.TrimEnd('/') +
                         "/api/agent/pending?agent_uuid=" + Uri.EscapeDataString(_config.AgentUuid) +
-                        "&agent_version=" + Uri.EscapeDataString(AgentConfig.CURRENT_VERSION);
+                        "&agent_version=" + Uri.EscapeDataString(AgentConfig.CURRENT_VERSION) +
+                        "&idle_seconds=" + currentIdleSeconds;
                     HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
                     req.Method = "GET";
                     req.Timeout = 7000;
                     req.Headers["X-Agent-UUID"] = _config.AgentUuid;
                     req.Headers["X-Agent-Token"] = _config.AgentToken;
                     req.Headers["X-Agent-Version"] = AgentConfig.CURRENT_VERSION;
+                    req.Headers["X-Agent-Idle-Seconds"] = currentIdleSeconds.ToString();
 
                     using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
                     using (StreamReader reader = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
@@ -1140,6 +1143,32 @@ namespace IpojucaRMM
         [DllImport("kernel32.dll")]
         private static extern ulong GetTickCount64();
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LASTINPUTINFO
+        {
+            public uint cbSize;
+            public uint dwTime;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+        public static long GetIdleSeconds()
+        {
+            try
+            {
+                LASTINPUTINFO lii = new LASTINPUTINFO();
+                lii.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
+                if (GetLastInputInfo(ref lii))
+                {
+                    uint elapsedTicks = unchecked((uint)Environment.TickCount - lii.dwTime);
+                    return (long)(elapsedTicks / 1000U);
+                }
+            }
+            catch { }
+            return 0;
+        }
+
         private static bool IsVirtualAdapter(string text)
         {
             if (string.IsNullOrEmpty(text)) return false;
@@ -1485,6 +1514,7 @@ namespace IpojucaRMM
             catch { }
 
             double temperatureC = Math.Round(42.0 + (cpuUsagePct * 0.31), 1);
+            long idleSeconds = GetIdleSeconds();
 
             return new Dictionary<string, object>
             {
@@ -1493,6 +1523,7 @@ namespace IpojucaRMM
                 { "disk_usage_pct", diskUsagePct },
                 { "temperature_c", temperatureC },
                 { "uptime_seconds", uptimeSeconds },
+                { "idle_seconds", idleSeconds },
                 { "spooler_running", spoolerRunning }
             };
         }
