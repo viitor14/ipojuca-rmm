@@ -3,14 +3,14 @@ import styled from "styled-components";
 import { STATUS_LABELS, RISK_LABELS, fixTextEncoding, theme } from "../styles/theme";
 
 const BladeContainer = styled.aside`
-  width: ${({ $collapsed }) => ($collapsed ? "300px" : "450px")};
-  max-height: calc(100vh - 116px);
-  background: rgba(13, 16, 24, 0.92);
+  width: ${({ $collapsed }) => ($collapsed ? "300px" : "468px")};
+  max-height: calc(100vh - 172px);
+  background: rgba(13, 16, 24, 0.94);
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-top: 3px solid ${({ $statusColor }) => $statusColor};
   border-radius: 10px;
-  padding: 16px 18px;
+  padding: 16px 18px 28px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -19,8 +19,13 @@ const BladeContainer = styled.aside`
   pointer-events: auto;
   transition: width 0.2s ease;
 
+  /* Impede que o Flexbox esmague o console de retorno ou o chat dentro da gaveta */
+  & > * {
+    flex-shrink: 0;
+  }
+
   @media (max-width: 1100px) {
-    width: ${({ $collapsed }) => ($collapsed ? "260px" : "375px")};
+    width: ${({ $collapsed }) => ($collapsed ? "260px" : "390px")};
   }
 `;
 
@@ -278,12 +283,13 @@ const RefreshTelemetryBtn = styled.button`
 const KeycapMatrix = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: 7px;
+  flex-shrink: 0;
 `;
 
 const KeycapButton = styled.button`
   position: relative;
-  padding: 10px 11px;
+  padding: 8px 10px;
   border-radius: 8px;
   text-align: left;
   background: ${({ disabled }) =>
@@ -313,12 +319,12 @@ const KeycapButton = styled.button`
     justify-content: space-between;
     align-items: center;
     gap: 6px;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
   }
 
   .key-badge {
     font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.64rem;
+    font-size: 0.62rem;
     font-weight: 700;
     padding: 2px 6px;
     border-radius: 4px;
@@ -338,58 +344,61 @@ const KeycapButton = styled.button`
 
   .key-title {
     font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.79rem;
+    font-size: 0.76rem;
     font-weight: 700;
-    line-height: 1.3;
+    line-height: 1.25;
     display: block;
     color: inherit;
   }
 `;
 
 const TerminalReadout = styled.div`
-  background: #060911;
-  border: 1px solid
+  flex-shrink: 0;
+  background: #060a14;
+  border: 1.5px solid
     ${({ $highlight }) =>
-      $highlight ? "rgba(0, 229, 255, 0.65)" : "rgba(255, 255, 255, 0.16)"};
+      $highlight ? "rgba(0, 229, 255, 0.75)" : "rgba(0, 229, 255, 0.28)"};
   box-shadow: ${({ $highlight }) =>
-    $highlight ? "0 0 16px rgba(0, 229, 255, 0.18)" : "none"};
-  border-radius: 8px;
-  padding: 10px 12px;
+    $highlight ? "0 0 20px rgba(0, 229, 255, 0.22)" : "none"};
+  border-radius: 10px;
+  padding: 12px 14px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.74rem;
-  line-height: 1.5;
-  max-height: 165px;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  min-height: 120px;
+  max-height: 290px;
   overflow-y: auto;
-  color: #cbd5e1;
+  color: #e2e8f0;
 
   .console-head {
-    font-size: 0.66rem;
-    font-weight: 700;
+    font-size: 0.7rem;
+    font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: #00e5ff;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     display: flex;
     justify-content: space-between;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    padding-bottom: 4px;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 6px;
   }
 
   .line-ok {
     color: #10b981;
-    font-weight: 600;
+    font-weight: 700;
   }
   .line-busy {
     color: #00e5ff;
-    font-weight: 600;
+    font-weight: 700;
   }
   .line-err {
     color: #ef4444;
-    font-weight: 600;
+    font-weight: 700;
   }
   .line-n8n {
     color: #d4ff33;
-    margin-top: 6px;
+    margin-top: 8px;
     padding-top: 6px;
     border-top: 1px dashed rgba(212, 255, 51, 0.25);
   }
@@ -906,7 +915,8 @@ export function DiagnosticDrawer({
   }
 
   return (
-    <BladeContainer $statusColor={statusColor} $collapsed={collapsed}>
+    <>
+      <BladeContainer $statusColor={statusColor} $collapsed={collapsed}>
       <HeaderBlock>
         <HeaderTopRow>
           <MicroSerial>
@@ -1100,6 +1110,108 @@ export function DiagnosticDrawer({
             </RefreshTelemetryBtn>
           )}
 
+          {onSendMessage && (
+            <div
+              style={{
+                flexShrink: 0,
+                background: "rgba(9, 14, 24, 0.95)",
+                border: "1.5px solid rgba(0, 229, 255, 0.45)",
+                borderRadius: "10px",
+                padding: "12px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
+              }}
+            >
+              <SectionBar style={{ marginTop: 0, color: "#00E5FF", fontSize: "0.75rem" }}>
+                <span>💬 Chat / Aviso na Tela do PC</span>
+                <span>Super Agente • Tempo Real</span>
+              </SectionBar>
+
+              <div
+                style={{
+                  minHeight: "64px",
+                  maxHeight: "135px",
+                  overflowY: "auto",
+                  fontSize: "0.8rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  padding: "8px 10px",
+                  background: "rgba(4, 7, 13, 0.85)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: "7px",
+                }}
+              >
+                {chatMessages.length === 0 ? (
+                  <span style={{ color: "#94A3B8", fontSize: "0.76rem" }}>
+                    Digite abaixo para abrir um aviso ou conversar ao vivo na tela de{" "}
+                    <strong style={{ color: "#E2E8F0" }}>{machine.hostname}</strong>.
+                  </span>
+                ) : (
+                  chatMessages.slice(-8).map((m) => (
+                    <div key={m.id} style={{ lineHeight: 1.4 }}>
+                      <strong
+                        style={{
+                          color:
+                            m.direction === "SERVER_TO_CLIENT"
+                              ? "#D4FF33"
+                              : "#00E5FF",
+                        }}
+                      >
+                        [{m.sender}]:
+                      </strong>{" "}
+                      <span style={{ color: "#F8FAFC" }}>
+                        {fixTextEncoding(m.message)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <form
+                onSubmit={handleSendChatMessage}
+                style={{ display: "flex", gap: "8px" }}
+              >
+                <input
+                  type="text"
+                  placeholder="Digite um aviso para exibir na tela do usuário..."
+                  value={chatText}
+                  onChange={(e) => setChatText(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: "9px 12px",
+                    borderRadius: "7px",
+                    background: "rgba(15, 23, 42, 0.95)",
+                    border: "1px solid rgba(0, 229, 255, 0.35)",
+                    color: "#F8FAFC",
+                    fontFamily: "inherit",
+                    fontSize: "0.82rem",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={sendingChat || !chatText.trim()}
+                  style={{
+                    padding: "9px 14px",
+                    borderRadius: "7px",
+                    background: "#00E5FF",
+                    color: "#050609",
+                    border: "none",
+                    fontWeight: 800,
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {sendingChat ? "Enviando..." : "Enviar Aviso"}
+                </button>
+              </form>
+            </div>
+          )}
+
           <SectionBar>
             <span>Ações de Manutenção Remota</span>
             <span>Perfil: {currentUser.role}</span>
@@ -1107,8 +1219,8 @@ export function DiagnosticDrawer({
 
           <TerminalReadout $highlight={Boolean(feedback || busyTask)}>
             <div className="console-head">
-              <span>⚡ Retorno de Execução Remota</span>
-              <span>{busyTask ? "EXECUTANDO..." : "PRONTO"}</span>
+              <span>⚡ Painel de Diagnóstico &amp; Retorno Remoto</span>
+              <span>{busyTask ? "⏳ EXECUTANDO NO PC..." : "PRONTO"}</span>
             </div>
             {feedback ? (
               <div
@@ -1119,17 +1231,40 @@ export function DiagnosticDrawer({
                       ? "line-busy"
                       : "line-ok"
                 }
-                style={{ marginBottom: tasks.length > 0 ? "6px" : 0 }}
+                style={{
+                  marginBottom: "10px",
+                  padding: "8px 10px",
+                  borderRadius: "6px",
+                  background: "rgba(15, 23, 42, 0.85)",
+                  border: "1px solid rgba(0, 229, 255, 0.25)",
+                  fontSize: "0.8rem",
+                }}
               >
                 &gt; {feedback.text}
               </div>
             ) : (
               tasks.length === 0 && (
-                <div style={{ color: "#94A3B8" }}>
-                  &gt; Clique em qualquer botão abaixo para executar no PC selecionado.
+                <div style={{ color: "#94A3B8", padding: "6px 0" }}>
+                  &gt; Clique em qualquer ação abaixo (ex.: Diagnóstico de Rede Local ou Saúde de Disco) para ver o diagnóstico detalhado do PC aqui.
                 </div>
               )
             )}
+
+            {(activeReport?.summary || tasks[0]?.output_summary) && (
+              <div style={{ marginBottom: "10px" }}>
+                <DiagItemsGrid>
+                  {parseDiagnosticSummary(
+                    activeReport?.summary || tasks[0]?.output_summary
+                  ).map((item, idx) => (
+                    <DiagItemBox key={idx}>
+                      <span className="diag-k">{item.label}</span>
+                      <span className="diag-v">{item.value}</span>
+                    </DiagItemBox>
+                  ))}
+                </DiagItemsGrid>
+              </div>
+            )}
+
             {tasks.slice(0, 4).map((t) => (
               <div
                 key={t.task_id}
@@ -1147,9 +1282,10 @@ export function DiagnosticDrawer({
                 }}
                 style={{
                   cursor: "pointer",
-                  padding: "3px 4px",
-                  borderRadius: "4px",
-                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                  padding: "5px 6px",
+                  borderRadius: "5px",
+                  borderBottom: "1px solid rgba(255,255,255,0.06)",
+                  fontSize: "0.75rem",
                 }}
                 title="Clique para abrir a janela de relatório detalhado desta ação"
               >
@@ -1157,8 +1293,8 @@ export function DiagnosticDrawer({
                 <strong style={{ color: "#E2E8F0" }}>{t.task_code}</strong> ::{" "}
                 <span className="line-ok">{t.status}</span> —{" "}
                 {fixTextEncoding(t.output_summary)}{" "}
-                <span style={{ color: "#00E5FF", fontSize: "0.68rem" }}>
-                  [Ver Diagnóstico]
+                <span style={{ color: "#00E5FF", fontWeight: 700 }}>
+                  [Expandir Relatório]
                 </span>
               </div>
             ))}
@@ -1205,100 +1341,9 @@ export function DiagnosticDrawer({
               );
             })}
           </KeycapMatrix>
-
-          {onSendMessage && (
-            <div
-              style={{
-                background: "rgba(7, 9, 14, 0.85)",
-                border: "1px solid rgba(0, 229, 255, 0.25)",
-                borderRadius: "8px",
-                padding: "10px 12px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-              }}
-            >
-              <SectionBar style={{ marginTop: 0, color: "#00E5FF" }}>
-                <span>💬 Chat / Aviso na Tela do PC</span>
-                <span>Super Agente</span>
-              </SectionBar>
-
-              {chatMessages.length > 0 && (
-                <div
-                  style={{
-                    maxHeight: "95px",
-                    overflowY: "auto",
-                    fontSize: "0.75rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                    padding: "6px 8px",
-                    background: "rgba(3, 5, 9, 0.7)",
-                    borderRadius: "6px",
-                  }}
-                >
-                  {chatMessages.slice(-6).map((m) => (
-                    <div key={m.id} style={{ lineHeight: 1.35 }}>
-                      <strong
-                        style={{
-                          color:
-                            m.direction === "SERVER_TO_CLIENT"
-                              ? "#D4FF33"
-                              : "#00E5FF",
-                        }}
-                      >
-                        [{m.sender}]:
-                      </strong>{" "}
-                      <span style={{ color: "#F1F5F9" }}>
-                        {fixTextEncoding(m.message)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <form
-                onSubmit={handleSendChatMessage}
-                style={{ display: "flex", gap: "6px" }}
-              >
-                <input
-                  type="text"
-                  placeholder="Enviar mensagem para abrir na tela do usuário..."
-                  value={chatText}
-                  onChange={(e) => setChatText(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: "7px 10px",
-                    borderRadius: "6px",
-                    background: "rgba(15, 23, 42, 0.9)",
-                    border: "1px solid rgba(255,255,255,0.16)",
-                    color: "#F8FAFC",
-                    fontFamily: "inherit",
-                    fontSize: "0.78rem",
-                    outline: "none",
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={sendingChat || !chatText.trim()}
-                  style={{
-                    padding: "7px 12px",
-                    borderRadius: "6px",
-                    background: "#00E5FF",
-                    color: "#050609",
-                    border: "none",
-                    fontWeight: 700,
-                    fontSize: "0.76rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  Enviar
-                </button>
-              </form>
-            </div>
-          )}
         </>
       )}
+      </BladeContainer>
 
       {activeReport && (
         <DiagnosticModalBackdrop onClick={() => setActiveReport(null)}>
@@ -1484,6 +1529,6 @@ export function DiagnosticDrawer({
           </DiagnosticModalCard>
         </DiagnosticModalBackdrop>
       )}
-    </BladeContainer>
+    </>
   );
 }

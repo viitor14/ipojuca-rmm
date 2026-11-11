@@ -153,23 +153,28 @@ const RoleSelect = styled.select`
 
 const MiddleWorkspace = styled.div`
   flex: 1;
+  min-height: 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-top: 12px;
-  margin-bottom: 12px;
+  margin-top: 10px;
+  margin-bottom: 10px;
   pointer-events: none;
   overflow: hidden;
 `;
 
 const LeftRadarColumn = styled.div`
   width: 295px;
-  max-height: calc(100vh - 140px);
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 9px;
   pointer-events: auto;
   overflow-y: auto;
+
+  & > * {
+    flex-shrink: 0;
+  }
 
   @media (max-width: 960px) {
     display: none;
