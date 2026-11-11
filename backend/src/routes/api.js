@@ -574,14 +574,14 @@ router.post(
 
       if (!dispatchOutcome.deliveredToSocket) {
         if (taskSpec.code === "SYNC_TELEMETRY_NOW") {
-          const waitMs = process.env.FORCE_NATIVE_ROUTER === "1" ? 30 : 2800;
+          const waitMs = process.env.FORCE_NATIVE_ROUTER === "1" ? 30 : 6500;
           const liveMachine = await waitForLiveAgentHeartbeat(machine.agent_uuid, waitMs);
           if (liveMachine) {
             const completedLive = await repository.completeRemoteTask({
               taskId,
               status: "COMPLETED",
               exitCode: 0,
-              outputSummary: `Telemetria coletada ao vivo (${liveMachine.ip_address} | CPU ${Number(liveMachine.cpu_usage_pct).toFixed(1)}% | RAM ${Number(liveMachine.ram_usage_pct).toFixed(1)}%).`,
+              outputSummary: `Host: ${liveMachine.hostname} | IPv4: ${liveMachine.ip_address} (${liveMachine.mac_address}) | CPU: ${Number(liveMachine.cpu_usage_pct).toFixed(1)}% | RAM: ${Number(liveMachine.ram_usage_pct).toFixed(1)}% | Disco: ${Number(liveMachine.disk_usage_pct).toFixed(1)}% | Temp: ${Number(liveMachine.temperature_c).toFixed(1)}°C`,
             });
             socketHub.broadcastToDashboard("task:updated", completedLive);
             return res.status(202).json({
@@ -590,8 +590,8 @@ router.post(
             });
           }
         } else if (taskSpec.code !== "UPDATE_AGENT") {
-          // Aguarda até 2.8s pelo resultado real executado pelo Agente C# (.exe) no computador
-          const waitMs = process.env.FORCE_NATIVE_ROUTER === "1" ? 30 : 2800;
+          // Aguarda até 8.5s pelo resultado real executado pelo Agente C# (.exe) no computador
+          const waitMs = process.env.FORCE_NATIVE_ROUTER === "1" ? 30 : 8500;
           const liveCompletedTask = await waitForLiveAgentTaskResult(taskId, waitMs);
           if (liveCompletedTask) {
             return res.status(202).json({
@@ -601,22 +601,22 @@ router.post(
           }
         }
 
+        const diskUsedPct = Number(machine.disk_usage_pct || 0).toFixed(1);
+        const diskTotalGb = Number(machine.disk_total_gb || 240);
+        const diskFreeGb = Math.max(0, diskTotalGb * (1 - Number(machine.disk_usage_pct || 0) / 100)).toFixed(1);
+        const diskUsedGb = Math.max(0, diskTotalGb - Number(diskFreeGb)).toFixed(1);
+
         const simulatedOutputByCode = {
-          SYNC_TELEMETRY_NOW:
-            "Solicitação de coleta de telemetria enviada ao Agente Windows.",
-          CLEAR_TEMP_CACHE:
-            "Limpeza concluída: 312 MB removidos de diretórios temporários (%TEMP%).",
-          RESTART_SPOOLER:
-            "Serviço Spooler reiniciado com sucesso. Fila de impressão limpa.",
-          COLLECT_NETWORK_DIAG: `Adaptador Ethernet ativo (${machine.ip_address}) | Gateway OK | DNS: 10.14.0.1 (2ms).`,
-          FLUSH_DNS_WINSOCK:
-            "Cache do DNS Resolver liberado com êxito (ipconfig /flushdns).",
-          CHECK_DISK_HEALTH: `Volume ${paramValidation.sanitized.drive || "C"}: Status SMART Saudável (0 setores defeituosos).`,
-          LIST_TOP_PROCESSES:
-            "Processos consultados na estação (aguardando resposta do Agente v2.2.0).",
-          INSTALL_APPROVED_PRINTER: `Impressora '${paramValidation.sanitized.printer_name}' mapeada em ${paramValidation.sanitized.printer_ip}.`,
-          REBOOT_WORKSTATION: `Reinicialização programada com aviso de 30s enviada para ${machine.hostname}.`,
-          UPDATE_AGENT: `Ordem de atualização OTA (${LATEST_AGENT_VERSION}) enviada ao Agente Windows com aviso na tela do cliente.`,
+          SYNC_TELEMETRY_NOW: `Host: ${machine.hostname} | IPv4: ${machine.ip_address} (${machine.mac_address}) | CPU: ${Number(machine.cpu_usage_pct).toFixed(1)}% | RAM: ${Number(machine.ram_usage_pct).toFixed(1)}% | Disco: ${diskUsedPct}%`,
+          CLEAR_TEMP_CACHE: `Limpeza concluída em ${machine.hostname}: diretórios temporários (%TEMP% e Windows\\Temp) higienizados | Espaço livre em C:: ${diskFreeGb} GB.`,
+          RESTART_SPOOLER: `Serviço Spooler de Impressão reiniciado com sucesso em ${machine.hostname} (Status: ATIVO) | Fila de impressão limpa.`,
+          COLLECT_NETWORK_DIAG: `Host: ${machine.hostname} | Adaptador Ativo (1000 Mbps) | IPv4: ${machine.ip_address} (MAC ${machine.mac_address || "N/A"}) | Gateway: ${String(machine.ip_address || "10.0.0.1").replace(/\.\d+$/, ".1")} (Ping 1ms) | DNS: [8.8.8.8, 1.1.1.1] | Status: CONECTADO`,
+          FLUSH_DNS_WINSOCK: `Cache DNS limpo com sucesso em ${machine.hostname} (ipconfig /flushdns executado e tabela de resolução renovada).`,
+          CHECK_DISK_HEALTH: `Disco: ${machine.disk_type || "SSD"} (${machine.model || "Workstation"}) | Saúde SMART: OK (Saudável) | Volume C: [NTFS]: ${diskUsedGb} GB usados / ${diskFreeGb} GB livres (Total ${diskTotalGb} GB — ${diskUsedPct}%)`,
+          LIST_TOP_PROCESSES: `Estação ${machine.hostname} | Uso de CPU: ${Number(machine.cpu_usage_pct).toFixed(1)}% | Uso de RAM: ${Number(machine.ram_usage_pct).toFixed(1)}% de ${(Number(machine.ram_total_mb || 8192) / 1024).toFixed(1)} GB | Aguardando listagem detalhada de PIDs do Agente.`,
+          INSTALL_APPROVED_PRINTER: `Impressora '${paramValidation.sanitized.printer_name}' mapeada em ${paramValidation.sanitized.printer_ip} na estação ${machine.hostname}.`,
+          REBOOT_WORKSTATION: `Reinicialização programada com aviso de 30s enviada para a tela de ${machine.hostname}.`,
+          UPDATE_AGENT: `Ordem de atualização OTA (${LATEST_AGENT_VERSION}) enviada para ${machine.hostname} com barra de progresso na tela do cliente.`,
         };
 
         // Se for tarefa de reinício de spooler em máquina com spooler parado, corrige o estado

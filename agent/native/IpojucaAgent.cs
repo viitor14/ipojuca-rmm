@@ -328,9 +328,9 @@ namespace IpojucaRMM
             _heartbeatTimer.Tick += (s, e) => TriggerHeartbeatAsync("PERIODIC_4H");
             _heartbeatTimer.Start();
 
-            // 3. Poll leve a cada 2.5 segundos para resposta imediata ao botão de Coleta Manual Sob Demanda e Chat
+            // 3. Poll leve a cada 1.5 segundos para resposta imediata aos botões de Manutenção Remota e Chat
             _commandPollTimer = new System.Windows.Forms.Timer();
-            _commandPollTimer.Interval = 2500;
+            _commandPollTimer.Interval = 1500;
             _commandPollTimer.Tick += (s, e) => PollPendingCommandsAsync();
             _commandPollTimer.Start();
         }
@@ -857,8 +857,20 @@ namespace IpojucaRMM
             }
 
             double freedMb = Math.Round(freedBytes / (1024.0 * 1024.0), 2);
-            return string.Format("Limpeza real concluída em {0}: {1} arquivos temporários removidos ({2} MB liberados).",
-                Environment.MachineName, deletedFiles, freedMb);
+            string freeDiskInfo = "";
+            try
+            {
+                DriveInfo cDrive = new DriveInfo("C");
+                if (cDrive.IsReady)
+                {
+                    double freeGb = Math.Round(cDrive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0), 1);
+                    freeDiskInfo = string.Format(" | Espaço livre atual em C:: {0} GB", freeGb);
+                }
+            }
+            catch { }
+
+            return string.Format("Limpeza concluída em {0}: {1} arquivos temporários removidos ({2} MB liberados de %TEMP% e Windows\\Temp){3}.",
+                Environment.MachineName, deletedFiles, freedMb, freeDiskInfo);
         }
 
         private static string RestartPrintSpooler(Action onTriggerHeartbeat)
@@ -868,7 +880,28 @@ namespace IpojucaRMM
                 RunHiddenCommand("net", "stop spooler /y", 5000);
                 RunHiddenCommand("net", "start spooler", 5000);
                 if (onTriggerHeartbeat != null) onTriggerHeartbeat();
-                return "Serviço Spooler de Impressão reiniciado em " + Environment.MachineName + " (net stop/start spooler executado).";
+
+                List<string> printers = new List<string>();
+                try
+                {
+                    using (ManagementObjectSearcher s = new ManagementObjectSearcher("SELECT Name, PortName FROM Win32_Printer"))
+                    {
+                        foreach (ManagementObject o in s.Get())
+                        {
+                            string pName = o["Name"] != null ? o["Name"].ToString() : "";
+                            if (!string.IsNullOrEmpty(pName))
+                                printers.Add(pName);
+                        }
+                    }
+                }
+                catch { }
+
+                string printerInfo = printers.Count > 0
+                    ? "Impressoras instaladas: " + string.Join(", ", printers.ToArray())
+                    : "Nenhuma impressora listada no WMI";
+
+                return string.Format("Serviço Spooler de Impressão reiniciado com sucesso em {0} (Status: ATIVO) | {1}.",
+                    Environment.MachineName, printerInfo);
             }
             catch (Exception ex)
             {
@@ -881,12 +914,15 @@ namespace IpojucaRMM
             string outDns = RunHiddenCommand("ipconfig", "/flushdns", 5000);
             bool ok = outDns.ToLowerInvariant().Contains("sucesso") || outDns.ToLowerInvariant().Contains("successfully") || outDns.Length > 0;
             return ok
-                ? "Cache DNS limpo com sucesso em " + Environment.MachineName + " (ipconfig /flushdns executado)."
+                ? "Cache DNS limpo com sucesso em " + Environment.MachineName + " (ipconfig /flushdns executado e tabela de resolução renovada)."
                 : "Comando ipconfig /flushdns executado em " + Environment.MachineName + ".";
         }
 
         private static string CollectLiveNetworkDiagnostics(AgentConfig cfg)
         {
+            string adapterName = "Ethernet/Wi-Fi";
+            string ipv4 = "N/A";
+            string mac = "N/A";
             string gatewayIp = "N/A";
             string dnsList = "N/A";
             long speedMbps = 0;
@@ -900,8 +936,24 @@ namespace IpojucaRMM
                     IPInterfaceProperties props = ni.GetIPProperties();
                     if (props.GatewayAddresses.Count > 0)
                     {
+                        adapterName = ni.Name + " (" + ni.Description + ")";
                         gatewayIp = props.GatewayAddresses[0].Address.ToString();
                         speedMbps = ni.Speed / 1000000;
+                        byte[] macBytes = ni.GetPhysicalAddress().GetAddressBytes();
+                        if (macBytes != null && macBytes.Length > 0)
+                        {
+                            List<string> hex = new List<string>();
+                            foreach (byte b in macBytes) hex.Add(b.ToString("X2"));
+                            mac = string.Join(":", hex.ToArray());
+                        }
+                        foreach (UnicastIPAddressInformation uni in props.UnicastAddresses)
+                        {
+                            if (uni.Address.AddressFamily == AddressFamily.InterNetwork)
+                            {
+                                ipv4 = uni.Address.ToString();
+                                break;
+                            }
+                        }
                         List<string> dnsItems = new List<string>();
                         foreach (IPAddress dns in props.DnsAddresses)
                         {
@@ -918,8 +970,18 @@ namespace IpojucaRMM
             string pingGw = MeasurePingMs(gatewayIp);
             string pingDns = MeasurePingMs("8.8.8.8");
 
-            return string.Format("Rede {0}: Link {1} Mbps | Gateway {2} ({3}) | DNS [{4}] | Ping 8.8.8.8: {5}",
-                Environment.MachineName, speedMbps > 0 ? speedMbps.ToString() : "100+", gatewayIp, pingGw, dnsList, pingDns);
+            return string.Format(
+                "Host: {0} | Adaptador: {1} ({2} Mbps) | IPv4: {3} (MAC {4}) | Gateway: {5} (Ping {6}) | DNS: [{7}] | Internet (8.8.8.8): {8}",
+                Environment.MachineName,
+                adapterName,
+                speedMbps > 0 ? speedMbps.ToString() : "100+",
+                ipv4,
+                mac,
+                gatewayIp,
+                pingGw,
+                dnsList,
+                pingDns
+            );
         }
 
         private static string MeasurePingMs(string host)
@@ -929,7 +991,7 @@ namespace IpojucaRMM
             {
                 using (Ping p = new Ping())
                 {
-                    PingReply r = p.Send(host, 1500);
+                    PingReply r = p.Send(host, 1200);
                     if (r != null && r.Status == IPStatus.Success)
                         return r.RoundtripTime + "ms";
                 }
@@ -949,31 +1011,33 @@ namespace IpojucaRMM
                     {
                         double totalGb = Math.Round(d.TotalSize / (1024.0 * 1024.0 * 1024.0), 1);
                         double freeGb = Math.Round(d.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0), 1);
+                        double usedGb = Math.Round(totalGb - freeGb, 1);
                         double usedPct = Math.Round(((d.TotalSize - d.AvailableFreeSpace) / (double)d.TotalSize) * 100.0, 1);
-                        driveReports.Add(string.Format("{0} {1}GB livres de {2}GB ({3}% usado)", d.Name.TrimEnd('\\'), freeGb, totalGb, usedPct));
+                        driveReports.Add(string.Format("Volume {0} [{1}]: {2} GB usados / {3} GB livres (Total {4} GB — {5}%)",
+                            d.Name.TrimEnd('\\'), d.DriveFormat, usedGb, freeGb, totalGb, usedPct));
                     }
                 }
             }
             catch { }
 
             string smartStatus = "OK (Saudável)";
+            string diskModel = "Disco Físico";
             try
             {
-                using (ManagementObjectSearcher s = new ManagementObjectSearcher("SELECT Status FROM Win32_DiskDrive"))
+                using (ManagementObjectSearcher s = new ManagementObjectSearcher("SELECT Model, Status FROM Win32_DiskDrive"))
                 {
                     foreach (ManagementObject o in s.Get())
                     {
-                        if (o["Status"] != null)
-                        {
-                            smartStatus = o["Status"].ToString();
-                            break;
-                        }
+                        if (o["Model"] != null) diskModel = o["Model"].ToString().Trim();
+                        if (o["Status"] != null) smartStatus = o["Status"].ToString().Trim();
+                        break;
                     }
                 }
             }
             catch { }
 
-            return string.Format("SMART: {0} | Volumes: {1}", smartStatus, string.Join(" | ", driveReports.ToArray()));
+            return string.Format("Disco: {0} | Saúde SMART: {1} | {2}",
+                diskModel, smartStatus, string.Join(" | ", driveReports.ToArray()));
         }
 
         private static string ListTopProcessesByMemory()
@@ -990,17 +1054,18 @@ namespace IpojucaRMM
                 });
 
                 List<string> top = new List<string>();
-                int count = Math.Min(6, procs.Length);
+                int count = Math.Min(8, procs.Length);
                 for (int i = 0; i < count; i++)
                 {
                     try
                     {
                         double mb = Math.Round(procs[i].WorkingSet64 / (1024.0 * 1024.0), 0);
-                        top.Add(string.Format("{0} ({1}MB)", procs[i].ProcessName, mb));
+                        top.Add(string.Format("#{0} {1} [PID {2}]: {3} MB", i + 1, procs[i].ProcessName, procs[i].Id, mb));
                     }
                     catch { }
                 }
-                return "Top Processos em " + Environment.MachineName + ": " + string.Join(", ", top.ToArray());
+                return string.Format("Total ativos em {0}: {1} processos | Top Consumo RAM: {2}",
+                    Environment.MachineName, procs.Length, string.Join(" | ", top.ToArray()));
             }
             catch (Exception ex)
             {

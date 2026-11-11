@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import styled from "styled-components";
 import { STATUS_LABELS, RISK_LABELS, fixTextEncoding, theme } from "../styles/theme";
 
@@ -395,6 +395,90 @@ const TerminalReadout = styled.div`
   }
 `;
 
+const DiagnosticModalBackdrop = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(3, 6, 12, 0.72);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  pointer-events: auto;
+`;
+
+const DiagnosticModalCard = styled.div`
+  width: 100%;
+  max-width: 560px;
+  background: rgba(11, 15, 25, 0.98);
+  border: 1px solid rgba(0, 229, 255, 0.55);
+  border-top: 4px solid ${({ $statusColor }) => $statusColor || "#00E5FF"};
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.9), 0 0 32px rgba(0, 229, 255, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: #f8fafc;
+  font-family: ${({ theme }) => theme.fonts.sans};
+`;
+
+const DiagItemsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+`;
+
+const DiagItemBox = styled.div`
+  background: rgba(6, 9, 16, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 3px solid #00e5ff;
+  border-radius: 7px;
+  padding: 8px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  .diag-k {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+  }
+
+  .diag-v {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.81rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    word-break: break-word;
+  }
+`;
+
+function parseDiagnosticSummary(rawText) {
+  const clean = fixTextEncoding(rawText || "");
+  if (!clean) return [];
+  const parts = clean
+    .split("|")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return parts.map((segment, idx) => {
+    const colonIdx = segment.indexOf(":");
+    if (colonIdx > 0 && colonIdx < 36) {
+      return {
+        label: segment.slice(0, colonIdx).trim(),
+        value: segment.slice(colonIdx + 1).trim(),
+      };
+    }
+    return {
+      label: `Item #${idx + 1}`,
+      value: segment,
+    };
+  });
+}
+
 function RadialGauge({ value = 0, unit = "%", label }) {
   const clamped = Math.min(100, Math.max(0, Number(value || 0)));
   const radius = 22;
@@ -571,7 +655,35 @@ export function DiagnosticDrawer({
   const [chatText, setChatText] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [activeReport, setActiveReport] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+
+  const latestTask = diagnostics?.tasks?.[0] || null;
+  useEffect(() => {
+    if (!latestTask || !activeReport) return;
+    if (
+      activeReport.taskId === latestTask.task_id ||
+      (activeReport.taskCode === latestTask.task_code && activeReport.status === "RUNNING")
+    ) {
+      if (latestTask.output_summary) {
+        setActiveReport((prev) =>
+          prev
+            ? {
+                ...prev,
+                taskId: latestTask.task_id,
+                status: latestTask.status || "COMPLETED",
+                summary: fixTextEncoding(latestTask.output_summary),
+                timestamp: new Date(latestTask.completed_at || latestTask.issued_at || Date.now()).toLocaleTimeString("pt-BR"),
+              }
+            : null
+        );
+        setFeedback({
+          type: "ok",
+          text: `✅ ${activeReport.title}: ${fixTextEncoding(latestTask.output_summary)}`,
+        });
+      }
+    }
+  }, [latestTask?.task_id, latestTask?.status, latestTask?.output_summary]);
 
   if (!diagnostics || !diagnostics.machine) {
     return (
@@ -686,26 +798,61 @@ export function DiagnosticDrawer({
   }
 
   async function handleRunTask(task) {
+    const cleanTitle = fixTextEncoding(task.title);
     setBusyTask(task.code);
     setFeedback({
       type: "busy",
-      text: `⏳ Executando "${fixTextEncoding(task.title)}" em ${machine.hostname}... aguarde resposta do Agente.`,
+      text: `⏳ Executando "${cleanTitle}" em ${machine.hostname}... aguarde resposta do Agente.`,
     });
+    setActiveReport({
+      taskId: null,
+      taskCode: task.code,
+      title: cleanTitle,
+      status: "RUNNING",
+      summary: `Solicitando "${cleanTitle}" ao Agente Windows instalado em ${machine.hostname} (${machine.ip_address})...`,
+      timestamp: new Date().toLocaleTimeString("pt-BR"),
+      taskRef: task,
+    });
+
     try {
       if (task.code === "SYNC_TELEMETRY_NOW" && onRefreshTelemetryNow) {
         const res = await onRefreshTelemetryNow(machine.id);
+        const summaryMsg =
+          res.message ||
+          `Host: ${machine.hostname} | IPv4: ${machine.ip_address} | CPU: ${Number(machine.cpu_usage_pct).toFixed(1)}% | RAM: ${Number(machine.ram_usage_pct).toFixed(1)}% | Disco: ${Number(machine.disk_usage_pct).toFixed(1)}%`;
         setFeedback({
           type: "ok",
-          text: `✅ ${fixTextEncoding(task.title)}: ${res.message || "Telemetria coletada em tempo real."}`,
+          text: `✅ ${cleanTitle}: ${summaryMsg}`,
+        });
+        setActiveReport({
+          taskId: `sync_${Date.now()}`,
+          taskCode: task.code,
+          title: cleanTitle,
+          status: "COMPLETED",
+          summary: summaryMsg,
+          timestamp: new Date().toLocaleTimeString("pt-BR"),
+          taskRef: task,
         });
         return;
       }
 
       if (task.code === "UPDATE_AGENT" && onUpdateMachineAgent) {
         const res = await onUpdateMachineAgent(machine.id);
+        const summaryMsg =
+          res.message ||
+          "Ordem de atualização OTA enviada ao PC com barra de progresso na tela do cliente.";
         setFeedback({
           type: "ok",
-          text: `✅ ${fixTextEncoding(task.title)}: ${res.message || "Ordem de atualização OTA enviada ao PC com barra de progresso na tela."}`,
+          text: `✅ ${cleanTitle}: ${summaryMsg}`,
+        });
+        setActiveReport({
+          taskId: `upd_${Date.now()}`,
+          taskCode: task.code,
+          title: cleanTitle,
+          status: "COMPLETED",
+          summary: summaryMsg,
+          timestamp: new Date().toLocaleTimeString("pt-BR"),
+          taskRef: task,
         });
         return;
       }
@@ -725,12 +872,34 @@ export function DiagnosticDrawer({
         parameters: defaultParams,
         reason: `Ação executada por ${currentUser.name}`,
       });
+      const summaryOut = fixTextEncoding(
+        res.task?.output_summary || "Comando executado no Agente Windows."
+      );
       setFeedback({
         type: "ok",
-        text: `✅ ${fixTextEncoding(task.title)}: ${fixTextEncoding(res.task?.output_summary || "Comando executado no Agente Windows.")}`,
+        text: `✅ ${cleanTitle}: ${summaryOut}`,
+      });
+      setActiveReport({
+        taskId: res.task?.task_id || `tsk_${Date.now()}`,
+        taskCode: task.code,
+        title: cleanTitle,
+        status: res.task?.status || "COMPLETED",
+        summary: summaryOut,
+        timestamp: new Date().toLocaleTimeString("pt-BR"),
+        taskRef: task,
       });
     } catch (err) {
-      setFeedback({ type: "err", text: `❌ Erro ao executar "${fixTextEncoding(task.title)}": ${err.message}` });
+      const errMsg = `Erro ao executar "${cleanTitle}": ${err.message}`;
+      setFeedback({ type: "err", text: `❌ ${errMsg}` });
+      setActiveReport({
+        taskId: `err_${Date.now()}`,
+        taskCode: task.code,
+        title: cleanTitle,
+        status: "FAILED",
+        summary: errMsg,
+        timestamp: new Date().toLocaleTimeString("pt-BR"),
+        taskRef: task,
+      });
     } finally {
       setBusyTask(null);
     }
@@ -962,10 +1131,35 @@ export function DiagnosticDrawer({
               )
             )}
             {tasks.slice(0, 4).map((t) => (
-              <div key={t.task_id}>
+              <div
+                key={t.task_id}
+                onClick={() => {
+                  const foundSpec = taskCatalog.find((c) => c.code === t.task_code);
+                  setActiveReport({
+                    taskId: t.task_id,
+                    taskCode: t.task_code,
+                    title: fixTextEncoding(foundSpec?.title || t.task_code),
+                    status: t.status || "COMPLETED",
+                    summary: fixTextEncoding(t.output_summary || "Sem detalhes adicionais."),
+                    timestamp: new Date(t.issued_at).toLocaleTimeString("pt-BR"),
+                    taskRef: foundSpec || null,
+                  });
+                }}
+                style={{
+                  cursor: "pointer",
+                  padding: "3px 4px",
+                  borderRadius: "4px",
+                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                }}
+                title="Clique para abrir a janela de relatório detalhado desta ação"
+              >
                 [{new Date(t.issued_at).toLocaleTimeString("pt-BR")}]{" "}
-                {t.task_code} :: <span className="line-ok">{t.status}</span> —{" "}
-                {fixTextEncoding(t.output_summary)}
+                <strong style={{ color: "#E2E8F0" }}>{t.task_code}</strong> ::{" "}
+                <span className="line-ok">{t.status}</span> —{" "}
+                {fixTextEncoding(t.output_summary)}{" "}
+                <span style={{ color: "#00E5FF", fontSize: "0.68rem" }}>
+                  [Ver Diagnóstico]
+                </span>
               </div>
             ))}
             {alerts.length > 0 && (
@@ -1104,6 +1298,191 @@ export function DiagnosticDrawer({
             </div>
           )}
         </>
+      )}
+
+      {activeReport && (
+        <DiagnosticModalBackdrop onClick={() => setActiveReport(null)}>
+          <DiagnosticModalCard
+            $statusColor={
+              activeReport.status === "FAILED"
+                ? "#EF4444"
+                : activeReport.status === "RUNNING"
+                  ? "#00E5FF"
+                  : "#10B981"
+            }
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: "12px",
+                borderBottom: "1px solid rgba(255,255,255,0.1)",
+                paddingBottom: "12px",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontFamily: "JetBrains Mono, monospace",
+                    fontSize: "0.7rem",
+                    color: "#00E5FF",
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  RELATÓRIO DE DIAGNÓSTICO REMOTO // {activeReport.taskCode}
+                </div>
+                <h3
+                  style={{
+                    margin: "4px 0 2px",
+                    fontSize: "1.15rem",
+                    fontWeight: 800,
+                    color: "#F8FAFC",
+                  }}
+                >
+                  {activeReport.title}
+                </h3>
+                <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>
+                  Estação:{" "}
+                  <strong style={{ color: "#E2E8F0" }}>
+                    {fixTextEncoding(machine.hostname)}
+                  </strong>{" "}
+                  ({machine.ip_address}) • Horário: {activeReport.timestamp}
+                </div>
+              </div>
+
+              <span
+                style={{
+                  padding: "5px 10px",
+                  borderRadius: "6px",
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  background:
+                    activeReport.status === "FAILED"
+                      ? "rgba(239, 68, 68, 0.2)"
+                      : activeReport.status === "RUNNING"
+                        ? "rgba(0, 229, 255, 0.2)"
+                        : "rgba(16, 185, 129, 0.2)",
+                  color:
+                    activeReport.status === "FAILED"
+                      ? "#EF4444"
+                      : activeReport.status === "RUNNING"
+                        ? "#00E5FF"
+                        : "#10B981",
+                  border: "1px solid currentColor",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {activeReport.status === "RUNNING"
+                  ? "⏳ COLETANDO NO PC..."
+                  : activeReport.status === "FAILED"
+                    ? "❌ FALHA"
+                    : "✅ CONCLUÍDO NO PC"}
+              </span>
+            </div>
+
+            {activeReport.status === "RUNNING" ? (
+              <div
+                style={{
+                  padding: "18px 16px",
+                  borderRadius: "8px",
+                  background: "rgba(0, 229, 255, 0.08)",
+                  border: "1px dashed rgba(0, 229, 255, 0.4)",
+                  color: "#E2E8F0",
+                  fontSize: "0.86rem",
+                  lineHeight: 1.5,
+                }}
+              >
+                ⏳ {activeReport.summary}
+              </div>
+            ) : (
+              <>
+                <DiagItemsGrid>
+                  {parseDiagnosticSummary(activeReport.summary).map(
+                    (item, idx) => (
+                      <DiagItemBox key={idx}>
+                        <span className="diag-k">{item.label}</span>
+                        <span className="diag-v">{item.value}</span>
+                      </DiagItemBox>
+                    )
+                  )}
+                </DiagItemsGrid>
+
+                <div
+                  style={{
+                    background: "#05070C",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    fontFamily: "JetBrains Mono, monospace",
+                    fontSize: "0.75rem",
+                    color: "#CBD5E1",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "0.65rem",
+                      color: "#64748B",
+                      marginBottom: "4px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Retorno Bruto do Agente Windows:
+                  </div>
+                  &gt; {activeReport.summary}
+                </div>
+              </>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px",
+                marginTop: "4px",
+              }}
+            >
+              {activeReport.taskRef && activeReport.status !== "RUNNING" && (
+                <button
+                  type="button"
+                  onClick={() => handleRunTask(activeReport.taskRef)}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "7px",
+                    background: "rgba(0, 229, 255, 0.14)",
+                    border: "1px solid rgba(0, 229, 255, 0.5)",
+                    color: "#00E5FF",
+                    fontWeight: 700,
+                    fontSize: "0.78rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  ⟳ Executar Novamente
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setActiveReport(null)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "7px",
+                  background: "#10B981",
+                  border: "none",
+                  color: "#04060A",
+                  fontWeight: 800,
+                  fontSize: "0.78rem",
+                  cursor: "pointer",
+                }}
+              >
+                Fechar Relatório
+              </button>
+            </div>
+          </DiagnosticModalCard>
+        </DiagnosticModalBackdrop>
       )}
     </BladeContainer>
   );

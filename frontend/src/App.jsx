@@ -498,10 +498,24 @@ export default function App() {
           onAlertTriggered: (newAlert) => {
             setAlerts((prev) => [newAlert, ...prev.slice(0, 19)]);
           },
-          onTaskUpdated: () => {
-            if (selectedMachineId) {
+          onTaskUpdated: (updatedTask) => {
+            const targetMachineId = updatedTask?.machine_id || selectedMachineId;
+            if (updatedTask && updatedTask.machine_id) {
+              setDiagnostics((prev) => {
+                if (!prev || prev.machine?.id !== Number(updatedTask.machine_id)) {
+                  return prev;
+                }
+                const prevTasks = prev.tasks || [];
+                const exists = prevTasks.some((t) => t.task_id === updatedTask.task_id);
+                const nextTasks = exists
+                  ? prevTasks.map((t) => (t.task_id === updatedTask.task_id ? updatedTask : t))
+                  : [updatedTask, ...prevTasks];
+                return { ...prev, tasks: nextTasks };
+              });
+            }
+            if (targetMachineId) {
               rmmApi
-                .getMachineDiagnostics(res.token, selectedMachineId)
+                .getMachineDiagnostics(res.token, targetMachineId)
                 .then(setDiagnostics)
                 .catch(() => {});
             }
