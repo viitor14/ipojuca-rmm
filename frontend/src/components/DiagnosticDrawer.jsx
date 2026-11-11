@@ -718,7 +718,9 @@ export function DiagnosticDrawer({
     }
   }, [latestTask?.task_id, latestTask?.status, latestTask?.output_summary]);
 
-  if (!diagnostics || !diagnostics.machine) {
+  const machine = diagnostics?.machine || null;
+
+  if (!machine) {
     return (
       <BladeContainer $statusColor="#D4FF33" $collapsed={collapsed}>
         <HeaderBlock>
@@ -734,7 +736,6 @@ export function DiagnosticDrawer({
   }
 
   const {
-    machine,
     tasks = [],
     alerts = [],
     telemetry = [],
@@ -760,22 +761,18 @@ export function DiagnosticDrawer({
   const uptimeHours = (Number(machine.uptime_seconds || 0) / 3600).toFixed(1);
   const baseIdle = Math.max(0, Number(machine.idle_seconds || 0));
   const isOffline = machine.health_status === "OFFLINE";
-  const offlineSeconds = useMemo(() => {
-    if (!machine.last_seen_at) return 0;
-    const diffMs = nowTimestamp - new Date(machine.last_seen_at).getTime();
-    return Math.max(0, Math.floor(diffMs / 1000));
-  }, [machine.last_seen_at, machine.health_status, nowTimestamp]);
+  const offlineSeconds = machine.last_seen_at
+    ? Math.max(0, Math.floor((nowTimestamp - new Date(machine.last_seen_at).getTime()) / 1000))
+    : 0;
 
-  const secondsSinceSeen = useMemo(() => {
-    if (!machine.last_seen_at) return 0;
-    const diffMs = nowTimestamp - new Date(machine.last_seen_at).getTime();
-    return Math.max(0, Math.floor(diffMs / 1000));
-  }, [machine.last_seen_at, nowTimestamp]);
+  const secondsSinceSeen = machine.last_seen_at
+    ? Math.max(0, Math.floor((nowTimestamp - new Date(machine.last_seen_at).getTime()) / 1000))
+    : 0;
 
   const liveIdleSeconds = !isOffline && baseIdle > 0 ? baseIdle + Math.min(secondsSinceSeen, 3) : baseIdle;
   const isLegacyAgent = Boolean(machine.agent_version) && !machine.agent_version.startsWith("2.3");
 
-  const activityState = useMemo(() => {
+  const activityState = (() => {
     if (isOffline) {
       return {
         badge: "🔌 DESLIGADO / OFFLINE",
@@ -831,7 +828,7 @@ export function DiagnosticDrawer({
       subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} sem atividade de usuário`,
       needsUpdate: false,
     };
-  }, [isOffline, isLegacyAgent, offlineSeconds, liveIdleSeconds, machine.last_seen_at, machine.uptime_seconds, uptimeHours, machine.agent_version]);
+  })();
 
   async function handleManualRefresh() {
     setRefreshingNow(true);
