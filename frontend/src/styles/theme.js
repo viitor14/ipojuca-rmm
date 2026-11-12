@@ -1,21 +1,36 @@
 export const theme = {
   colors: {
-    bgCanvas: '#050609',
-    bgSurface: 'rgba(13, 16, 23, 0.88)',
-    bgElevated: 'rgba(20, 24, 34, 0.94)',
-    bgGlassHeavy: 'rgba(9, 11, 16, 0.94)',
-    borderSubtle: 'rgba(244, 244, 240, 0.13)',
-    borderStrong: 'rgba(212, 255, 51, 0.55)',
-    textPrimary: '#F8FAFC',
-    textSecondary: '#94A3B8',
-    brandPrimary: '#D4FF33', // Acid Lime / Titanium Highlight
-    accentCyan: '#00E5FF',
+    bgCanvas: '#F4F5F2', // Fundo linho neutro e acolhedor
+    bgSurface: '#FFFFFF', // Superfícies e cartões brancos puros
+    bgSurfaceSubtle: '#ECEFEB', // Superfícies secundárias neutras
+    bgElevated: '#FFFFFF',
+    bgGlassHeavy: 'rgba(255, 255, 255, 0.94)',
+    borderSubtle: '#E4E8E3', // Divisórias discretas
+    borderStrong: '#CBD3CB',
+    textPrimary: '#242925', // Preto carvão de alto contraste
+    textSecondary: '#737B75', // Ardósia neutra
+    textMuted: '#9BA39D',
+    brandPrimary: '#52796B', // Verde sálvia arquitetônico institucional
+    brandPrimaryLight: '#6B9080',
+    brandPrimarySubtle: 'rgba(82, 121, 107, 0.12)',
+    accentMuted: '#3E5C52',
     status: {
-      NORMAL: '#10B981', // Bio-Phosphor Mint
-      WARNING: '#F59E0B', // Solar Amber
-      CRITICAL: '#EF4444', // Signal Vermilion
-      OFFLINE: '#64748B', // Carbon Slate
+      NORMAL: '#2D6A4F', // Verde moderado funcional
+      WARNING: '#D97706', // Âmbar discreto
+      CRITICAL: '#DC2626', // Vermelho reservado
+      OFFLINE: '#718096', // Cinza ardósia neutro
     },
+    statusBg: {
+      NORMAL: 'rgba(45, 106, 79, 0.1)',
+      WARNING: 'rgba(217, 119, 6, 0.12)',
+      CRITICAL: 'rgba(220, 38, 38, 0.1)',
+      OFFLINE: 'rgba(113, 128, 150, 0.12)',
+    },
+  },
+  shadows: {
+    sm: '0 1px 3px rgba(0, 0, 0, 0.05)',
+    md: '0 4px 14px rgba(0, 0, 0, 0.06)',
+    lg: '0 12px 32px rgba(0, 0, 0, 0.08)',
   },
   fonts: {
     sans: "'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",

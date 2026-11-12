@@ -25,7 +25,7 @@ const HudOverlay = styled.div`
 const TopCommandDeck = styled.header`
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   pointer-events: none;
   flex-wrap: wrap;
@@ -33,78 +33,83 @@ const TopCommandDeck = styled.header`
 
 const MastheadPod = styled.div`
   pointer-events: auto;
-  background: ${({ theme }) => theme.colors.bgSurface};
-  backdrop-filter: blur(22px);
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  border-left: 3px solid ${({ theme }) => theme.colors.brandPrimary};
-  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
-  padding: 9px 15px;
+  background: #ffffff;
+  border: 1px solid #e4e8e3;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  padding: 8px 14px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 
-  .sys-tag {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.62rem;
-    letter-spacing: 0.14em;
-    color: ${({ theme }) => theme.colors.brandPrimary};
+  .brand-group {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
   }
 
   .brand-title {
-    font-size: 0.94rem;
+    font-size: 0.88rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    margin-top: 2px;
+    color: #242925;
+    letter-spacing: -0.01em;
+  }
+
+  .brand-sub {
+    font-size: 0.68rem;
+    color: #737b75;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 1px;
   }
 `;
 
 const LiveBeacon = styled.span`
   width: 7px;
   height: 7px;
-  background: ${({ $online }) => ($online ? '#00F5A0' : '#FFB800')};
+  border-radius: 50%;
+  background: ${({ $online }) => ($online ? '#2D6A4F' : '#D97706')};
   display: inline-block;
-  animation: ${pulseDot} 1.6s infinite;
+  animation: ${pulseDot} 2s infinite;
 `;
 
 const UnitSwitcherPod = styled.div`
   pointer-events: auto;
   display: flex;
-  gap: 6px;
-  background: rgba(8, 9, 12, 0.84);
-  backdrop-filter: blur(20px);
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding: 5px;
+  gap: 4px;
+  background: #ffffff;
+  border: 1px solid #e4e8e3;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 `;
 
 const UnitSwitchBtn = styled.button`
-  background: ${({ $active }) =>
-    $active ? '#D4FF33' : 'rgba(18, 20, 27, 0.85)'};
-  color: ${({ $active }) => ($active ? '#050507' : '#F4F4F0')};
-  border: 1px solid
-    ${({ $active }) =>
-      $active ? '#D4FF33' : 'rgba(244, 244, 240, 0.1)'};
-  padding: 6px 12px;
+  background: ${({ $active }) => ($active ? '#ECEFEB' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#242925' : '#737B75')};
+  border: 1px solid ${({ $active }) => ($active ? '#CBD3CB' : 'transparent')};
+  border-radius: 6px;
+  padding: 5px 12px;
   cursor: pointer;
   text-align: left;
   transition: all 0.15s ease;
-  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
+
+  &:hover {
+    color: #242925;
+    background: #f4f5f2;
+  }
 
   .u-code {
     font-family: ${({ theme }) => theme.fonts.mono};
     font-size: 0.58rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    opacity: 0.82;
+    color: #52796b;
     display: block;
   }
 
   .u-name {
     font-size: 0.74rem;
-    font-weight: 700;
+    font-weight: 600;
     display: block;
     margin-top: 1px;
   }
@@ -115,40 +120,46 @@ const RightControlPod = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  background: ${({ theme }) => theme.colors.bgSurface};
-  backdrop-filter: blur(20px);
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding: 6px 10px;
+  background: #ffffff;
+  border: 1px solid #e4e8e3;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  padding: 4px 8px;
 `;
 
 const CamModeBtn = styled.button`
-  padding: 6px 9px;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  padding: 6px 10px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.7rem;
+  font-weight: 600;
   cursor: pointer;
-  background: ${({ $active }) => ($active ? '#D4FF33' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#050507' : '#F4F4F0')};
-  border: 1px solid
-    ${({ $active }) =>
-      $active ? '#D4FF33' : 'rgba(244, 244, 240, 0.16)'};
+  border-radius: 6px;
+  background: ${({ $active }) => ($active ? '#ECEFEB' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#242925' : '#737B75')};
+  border: 1px solid ${({ $active }) => ($active ? '#CBD3CB' : 'transparent')};
   transition: all 0.15s ease;
 
   &:hover {
-    border-color: #d4ff33;
+    color: #242925;
+    background: #f4f5f2;
   }
 `;
 
 const RoleSelect = styled.select`
-  background: #0b0c10;
-  color: #d4ff33;
-  border: 1px solid rgba(212, 255, 51, 0.45);
-  padding: 6px 9px;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.63rem;
+  background: #f4f5f2;
+  color: #242925;
+  border: 1px solid #e4e8e3;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.7rem;
   font-weight: 600;
   cursor: pointer;
+  outline: none;
+
+  &:focus {
+    border-color: #52796b;
+  }
 `;
 
 const MiddleWorkspace = styled.div`
@@ -164,11 +175,11 @@ const MiddleWorkspace = styled.div`
 `;
 
 const LeftRadarColumn = styled.div`
-  width: 295px;
+  width: 290px;
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 10px;
   pointer-events: auto;
   overflow-y: auto;
 
@@ -182,76 +193,79 @@ const LeftRadarColumn = styled.div`
 `;
 
 const RadarCard = styled.div`
-  background: ${({ theme }) => theme.colors.bgSurface};
-  backdrop-filter: blur(20px);
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding: 11px 13px;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  background: #ffffff;
+  border: 1px solid #e4e8e3;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  padding: 12px 14px;
 
   .card-tag {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.59rem;
-    letter-spacing: 0.12em;
-    color: ${({ theme }) => theme.colors.textSecondary};
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #737b75;
     text-transform: uppercase;
-    margin-bottom: 7px;
+    margin-bottom: 8px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
   }
 `;
 
 const KpiMatrix = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 `;
 
 const KpiCell = styled.div`
-  background: rgba(5, 5, 7, 0.7);
-  border: 1px solid rgba(244, 244, 240, 0.08);
-  border-left: 2px solid ${({ $color }) => $color};
-  padding: 5px 8px;
+  background: #f8faf8;
+  border: 1px solid #e4e8e3;
+  border-radius: 6px;
+  padding: 6px 4px;
+  text-align: center;
 
   .num {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 1.02rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: ${({ $color }) => $color};
+    line-height: 1.1;
   }
   .lbl {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.56rem;
-    letter-spacing: 0.08em;
-    color: ${({ theme }) => theme.colors.textSecondary};
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: #737b75;
+    margin-top: 2px;
   }
 `;
 
 const LayerToggleGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 5px;
+  gap: 6px;
 `;
 
 const LayerChip = styled.button`
-  padding: 5px 7px;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.58rem;
+  padding: 6px 8px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.66rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-align: left;
+  border-radius: 6px;
   cursor: pointer;
-  background: ${({ $on }) =>
-    $on ? 'rgba(0, 229, 255, 0.12)' : 'rgba(10, 12, 18, 0.75)'};
-  color: ${({ $on }) => ($on ? '#00E5FF' : '#7E8494')};
-  border: 1px solid
-    ${({ $on }) => ($on ? 'rgba(0, 229, 255, 0.5)' : 'rgba(244, 244, 240, 0.08)')};
+  background: ${({ $on }) => ($on ? '#ECEFEB' : '#FFFFFF')};
+  color: ${({ $on }) => ($on ? '#242925' : '#737B75')};
+  border: 1px solid ${({ $on }) => ($on ? '#CBD3CB' : '#E4E8E3')};
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: all 0.14s ease;
+  transition: all 0.15s ease;
 
   &:hover {
-    border-color: #00e5ff;
+    background: #f4f5f2;
+    color: #242925;
   }
 `;
 
@@ -259,46 +273,48 @@ const SectorMiniRow = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 7px;
-  background: rgba(5, 6, 9, 0.65);
-  border-left: 2px solid ${({ $accent }) => $accent};
-  margin-bottom: 4px;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.61rem;
+  padding: 6px 8px;
+  background: #f8faf8;
+  border: 1px solid #e4e8e3;
+  border-radius: 6px;
+  margin-bottom: 5px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.7rem;
 
   .s-name {
-    color: #f4f4f0;
+    color: #242925;
     font-weight: 600;
   }
   .s-meta {
-    color: #8a90a2;
-    font-size: 0.56rem;
+    color: #737b75;
+    font-size: 0.64rem;
   }
 `;
 
 const IncidentItem = styled.div`
-  padding: 7px 9px;
-  background: rgba(255, 42, 84, 0.08);
-  border: 1px solid rgba(255, 42, 84, 0.35);
-  margin-top: 5px;
+  padding: 8px 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  margin-top: 6px;
   cursor: pointer;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.62rem;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.7rem;
   transition: background 0.15s ease;
 
   &:hover {
-    background: rgba(255, 42, 84, 0.2);
+    background: #fee2e2;
   }
 
   .tck {
-    color: #d4ff33;
+    color: #dc2626;
     font-weight: 700;
     display: flex;
     justify-content: space-between;
   }
   .msg {
-    color: #f4f4f0;
-    margin-top: 2px;
+    color: #4b5563;
+    margin-top: 3px;
     line-height: 1.35;
   }
 `;
@@ -316,48 +332,45 @@ const DockToggleBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 22px;
-  padding: 0 14px;
+  height: 24px;
+  padding: 0 16px;
   margin-bottom: -1px;
-  background: rgba(8, 9, 13, 0.92);
-  backdrop-filter: blur(22px);
-  color: #d4ff33;
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  border-bottom: ${({ $collapsed, theme }) =>
-    $collapsed ? `1px solid ${theme.colors.borderSubtle}` : '1px solid transparent'};
-  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.6rem;
+  background: #ffffff;
+  color: #52796b;
+  border: 1px solid #e4e8e3;
+  border-bottom: ${({ $collapsed }) =>
+    $collapsed ? '1px solid #e4e8e3' : '1px solid transparent'};
+  border-radius: 6px 6px 0 0;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease;
 
   .arrow {
     display: inline-block;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     transition: transform 0.25s ease;
     transform: rotate(${({ $collapsed }) => ($collapsed ? '180deg' : '0deg')});
   }
 
   &:hover {
-    background: rgba(212, 255, 51, 0.14);
-  }
-
-  &:focus-visible {
-    outline: 1px solid #d4ff33;
-    outline-offset: 2px;
+    background: #f8faf8;
+    color: #242925;
   }
 `;
 
 const BottomMatrixDock = styled.footer`
   pointer-events: auto;
   align-self: stretch;
-  background: rgba(8, 9, 13, 0.88);
-  backdrop-filter: blur(22px);
-  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding: ${({ $collapsed }) => ($collapsed ? '0 12px' : '8px 12px')};
-  max-height: ${({ $collapsed }) => ($collapsed ? '0px' : '220px')};
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid #e4e8e3;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  padding: ${({ $collapsed }) => ($collapsed ? '0 14px' : '10px 14px')};
+  max-height: ${({ $collapsed }) => ($collapsed ? '0px' : '195px')};
   opacity: ${({ $collapsed }) => ($collapsed ? 0 : 1)};
   border-width: ${({ $collapsed }) => ($collapsed ? '0' : '1px')};
   visibility: ${({ $collapsed }) => ($collapsed ? 'hidden' : 'visible')};
@@ -373,83 +386,99 @@ const BottomMatrixDock = styled.footer`
 const DockControlsBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-right: 10px;
-  border-right: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  min-width: 195px;
+  gap: 5px;
+  padding-right: 12px;
+  border-right: 1px solid #e4e8e3;
+  min-width: 190px;
 
   .dock-title {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.6rem;
-    letter-spacing: 0.12em;
-    color: ${({ theme }) => theme.colors.brandPrimary};
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #242925;
     white-space: nowrap;
   }
 
   .dock-search {
-    background: rgba(5, 6, 10, 0.9);
-    border: 1px solid rgba(244, 244, 240, 0.16);
-    color: #f4f4f0;
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.62rem;
-    padding: 4px 7px;
+    background: #f4f5f2;
+    border: 1px solid #e4e8e3;
+    border-radius: 6px;
+    color: #242925;
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.7rem;
+    padding: 5px 8px;
     outline: none;
 
     &:focus {
-      border-color: #d4ff33;
+      border-color: #52796b;
+      background: #ffffff;
     }
   }
 `;
 
 const NodeKeycap = styled.button`
   min-width: 175px;
-  padding: 7px 10px;
-  background: ${({ $selected }) =>
-    $selected ? 'rgba(212, 255, 51, 0.16)' : 'rgba(16, 19, 27, 0.94)'};
-  border: 1px solid
-    ${({ $selected }) =>
-      $selected ? '#D4FF33' : 'rgba(244, 244, 240, 0.12)'};
-  border-top: 2px solid ${({ $color }) => $color};
-  color: #f4f4f0;
+  padding: 8px 11px;
+  background: ${({ $selected }) => ($selected ? '#F2F6F4' : '#FFFFFF')};
+  border: 1px solid ${({ $selected }) => ($selected ? '#52796B' : '#E4E8E3')};
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  color: #242925;
   text-align: left;
   cursor: pointer;
   transition: all 0.15s ease;
-  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
 
   &:hover {
-    border-color: #d4ff33;
-    transform: translateY(-2px);
+    border-color: #52796b;
+    transform: translateY(-1px);
   }
 
   .n-top {
     display: flex;
     justify-content: space-between;
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.56rem;
-    color: ${({ theme }) => theme.colors.textSecondary};
+    align-items: center;
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.64rem;
+    color: #737b75;
+    font-weight: 600;
   }
+
+  .n-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${({ $color }) => $color};
+    display: inline-block;
+    margin-right: 4px;
+  }
+
   .n-host {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    margin: 2px 0;
+    color: #242925;
+    margin: 3px 0 2px;
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
+
   .n-metrics {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.6rem;
-    color: ${({ $color }) => $color};
-    margin-bottom: 4px;
+    font-size: 0.64rem;
+    color: #737b75;
+    margin-bottom: 5px;
   }
+
   .n-bars {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 4px;
   }
+
   .bar-track {
     height: 3px;
-    background: rgba(244, 244, 240, 0.1);
+    background: #e4e8e3;
+    border-radius: 2px;
     overflow: hidden;
     i {
       display: block;
@@ -493,12 +522,11 @@ export default function App() {
       /* armazenamento indisponível: mantém apenas em memória */
     }
   }, [dockCollapsed]);
+
   const [nowTimestamp, setNowTimestamp] = useState(Date.now());
   const [sceneLayers, setSceneLayers] = useState({
     furniture: true,
-    network: true,
     labels: true,
-    volumetric: true,
   });
 
   useEffect(() => {
@@ -697,7 +725,7 @@ export default function App() {
     <ThemeProvider theme={theme}>
       <GlobalStyles />
 
-      {/* PALCO ESPACIAL 3D EM TELA CHEIA (100VW x 100VH) */}
+      {/* MAQUETE 3D ISOMÉTRICA EM TELA CHEIA (ESTILO HABBLAUDE) */}
       <DigitalTwin3D
         activeUnit={activeUnit}
         machines={machines}
@@ -713,19 +741,15 @@ export default function App() {
         }}
       />
 
-      {/* CAMADA HUD TÁTICA FLUTUANTE */}
+      {/* INTERFACE ADMINISTRATIVA EDITORIAL MINIMALISTA */}
       <HudOverlay>
         <TopCommandDeck>
           <MastheadPod>
-            <div>
-              <div className="sys-tag">
+            <div className="brand-group">
+              <div className="brand-title">RMM // Saúde Ipojuca</div>
+              <div className="brand-sub">
                 <LiveBeacon $online={socketConnected} />
-                <span>
-                  IPOJUCA.SPATIAL.OS v3.0 // 08°23&apos;56&quot;S 35°03&apos;50&quot;W
-                </span>
-              </div>
-              <div className="brand-title">
-                RMM Comando Biomédico &amp; Gêmeo Digital
+                <span>Gêmeo Digital &amp; Telemetria</span>
               </div>
             </div>
           </MastheadPod>
@@ -741,9 +765,7 @@ export default function App() {
                   setCameraMode('ISO');
                 }}
               >
-                <span className="u-code">
-                  [{u.code}] • {u.summary?.total || 0} PC(S)
-                </span>
+                <span className="u-code">[{u.code}] • {u.summary?.total || 0} PCs</span>
                 <span className="u-name">{fixTextEncoding(u.name)}</span>
               </UnitSwitchBtn>
             ))}
@@ -766,16 +788,16 @@ export default function App() {
               $active={cameraMode === 'FOCUS'}
               onClick={() => setCameraMode('FOCUS')}
             >
-              FOCO ESTAÇÃO
+              FOCO
             </CamModeBtn>
             <CamModeBtn
               $active={cameraMode === 'ORBIT'}
               onClick={() =>
                 setCameraMode((prev) => (prev === 'ORBIT' ? 'ISO' : 'ORBIT'))
               }
-              title="Giro orbital cinematográfico automático ao redor da Unidade de Saúde"
+              title="Giro orbital suave ao redor da maquete"
             >
-              ORBITAL 360°
+              360°
             </CamModeBtn>
 
             <CamModeBtn
@@ -784,26 +806,26 @@ export default function App() {
               download="IpojucaRMM-Setup.exe"
               style={{
                 textDecoration: 'none',
-                borderColor: 'rgba(16, 185, 129, 0.55)',
-                color: '#10B981',
-                background: 'rgba(16, 185, 129, 0.12)',
+                color: '#52796B',
+                background: 'rgba(82, 121, 107, 0.1)',
+                fontWeight: 700,
               }}
-              title="Baixar o instalador executável (.exe) para instalar o Agente Windows em segundo plano em qualquer PC"
+              title="Baixar instalador do Agente Windows (.exe)"
             >
-              ⬇ AGENTE (.EXE)
+              ↓ AGENTE (.EXE)
             </CamModeBtn>
 
             {auth.user?.role === 'ADMIN_N2' && (
               <CamModeBtn
                 onClick={handleUpdateAllAgents}
                 style={{
-                  borderColor: 'rgba(0, 229, 255, 0.55)',
-                  color: '#00E5FF',
-                  background: 'rgba(0, 229, 255, 0.12)',
+                  color: '#2D6A4F',
+                  background: 'rgba(45, 106, 79, 0.08)',
+                  fontWeight: 700,
                 }}
-                title="Enviar atualização automática (OTA) do Agente para todas as máquinas cadastradas na rede"
+                title="Atualizar agentes via OTA"
               >
-                ⬆ ATUALIZAR TODOS
+                ↑ ATUALIZAR TODOS
               </CamModeBtn>
             )}
 
@@ -824,8 +846,8 @@ export default function App() {
           <LeftRadarColumn>
             <RadarCard>
               <div className="card-tag">
-                <span>MATRIZ GLOBAL DA REDE</span>
-                <span>[{totalSummary.total} ESTAÇÕES]</span>
+                <span>REDE GLOBAL</span>
+                <span>{totalSummary.total} ESTAÇÕES</span>
               </div>
               <KpiMatrix>
                 <KpiCell $color={theme.colors.status.NORMAL}>
@@ -849,58 +871,37 @@ export default function App() {
 
             <RadarCard>
               <div className="card-tag">
-                <span>CAMADAS HOLOGRÁFICAS 3D</span>
-                <span style={{ color: '#00E5FF' }}>BIO-CAD</span>
+                <span>CAMADAS DA MAQUETE</span>
               </div>
               <LayerToggleGrid>
                 <LayerChip
                   $on={sceneLayers.furniture}
                   onClick={() => toggleLayer('furniture')}
                 >
-                  <span>MOBILIÁRIO</span>
-                  <span>{sceneLayers.furniture ? 'ON' : 'OFF'}</span>
-                </LayerChip>
-                <LayerChip
-                  $on={sceneLayers.network}
-                  onClick={() => toggleLayer('network')}
-                >
-                  <span>FIBRA GPON</span>
-                  <span>{sceneLayers.network ? 'ON' : 'OFF'}</span>
+                  <span>Mobiliário</span>
+                  <span>{sceneLayers.furniture ? 'Ligado' : 'Desl.'}</span>
                 </LayerChip>
                 <LayerChip
                   $on={sceneLayers.labels}
                   onClick={() => toggleLayer('labels')}
                 >
-                  <span>HUD 3D</span>
-                  <span>{sceneLayers.labels ? 'ON' : 'OFF'}</span>
-                </LayerChip>
-                <LayerChip
-                  $on={sceneLayers.volumetric}
-                  onClick={() => toggleLayer('volumetric')}
-                >
-                  <span>LUZ VOLUM.</span>
-                  <span>{sceneLayers.volumetric ? 'ON' : 'OFF'}</span>
+                  <span>Rótulos</span>
+                  <span>{sceneLayers.labels ? 'Ligado' : 'Desl.'}</span>
                 </LayerChip>
               </LayerToggleGrid>
             </RadarCard>
 
             <RadarCard>
               <div className="card-tag">
-                <span>PLANTA ARQUITETÔNICA</span>
-                <span>{(activeUnit?.sectors || []).length} SETORES</span>
+                <span>SETORES DA UNIDADE</span>
+                <span>{(activeUnit?.sectors || []).length}</span>
               </div>
               {(activeUnit?.sectors || []).map((sec) => {
                 const secNodes = machines.filter(
                   (m) => Number(m.sector_id) === Number(sec.id)
                 );
-                const hasCrit = secNodes.some((m) => m.health_status === 'CRITICAL');
-                const accent = hasCrit
-                  ? theme.colors.status.CRITICAL
-                  : secNodes.length > 0
-                    ? theme.colors.status.NORMAL
-                    : '#3a4256';
                 return (
-                  <SectorMiniRow key={sec.id} $accent={accent}>
+                  <SectorMiniRow key={sec.id}>
                     <div>
                       <div className="s-name">{fixTextEncoding(sec.name)}</div>
                       <div className="s-meta">[{sec.code}]</div>
@@ -913,18 +914,17 @@ export default function App() {
 
             <RadarCard>
               <div className="card-tag">
-                <span>DESPACHOS AUTÔNOMOS N8N</span>
-                <span style={{ color: '#D4FF33' }}>WHATSAPP LIVE</span>
+                <span>OCORRÊNCIAS &amp; ALERTAS</span>
               </div>
               {alerts.length === 0 && (
                 <div
                   style={{
-                    fontFamily: "'IBM Plex Mono', monospace",
-                    fontSize: '0.6rem',
-                    color: '#7E8494',
+                    fontSize: '0.68rem',
+                    color: '#737B75',
+                    padding: '4px 0',
                   }}
                 >
-                  NENHUM INCIDENTE ATIVO NA REDE.
+                  Nenhum alerta ativo na rede.
                 </div>
               )}
               {alerts.slice(0, 3).map((a) => (
@@ -967,151 +967,151 @@ export default function App() {
         </MiddleWorkspace>
 
         <DockShell>
-        <DockToggleBtn
-          type="button"
-          $collapsed={dockCollapsed}
-          onClick={() => setDockCollapsed((prev) => !prev)}
-          aria-expanded={!dockCollapsed}
-          aria-controls="rmm-bottom-dock"
-          aria-label={dockCollapsed ? 'Expandir lista de computadores' : 'Recolher lista de computadores'}
-          title={dockCollapsed ? 'Expandir lista de computadores' : 'Recolher lista de computadores'}
-        >
-          <span className="arrow" aria-hidden="true">▼</span>
-          {dockCollapsed && <span>{machines.length} PCs</span>}
-        </DockToggleBtn>
-        <BottomMatrixDock id="rmm-bottom-dock" $collapsed={dockCollapsed} aria-hidden={dockCollapsed}>
-          <DockControlsBlock>
-            <span className="dock-title">
-              DOCK // {activeUnit?.code || 'UNIDADE'} ({filteredMachines.length})
-            </span>
-            <input
-              className="dock-search"
-              type="text"
-              placeholder="Filtrar Hostname, IP ou Setor..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </DockControlsBlock>
+          <DockToggleBtn
+            type="button"
+            $collapsed={dockCollapsed}
+            onClick={() => setDockCollapsed((prev) => !prev)}
+            aria-expanded={!dockCollapsed}
+            aria-controls="rmm-bottom-dock"
+            aria-label={dockCollapsed ? 'Expandir lista de computadores' : 'Recolher lista de computadores'}
+            title={dockCollapsed ? 'Expandir lista de computadores' : 'Recolher lista de computadores'}
+          >
+            <span className="arrow" aria-hidden="true">▼</span>
+            <span>{dockCollapsed ? `${machines.length} PCs da Unidade` : 'Ocultar Barra'}</span>
+          </DockToggleBtn>
 
-          {filteredMachines.length === 0 && (
-            <div
-              style={{
-                fontFamily: "'IBM Plex Mono', monospace",
-                fontSize: '0.68rem',
-                color: '#8A90A2',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-              }}
-            >
-              <span>
-                [NENHUMA MÁQUINA REGISTRADA NESTA UNIDADE — INSTALE O AGENTE (.EXE) NO PC]
+          <BottomMatrixDock id="rmm-bottom-dock" $collapsed={dockCollapsed} aria-hidden={dockCollapsed}>
+            <DockControlsBlock>
+              <span className="dock-title">
+                {activeUnit?.code || 'UNIDADE'} — {filteredMachines.length} ESTAÇÕES
               </span>
-              <a
-                href="/IpojucaRMM-Setup.exe"
-                download="IpojucaRMM-Setup.exe"
+              <input
+                className="dock-search"
+                type="text"
+                placeholder="Filtrar Hostname, IP..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </DockControlsBlock>
+
+            {filteredMachines.length === 0 && (
+              <div
                 style={{
-                  color: '#10B981',
-                  textDecoration: 'underline',
-                  fontWeight: 600,
+                  fontSize: '0.72rem',
+                  color: '#737B75',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
                 }}
               >
-                ⬇ Baixar IpojucaRMM-Setup.exe
-              </a>
-            </div>
-          )}
-
-          {filteredMachines.map((m, idx) => {
-            const stColor =
-              theme.colors.status[m.health_status] || theme.colors.status.NORMAL;
-            const isSel = selectedMachine?.id === m.id;
-            const cpu = Math.min(100, Math.max(0, Number(m.cpu_usage_pct || 0)));
-            const ram = Math.min(100, Math.max(0, Number(m.ram_usage_pct || 0)));
-            const dsk = Math.min(100, Math.max(0, Number(m.disk_usage_pct || 0)));
-            const idleSec = Math.max(0, Math.floor(Number(m.idle_seconds || 0)));
-            const isLegacy = Boolean(m.agent_version) && !m.agent_version.startsWith('2.3');
-            const offSec = m.last_seen_at
-              ? Math.max(0, Math.floor((nowTimestamp - new Date(m.last_seen_at).getTime()) / 1000))
-              : 0;
-            const fmtShort = (s) => {
-              if (s < 60) return `${s}s`;
-              const mins = Math.floor(s / 60);
-              if (mins < 60) return `${mins}m`;
-              const hrs = Math.floor(mins / 60);
-              if (hrs < 24) return `${hrs}h ${mins % 60}m`;
-              return `${Math.floor(hrs / 24)}d ${hrs % 24}h`;
-            };
-            const activityLabel =
-              m.health_status === 'OFFLINE'
-                ? `🔌 Desligado há ${fmtShort(offSec)}`
-                : isLegacy
-                  ? `⚡ Ativo (${m.agent_version || '2.2.0'})`
-                  : idleSec < 180
-                    ? `🟢 Em uso (${fmtShort(idleSec)})`
-                    : `⏳ Ocioso há ${fmtShort(idleSec)}`;
-
-            return (
-              <NodeKeycap
-                key={m.id}
-                $selected={isSel}
-                $color={stColor}
-                onClick={() => {
-                  setSelectedMachineId(m.id);
-                  setCameraMode('FOCUS');
-                }}
-              >
-                <div className="n-top">
-                  <span>
-                    [0{idx + 1}] {m.sector_code}
-                  </span>
-                  <span>{STATUS_LABELS[m.health_status]}</span>
-                </div>
-                <div className="n-host">
-                  <span>{m.hostname}</span>
-                  <span
-                    style={{
-                      fontSize: '0.56rem',
-                      fontFamily: "'IBM Plex Mono', monospace",
-                      color: m.spooler_running ? '#00F5A0' : '#FF2A54',
-                    }}
-                  >
-                    {m.spooler_running ? 'PRN:OK' : 'PRN:ERR'}
-                  </span>
-                </div>
-                <div className="n-metrics">
-                  CPU {cpu.toFixed(0)}% • RAM {ram.toFixed(0)}% • {m.ip_address}
-                </div>
-                <div
+                <span>Nenhuma máquina cadastrada nesta unidade.</span>
+                <a
+                  href="/IpojucaRMM-Setup.exe"
+                  download="IpojucaRMM-Setup.exe"
                   style={{
-                    fontFamily: "'IBM Plex Mono', monospace",
-                    fontSize: '0.58rem',
-                    color:
-                      m.health_status === 'OFFLINE'
-                        ? '#EF4444'
-                        : idleSec < 180
-                          ? '#10B981'
-                          : '#F59E0B',
-                    marginBottom: '4px',
+                    color: '#52796B',
+                    textDecoration: 'underline',
                     fontWeight: 600,
                   }}
                 >
-                  {activityLabel}
-                </div>
-                <div className="n-bars">
-                  <div className="bar-track" title={`CPU: ${cpu.toFixed(0)}%`}>
-                    <i style={{ width: `${cpu}%`, background: '#00F5A0' }} />
+                  Baixar Agente (.exe)
+                </a>
+              </div>
+            )}
+
+            {filteredMachines.map((m, idx) => {
+              const stColor =
+                theme.colors.status[m.health_status] || theme.colors.status.NORMAL;
+              const isSel = selectedMachine?.id === m.id;
+              const cpu = Math.min(100, Math.max(0, Number(m.cpu_usage_pct || 0)));
+              const ram = Math.min(100, Math.max(0, Number(m.ram_usage_pct || 0)));
+              const dsk = Math.min(100, Math.max(0, Number(m.disk_usage_pct || 0)));
+              const idleSec = Math.max(0, Math.floor(Number(m.idle_seconds || 0)));
+              const isLegacy = Boolean(m.agent_version) && !m.agent_version.startsWith('2.3');
+              const offSec = m.last_seen_at
+                ? Math.max(0, Math.floor((nowTimestamp - new Date(m.last_seen_at).getTime()) / 1000))
+                : 0;
+
+              const fmtShort = (s) => {
+                if (s < 60) return `${s}s`;
+                const mins = Math.floor(s / 60);
+                if (mins < 60) return `${mins}m`;
+                const hrs = Math.floor(mins / 60);
+                if (hrs < 24) return `${hrs}h ${mins % 60}m`;
+                return `${Math.floor(hrs / 24)}d ${hrs % 24}h`;
+              };
+
+              const activityLabel =
+                m.health_status === 'OFFLINE'
+                  ? `Desligado há ${fmtShort(offSec)}`
+                  : isLegacy
+                    ? `Ativo (${m.agent_version || '2.2.0'})`
+                    : idleSec < 180
+                      ? `Em uso (${fmtShort(idleSec)})`
+                      : `Ocioso há ${fmtShort(idleSec)}`;
+
+              return (
+                <NodeKeycap
+                  key={m.id}
+                  $selected={isSel}
+                  $color={stColor}
+                  onClick={() => {
+                    setSelectedMachineId(m.id);
+                    setCameraMode('FOCUS');
+                  }}
+                >
+                  <div className="n-top">
+                    <span>
+                      <i className="n-dot" />
+                      {m.sector_code}
+                    </span>
+                    <span>{STATUS_LABELS[m.health_status]}</span>
                   </div>
-                  <div className="bar-track" title={`RAM: ${ram.toFixed(0)}%`}>
-                    <i style={{ width: `${ram}%`, background: '#00E5FF' }} />
+                  <div className="n-host">
+                    <span>{m.hostname}</span>
+                    <span
+                      style={{
+                        fontSize: '0.62rem',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        color: m.spooler_running ? '#2D6A4F' : '#DC2626',
+                      }}
+                    >
+                      {m.spooler_running ? 'PRN:OK' : 'PRN:OFF'}
+                    </span>
                   </div>
-                  <div className="bar-track" title={`Disco: ${dsk.toFixed(0)}%`}>
-                    <i style={{ width: `${dsk}%`, background: stColor }} />
+                  <div className="n-metrics">
+                    CPU {cpu.toFixed(0)}% • RAM {ram.toFixed(0)}% • {m.ip_address}
                   </div>
-                </div>
-              </NodeKeycap>
-            );
-          })}
-        </BottomMatrixDock>
+                  <div
+                    style={{
+                      fontSize: '0.64rem',
+                      color:
+                        m.health_status === 'OFFLINE'
+                          ? '#718096'
+                          : idleSec < 180
+                            ? '#2D6A4F'
+                            : '#D97706',
+                      marginBottom: '5px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {activityLabel}
+                  </div>
+                  <div className="n-bars">
+                    <div className="bar-track" title={`CPU: ${cpu.toFixed(0)}%`}>
+                      <i style={{ width: `${cpu}%`, background: '#2D6A4F' }} />
+                    </div>
+                    <div className="bar-track" title={`RAM: ${ram.toFixed(0)}%`}>
+                      <i style={{ width: `${ram}%`, background: '#52796B' }} />
+                    </div>
+                    <div className="bar-track" title={`Disco: ${dsk.toFixed(0)}%`}>
+                      <i style={{ width: `${dsk}%`, background: '#718096' }} />
+                    </div>
+                  </div>
+                </NodeKeycap>
+              );
+            })}
+          </BottomMatrixDock>
         </DockShell>
       </HudOverlay>
     </ThemeProvider>

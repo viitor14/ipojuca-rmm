@@ -75,3 +75,34 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 
 **Arquivos modificados:** `frontend/src/App.jsx`, `frontend/src/components/DiagnosticDrawer.jsx`.
 **Segurança:** sem impacto (somente UI; preferência booleana local, sem dados pessoais).
+
+
+---
+
+## Ciclo #08 — Reformulação Completa de Identidade Visual Minimalista Editorial e Gêmeo Digital Isométrico Habblaude (`@qa`)
+
+**Data:** 2026-11-12  
+**Ambiente:** Frontend React + Three.js / R3F / Drei (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-21** | Eliminação Total da Estética Neon/Futurista | ✅ APROVADO | Fundo `#F4F5F2`, cartões `#FFFFFF`, texto `#242925`, zero neon/glow/partículas. |
+| **CA-22** | Maquete Isométrica Estilo Habblaude | ✅ APROVADO | Base em diorama de madeira/concreto, pisos modulares, paredes cutaway baixas em L e móveis em voxel. |
+| **CA-23** | Indicadores Luminosos Discretos nos PCs | ✅ APROVADO | Micro-LED no monitor da estação com cor de status funcional (verde, âmbar, vermelho suave ou cinza). |
+| **CA-24** | Interação e Sincronização Maquete ↔ Drawer | ✅ APROVADO | Tooltip HTML flutuante limpo ao passar o mouse e clique aciona seleção e foco da câmera. |
+| **CA-25** | Preservação de Recursos de Câmera | ✅ APROVADO | Modos `ISO 3D`, `CAD TOPO`, `FOCO` e `360°` mantidos com interpolação suave via `useFrame`. |
+| **CA-26** | Painel de Diagnóstico Lateral Minimalista | ✅ APROVADO | Medidores circulares substituídos por barras lineares limpas, osciloscópio suave, catálogo de tarefas e chat funcionais. |
+| **CA-27** | Integridade dos Dados Reais e Ações Remotas | ✅ APROVADO | Preservados 100% dos contratos de dados, Socket.io, telemetria real e catálogo de tarefas. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso sem erros. |
+
+**Arquivos Modificados:**
+- `frontend/src/styles/theme.js`
+- `frontend/src/styles/GlobalStyles.js`
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/src/App.jsx`
+- `frontend/src/components/DiagnosticDrawer.jsx`
+- `frontend/dist/` (assets de produção gerados)
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/Design_Specification.md`
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/QA_Report.md`

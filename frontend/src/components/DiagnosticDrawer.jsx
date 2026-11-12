@@ -3,39 +3,35 @@ import styled from "styled-components";
 import { STATUS_LABELS, RISK_LABELS, fixTextEncoding, theme } from "../styles/theme";
 
 const BladeContainer = styled.aside`
-  width: ${({ $collapsed }) => ($collapsed ? "300px" : "468px")};
-  /* Limita a gaveta ao espaço real entre a barra superior e a barra inferior (rolagem interna) */
+  width: ${({ $collapsed }) => ($collapsed ? "290px" : "440px")};
   max-height: 100%;
   min-height: 0;
-  background: rgba(13, 16, 24, 0.94);
-  backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-top: 3px solid ${({ $statusColor }) => $statusColor};
-  border-radius: 10px;
-  padding: 16px 18px 28px;
+  background: #ffffff;
+  border: 1px solid #e4e8e3;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  padding: 16px 18px 24px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.82);
   pointer-events: auto;
   transition: width 0.2s ease;
 
-  /* Impede que o Flexbox esmague o console de retorno ou o chat dentro da gaveta */
   & > * {
     flex-shrink: 0;
   }
 
   @media (max-width: 1100px) {
-    width: ${({ $collapsed }) => ($collapsed ? "260px" : "390px")};
+    width: ${({ $collapsed }) => ($collapsed ? "260px" : "380px")};
   }
 `;
 
 const HeaderBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  gap: 8px;
+  border-bottom: 1px solid #e4e8e3;
   padding-bottom: 12px;
 `;
 
@@ -48,48 +44,46 @@ const HeaderTopRow = styled.div`
 
 const MicroSerial = styled.div`
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  color: ${({ theme }) => theme.colors.brandPrimary};
+  color: #52796b;
 `;
 
 const StatusBadge = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 6px;
   font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #050609;
-  background: ${({ $color }) => $color};
+  color: ${({ $color }) => $color};
+  background: ${({ $bgColor }) => $bgColor || 'rgba(0,0,0,0.05)'};
+  border: 1px solid ${({ $color }) => $color};
 
   .dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #050609;
+    background: currentColor;
   }
 `;
 
 const HostHeading = styled.h2`
   font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 1.32rem;
-  font-weight: 800;
+  font-size: 1.15rem;
+  font-weight: 700;
   letter-spacing: -0.01em;
-  color: #f8fafc;
-  line-height: 1.2;
+  color: #242925;
+  line-height: 1.25;
   word-break: break-word;
 `;
 
 const SubLocation = styled.div`
   font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: #cbd5e1;
+  font-size: 0.78rem;
+  color: #737b75;
   line-height: 1.35;
 `;
 
@@ -98,81 +92,100 @@ const ActionToolbar = styled.div`
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  margin-top: 4px;
 `;
 
 const HeaderActionBtn = styled.button`
-  padding: 5px 10px;
+  padding: 5px 9px;
   border-radius: 6px;
   font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.73rem;
+  font-size: 0.7rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   background: ${({ $variant }) =>
     $variant === "danger"
-      ? "rgba(239, 68, 68, 0.14)"
+      ? "#FEF2F2"
       : $variant === "accent"
-        ? "rgba(212, 255, 51, 0.12)"
-        : "rgba(255, 255, 255, 0.06)"};
+        ? "#ECEFEB"
+        : "#F8FAF8"};
   color: ${({ $variant }) =>
     $variant === "danger"
-      ? "#FCA5A5"
+      ? "#DC2626"
       : $variant === "accent"
-        ? "#D4FF33"
-        : "#E2E8F0"};
+        ? "#52796B"
+        : "#242925"};
   border: 1px solid
     ${({ $variant }) =>
       $variant === "danger"
-        ? "rgba(239, 68, 68, 0.4)"
+        ? "#FECACA"
         : $variant === "accent"
-          ? "rgba(212, 255, 51, 0.4)"
-          : "rgba(255, 255, 255, 0.14)"};
+          ? "#CBD3CB"
+          : "#E4E8E3"};
 
   &:hover {
-    filter: brightness(1.18);
-    transform: translateY(-1px);
+    filter: brightness(0.96);
   }
 `;
 
-const RadialGrid = styled.div`
+const MetricsLinearGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 `;
 
-const DialCard = styled.div`
-  background: rgba(7, 9, 14, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 8px;
-  padding: 8px 6px;
+const MetricCard = styled.div`
+  background: #f8faf8;
+  border: 1px solid #e4e8e3;
+  border-radius: 6px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 4px;
 
-  .dial-label {
-    font-family: ${({ theme }) => theme.fonts.sans};
+  .m-head {
+    display: flex;
+    justify-content: space-between;
     font-size: 0.68rem;
     font-weight: 600;
-    color: #94a3b8;
-    text-align: center;
+    color: #737b75;
+  }
+
+  .m-val {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #242925;
+  }
+
+  .m-track {
+    height: 4px;
+    background: #e4e8e3;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 2px;
+    i {
+      display: block;
+      height: 100%;
+      border-radius: 2px;
+    }
   }
 `;
 
 const OscilloscopeCard = styled.div`
-  background: rgba(7, 9, 14, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: #f8faf8;
+  border: 1px solid #e4e8e3;
   border-radius: 8px;
-  padding: 9px 12px;
+  padding: 10px 12px;
 
   .osc-head {
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 600;
-    color: #94a3b8;
+    color: #737b75;
     margin-bottom: 6px;
   }
 
@@ -180,12 +193,12 @@ const OscilloscopeCard = styled.div`
     display: flex;
     gap: 12px;
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.68rem;
+    font-size: 0.66rem;
     span {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      color: #e2e8f0;
+      color: #242925;
     }
     i {
       width: 8px;
@@ -200,51 +213,50 @@ const SpecPlate = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 14px;
-  background: rgba(7, 9, 14, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-left: 3px solid ${({ theme }) => theme.colors.brandPrimary};
+  padding: 11px 13px;
+  background: #f8faf8;
+  border: 1px solid #e4e8e3;
   border-radius: 8px;
 
   .spec-grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
   }
 
   .spec-cell {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
     min-width: 0;
 
     span {
       font-family: ${({ theme }) => theme.fonts.sans};
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       font-weight: 600;
-      color: #94a3b8;
+      color: #737b75;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
     }
 
     strong {
       font-family: ${({ theme }) => theme.fonts.sans};
-      font-size: 0.82rem;
-      color: #f8fafc;
+      font-size: 0.78rem;
+      color: #242925;
       font-weight: 600;
-      line-height: 1.35;
+      line-height: 1.3;
       word-break: break-word;
     }
 
     strong.mono {
       font-family: ${({ theme }) => theme.fonts.mono};
-      font-size: 0.79rem;
+      font-size: 0.76rem;
     }
   }
 
   .spec-divider {
     height: 1px;
-    background: rgba(255, 255, 255, 0.07);
+    background: #e4e8e3;
   }
 `;
 
@@ -253,66 +265,53 @@ const SectionBar = styled.div`
   justify-content: space-between;
   align-items: center;
   font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  color: #737b75;
   text-transform: uppercase;
-  color: #94a3b8;
   margin-top: 2px;
 `;
 
 const RefreshTelemetryBtn = styled.button`
   width: 100%;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: ${({ $loading }) =>
-    $loading ? "rgba(212, 255, 51, 0.25)" : "#D4FF33"};
-  color: #050609;
-  border: 1px solid #d4ff33;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #ecefeb;
+  color: #242925;
+  border: 1px solid #cbd3cb;
   font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
   cursor: ${({ disabled }) => (disabled ? "wait" : "pointer")};
   transition: all 0.15s ease;
 
   &:hover:not(:disabled) {
-    filter: brightness(1.08);
-    transform: translateY(-1px);
+    background: #e2e6e1;
   }
 `;
 
 const KeycapMatrix = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 7px;
+  gap: 6px;
   flex-shrink: 0;
 `;
 
 const KeycapButton = styled.button`
   position: relative;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 8px 9px;
+  border-radius: 6px;
   text-align: left;
-  background: ${({ disabled }) =>
-    disabled ? "rgba(15, 18, 26, 0.5)" : "rgba(20, 25, 36, 0.95)"};
-  color: ${({ disabled }) => (disabled ? "#64748B" : "#F8FAFC")};
-  border: 1px solid
-    ${({ disabled, $risk }) =>
-      disabled
-        ? "rgba(255,255,255,0.06)"
-        : $risk === "HIGH"
-          ? "rgba(245, 158, 11, 0.45)"
-          : "rgba(255, 255, 255, 0.13)"};
+  background: #ffffff;
+  color: ${({ disabled }) => (disabled ? "#9CA3AF" : "#242925")};
+  border: 1px solid #e4e8e3;
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
-  transition:
-    transform 0.12s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
+  transition: all 0.15s ease;
 
   &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.brandPrimary};
-    background: rgba(28, 35, 50, 0.98);
+    border-color: #52796b;
+    background: #f8faf8;
     transform: translateY(-1px);
   }
 
@@ -320,34 +319,34 @@ const KeycapButton = styled.button`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 3px;
+    gap: 4px;
+    margin-bottom: 2px;
   }
 
   .key-badge {
     font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.62rem;
+    font-size: 0.6rem;
     font-weight: 700;
-    padding: 2px 6px;
+    padding: 1px 5px;
     border-radius: 4px;
     background: ${({ $risk }) =>
       $risk === "HIGH"
-        ? "rgba(245, 158, 11, 0.18)"
+        ? "#FEF2F2"
         : $risk === "MEDIUM"
-          ? "rgba(56, 189, 248, 0.16)"
-          : "rgba(16, 185, 129, 0.16)"};
+          ? "#FFFBEB"
+          : "#F0FDF4"};
     color: ${({ $risk }) =>
       $risk === "HIGH"
-        ? "#FBBF24"
+        ? "#DC2626"
         : $risk === "MEDIUM"
-          ? "#38BDF8"
-          : "#34D399"};
+          ? "#D97706"
+          : "#2D6A4F"};
   }
 
   .key-title {
     font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.76rem;
-    font-weight: 700;
+    font-size: 0.72rem;
+    font-weight: 600;
     line-height: 1.25;
     display: block;
     color: inherit;
@@ -356,53 +355,47 @@ const KeycapButton = styled.button`
 
 const TerminalReadout = styled.div`
   flex-shrink: 0;
-  background: #060a14;
-  border: 1.5px solid
-    ${({ $highlight }) =>
-      $highlight ? "rgba(0, 229, 255, 0.75)" : "rgba(0, 229, 255, 0.28)"};
-  box-shadow: ${({ $highlight }) =>
-    $highlight ? "0 0 20px rgba(0, 229, 255, 0.22)" : "none"};
-  border-radius: 10px;
-  padding: 12px 14px;
+  background: #f8faf8;
+  border: 1px solid #e4e8e3;
+  border-radius: 8px;
+  padding: 10px 12px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.78rem;
-  line-height: 1.55;
-  min-height: 120px;
-  max-height: 290px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  min-height: 100px;
+  max-height: 240px;
   overflow-y: auto;
-  color: #e2e8f0;
+  color: #242925;
 
   .console-head {
-    font-size: 0.7rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #00e5ff;
-    margin-bottom: 8px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #52796b;
+    margin-bottom: 6px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 6px;
+    border-bottom: 1px solid #e4e8e3;
+    padding-bottom: 4px;
   }
 
   .line-ok {
-    color: #10b981;
-    font-weight: 700;
+    color: #2d6a4f;
+    font-weight: 600;
   }
   .line-busy {
-    color: #00e5ff;
-    font-weight: 700;
+    color: #52796b;
+    font-weight: 600;
   }
   .line-err {
-    color: #ef4444;
-    font-weight: 700;
+    color: #dc2626;
+    font-weight: 600;
   }
   .line-n8n {
-    color: #d4ff33;
-    margin-top: 8px;
-    padding-top: 6px;
-    border-top: 1px dashed rgba(212, 255, 51, 0.25);
+    color: #d97706;
+    margin-top: 6px;
+    padding-top: 4px;
+    border-top: 1px dashed #e4e8e3;
   }
 `;
 
@@ -410,8 +403,8 @@ const DiagnosticModalBackdrop = styled.div`
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(3, 6, 12, 0.72);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -421,49 +414,47 @@ const DiagnosticModalBackdrop = styled.div`
 
 const DiagnosticModalCard = styled.div`
   width: 100%;
-  max-width: 560px;
-  background: rgba(11, 15, 25, 0.98);
-  border: 1px solid rgba(0, 229, 255, 0.55);
-  border-top: 4px solid ${({ $statusColor }) => $statusColor || "#00E5FF"};
-  border-radius: 12px;
-  padding: 20px 22px;
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.9), 0 0 32px rgba(0, 229, 255, 0.16);
+  max-width: 540px;
+  background: #ffffff;
+  border: 1px solid #e4e8e3;
+  border-radius: 10px;
+  padding: 18px 20px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  color: #f8fafc;
+  gap: 12px;
+  color: #242925;
   font-family: ${({ theme }) => theme.fonts.sans};
 `;
 
 const DiagItemsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px;
 `;
 
 const DiagItemBox = styled.div`
-  background: rgba(6, 9, 16, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-left: 3px solid #00e5ff;
-  border-radius: 7px;
-  padding: 8px 11px;
+  background: #f8faf8;
+  border: 1px solid #e4e8e3;
+  border-left: 3px solid #52796b;
+  border-radius: 6px;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 
   .diag-k {
-    font-size: 0.66rem;
+    font-size: 0.64rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #94a3b8;
+    color: #737b75;
   }
 
   .diag-v {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.81rem;
-    font-weight: 700;
-    color: #f1f5f9;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #242925;
     word-break: break-word;
   }
 `;
@@ -508,61 +499,6 @@ function parseDiagnosticSummary(rawText) {
   });
 }
 
-function RadialGauge({ value = 0, unit = "%", label }) {
-  const clamped = Math.min(100, Math.max(0, Number(value || 0)));
-  const radius = 22;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (clamped / 100) * circumference;
-
-  const strokeColor =
-    clamped >= 90
-      ? theme.colors.status.CRITICAL
-      : clamped >= 75
-        ? theme.colors.status.WARNING
-        : theme.colors.status.NORMAL;
-
-  return (
-    <DialCard>
-      <svg width="56" height="56" viewBox="0 0 56 56">
-        <circle
-          cx="28"
-          cy="28"
-          r={radius}
-          fill="none"
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth="4.5"
-        />
-        <circle
-          cx="28"
-          cy="28"
-          r={radius}
-          fill="none"
-          stroke={strokeColor}
-          strokeWidth="4.5"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          transform="rotate(-90 28 28)"
-        />
-        <text
-          x="50%"
-          y="52%"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="#F8FAFC"
-          fontFamily="JetBrains Mono, monospace"
-          fontSize="10.5"
-          fontWeight="700"
-        >
-          {clamped.toFixed(1)}
-          {unit}
-        </text>
-      </svg>
-      <span className="dial-label">{label}</span>
-    </DialCard>
-  );
-}
-
 function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
   const { cpuPath, ramPath } = useMemo(() => {
     const baseCpu = Number(machine?.cpu_usage_pct || 18);
@@ -589,7 +525,7 @@ function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
           }));
 
     const width = 360;
-    const height = 46;
+    const height = 44;
     const step = width / Math.max(1, samples.length - 1);
 
     const toPath = (key) =>
@@ -611,54 +547,53 @@ function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
   return (
     <OscilloscopeCard>
       <div className="osc-head">
-        <span>Histórico de Uso em Tempo Real</span>
+        <span>Histórico de Uso</span>
         <div className="osc-legend">
           <span>
-            <i style={{ background: "#10B981" }} /> CPU
+            <i style={{ background: "#2D6A4F" }} /> CPU
           </span>
           <span>
-            <i style={{ background: "#00E5FF" }} /> RAM
+            <i style={{ background: "#52796B" }} /> RAM
           </span>
         </div>
       </div>
       <svg
         width="100%"
-        height="46"
-        viewBox="0 0 360 46"
+        height="44"
+        viewBox="0 0 360 44"
         preserveAspectRatio="none"
       >
         <line
           x1="0"
-          y1="12"
+          y1="11"
           x2="360"
-          y2="12"
-          stroke="rgba(255,255,255,0.06)"
+          y2="11"
+          stroke="#E4E8E3"
           strokeDasharray="3 3"
         />
         <line
           x1="0"
-          y1="24"
+          y1="22"
           x2="360"
-          y2="24"
-          stroke="rgba(255,255,255,0.06)"
+          y2="22"
+          stroke="#E4E8E3"
           strokeDasharray="3 3"
         />
         <line
           x1="0"
-          y1="36"
+          y1="33"
           x2="360"
-          y2="36"
-          stroke="rgba(255,255,255,0.06)"
+          y2="33"
+          stroke="#E4E8E3"
           strokeDasharray="3 3"
         />
         <path
           d={ramPath}
           fill="none"
-          stroke="#00E5FF"
+          stroke="#52796B"
           strokeWidth="1.8"
-          opacity="0.85"
         />
-        <path d={cpuPath} fill="none" stroke="#10B981" strokeWidth="2" />
+        <path d={cpuPath} fill="none" stroke="#2D6A4F" strokeWidth="2" />
       </svg>
     </OscilloscopeCard>
   );
@@ -668,7 +603,7 @@ export function DiagnosticDrawer({
   diagnostics,
   units = [],
   chatMessages = [],
-  taskCatalog,
+  taskCatalog = [],
   currentUser,
   onDispatchTask,
   onRefreshTelemetryNow,
@@ -724,13 +659,12 @@ export function DiagnosticDrawer({
 
   if (!machine) {
     return (
-      <BladeContainer $statusColor="#D4FF33" $collapsed={collapsed}>
+      <BladeContainer $collapsed={collapsed}>
         <HeaderBlock>
-          <MicroSerial>AGUARDANDO AGENTES REAIS</MicroSerial>
-          <HostHeading>Nenhuma Estação Nesta Unidade</HostHeading>
+          <MicroSerial>AGUARDANDO AGENTES</MicroSerial>
+          <HostHeading>Nenhuma Estação Selecionada</HostHeading>
           <SubLocation>
-            Instale e inicie o Agente Windows (IpojucaRMM-Setup.exe) na máquina
-            para registrá-la automaticamente nesta unidade.
+            Instale o Agente Windows (IpojucaRMM-Setup.exe) para registrar novas estações nesta unidade.
           </SubLocation>
         </HeaderBlock>
       </BladeContainer>
@@ -746,7 +680,6 @@ export function DiagnosticDrawer({
   const activeTelemetryHistory =
     telemetry.length > 0 ? telemetry : telemetryHistory;
 
-  // Se a máquina tiver histórico de telemetria recente mas CPU/RAM vieram zerados, exibe o último valor real medido
   const latestSample = activeTelemetryHistory[0] || null;
   const displayCpu =
     Number(machine.cpu_usage_pct) > 0
@@ -759,6 +692,8 @@ export function DiagnosticDrawer({
 
   const statusColor =
     theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
+  const statusBg =
+    theme.colors.statusBg[machine.health_status] || 'rgba(0,0,0,0.05)';
 
   const uptimeHours = (Number(machine.uptime_seconds || 0) / 3600).toFixed(1);
   const baseIdle = Math.max(0, Number(machine.idle_seconds || 0));
@@ -777,58 +712,53 @@ export function DiagnosticDrawer({
   const activityState = (() => {
     if (isOffline) {
       return {
-        badge: "🔌 DESLIGADO / OFFLINE",
-        color: "#EF4444",
-        bg: "rgba(239, 68, 68, 0.12)",
-        border: "rgba(239, 68, 68, 0.45)",
+        badge: "DESLIGADO",
+        color: "#718096",
+        bg: "#F8FAFC",
+        border: "#E2E8F0",
         headline: `Desligado há ${formatDurationPt(offlineSeconds)}`,
         subline: machine.last_seen_at
           ? `Último contato: ${new Date(machine.last_seen_at).toLocaleString("pt-BR")}`
           : "Sem registro recente",
-        needsUpdate: false,
       };
     }
     if (isLegacyAgent) {
       return {
-        badge: "⚠️ AGENTE LEGADO (" + (machine.agent_version || "2.2.0") + ")",
-        color: "#F59E0B",
-        bg: "rgba(245, 158, 11, 0.14)",
-        border: "rgba(245, 158, 11, 0.55)",
-        headline: `Estação Ativa • Requer Atualização 2.3.0`,
-        subline: `Clique no botão "Enviar Atualização do Agente" abaixo para ativar telemetria de ociosidade em tempo real.`,
-        needsUpdate: true,
+        badge: `AGENTE ${machine.agent_version || "2.2.0"}`,
+        color: "#D97706",
+        bg: "#FFFBEB",
+        border: "#FDE68A",
+        headline: `Estação Ativa • Requer v2.3.0`,
+        subline: `Envie a atualização do agente abaixo para ativar o tempo de ociosidade contínuo.`,
       };
     }
     if (liveIdleSeconds < 180) {
       return {
-        badge: "🟢 EM USO ATIVO",
-        color: "#10B981",
-        bg: "rgba(16, 185, 129, 0.12)",
-        border: "rgba(16, 185, 129, 0.45)",
-        headline: `Em uso agora (Ocioso há ${formatDurationPt(liveIdleSeconds)})`,
+        badge: "EM USO",
+        color: "#2D6A4F",
+        bg: "#F0FDF4",
+        border: "#BBF7D0",
+        headline: `Em uso ativo agora`,
         subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} (${uptimeHours}h)`,
-        needsUpdate: false,
       };
     }
     if (liveIdleSeconds < 1800) {
       return {
-        badge: "🟡 OCIOSO / AUSENTE",
-        color: "#F59E0B",
-        bg: "rgba(245, 158, 11, 0.12)",
-        border: "rgba(245, 158, 11, 0.45)",
-        headline: `Ocioso há ${formatDurationPt(liveIdleSeconds)} sem uso`,
+        badge: "AUSENTE",
+        color: "#D97706",
+        bg: "#FFFBEB",
+        border: "#FDE68A",
+        headline: `Ocioso há ${formatDurationPt(liveIdleSeconds)}`,
         subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} (${uptimeHours}h)`,
-        needsUpdate: false,
       };
     }
     return {
-      badge: "🟠 OCIOSIDADE PROLONGADA",
-      color: "#F97316",
-      bg: "rgba(249, 115, 22, 0.14)",
-      border: "rgba(249, 115, 22, 0.5)",
-      headline: `Parado / Ocioso há ${formatDurationPt(liveIdleSeconds)}`,
-      subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} sem atividade de usuário`,
-      needsUpdate: false,
+      badge: "OCIOSO",
+      color: "#D97706",
+      bg: "#FFFBEB",
+      border: "#FDE68A",
+      headline: `Parado há ${formatDurationPt(liveIdleSeconds)}`,
+      subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} sem interação`,
     };
   })();
 
@@ -839,9 +769,7 @@ export function DiagnosticDrawer({
       const res = await onRefreshTelemetryNow(machine.id);
       setFeedback({
         type: "ok",
-        text:
-          res.message ||
-          "Telemetria atualizada com sucesso em tempo real.",
+        text: res.message || "Telemetria atualizada em tempo real.",
       });
     } catch (err) {
       setFeedback({ type: "err", text: `Falha na coleta: ${err.message}` });
@@ -858,9 +786,7 @@ export function DiagnosticDrawer({
       const res = await onUpdateMachineAgent(machine.id);
       setFeedback({
         type: "ok",
-        text:
-          res.message ||
-          "Ordem de atualização enviada ao Agente Windows com aviso na tela do cliente.",
+        text: res.message || "Atualização enviada para a estação.",
       });
     } catch (err) {
       setFeedback({ type: "err", text: `Falha ao atualizar agente: ${err.message}` });
@@ -877,7 +803,7 @@ export function DiagnosticDrawer({
       await onSendMessage(machine.id, chatText.trim());
       setFeedback({
         type: "ok",
-        text: `Mensagem enviada para a tela de ${machine.hostname}: "${chatText.trim()}"`,
+        text: `Aviso enviado para a tela de ${machine.hostname}.`,
       });
       setChatText("");
     } catch (err) {
@@ -896,7 +822,7 @@ export function DiagnosticDrawer({
       await onUpdateLocation(machine.id, { unitId: uId, sectorId: sId });
       setFeedback({
         type: "ok",
-        text: "Unidade e setor da estação atualizados no mapa 3D.",
+        text: "Localização da estação atualizada.",
       });
     } catch (err) {
       setFeedback({ type: "err", text: `Erro ao mover estação: ${err.message}` });
@@ -908,14 +834,14 @@ export function DiagnosticDrawer({
     setBusyTask(task.code);
     setFeedback({
       type: "busy",
-      text: `⏳ Executando "${cleanTitle}" em ${machine.hostname}... aguarde resposta do Agente.`,
+      text: `Executando "${cleanTitle}" em ${machine.hostname}...`,
     });
     setActiveReport({
       taskId: null,
       taskCode: task.code,
       title: cleanTitle,
       status: "RUNNING",
-      summary: `Solicitando "${cleanTitle}" ao Agente Windows instalado em ${machine.hostname} (${machine.ip_address})...`,
+      summary: `Executando "${cleanTitle}" no Agente Windows (${machine.ip_address})...`,
       timestamp: new Date().toLocaleTimeString("pt-BR"),
       taskRef: task,
     });
@@ -945,14 +871,13 @@ export function DiagnosticDrawer({
       if (task.code === "UPDATE_AGENT" && onUpdateMachineAgent) {
         const res = await onUpdateMachineAgent(machine.id);
         const summaryMsg =
-          res.message ||
-          "Ordem de atualização OTA enviada ao PC com barra de progresso na tela do cliente.";
+          res.message || "Atualização OTA despachada para o computador.";
         setFeedback({
           type: "ok",
           text: `✅ ${cleanTitle}: ${summaryMsg}`,
         });
         setActiveReport({
-          taskId: `upd_${Date.now()}`,
+          taskId: `ota_${Date.now()}`,
           taskCode: task.code,
           title: cleanTitle,
           status: "COMPLETED",
@@ -963,46 +888,36 @@ export function DiagnosticDrawer({
         return;
       }
 
-      const defaultParams =
-        task.code === "INSTALL_APPROVED_PRINTER"
-          ? { printer_ip: "10.14.1.250", printer_name: "IMP_USF_RECEPCAO" }
-          : task.code === "CLEAR_TEMP_CACHE"
-            ? { include_system_temp: true }
-            : task.code === "CHECK_DISK_HEALTH"
-              ? { drive: "C" }
-              : {};
-
       const res = await onDispatchTask({
         machineId: machine.id,
         taskCode: task.code,
-        parameters: defaultParams,
-        reason: `Ação executada por ${currentUser.name}`,
+        params: {},
       });
-      const summaryOut = fixTextEncoding(
-        res.task?.output_summary || "Comando executado no Agente Windows."
-      );
       setFeedback({
         type: "ok",
-        text: `✅ ${cleanTitle}: ${summaryOut}`,
+        text: `Ordem enviada para ${machine.hostname}. Aguardando retorno.`,
       });
-      setActiveReport({
-        taskId: res.task?.task_id || `tsk_${Date.now()}`,
-        taskCode: task.code,
-        title: cleanTitle,
-        status: res.task?.status || "COMPLETED",
-        summary: summaryOut,
-        timestamp: new Date().toLocaleTimeString("pt-BR"),
-        taskRef: task,
-      });
+      if (res?.task) {
+        setActiveReport({
+          taskId: res.task.task_id,
+          taskCode: res.task.task_code,
+          title: cleanTitle,
+          status: res.task.status || "RUNNING",
+          summary:
+            fixTextEncoding(res.task.output_summary) ||
+            "Executando no computador cliente...",
+          timestamp: new Date(res.task.issued_at || Date.now()).toLocaleTimeString("pt-BR"),
+          taskRef: task,
+        });
+      }
     } catch (err) {
-      const errMsg = `Erro ao executar "${cleanTitle}": ${err.message}`;
-      setFeedback({ type: "err", text: `❌ ${errMsg}` });
+      setFeedback({ type: "err", text: `Falha: ${err.message}` });
       setActiveReport({
-        taskId: `err_${Date.now()}`,
+        taskId: null,
         taskCode: task.code,
         title: cleanTitle,
         status: "FAILED",
-        summary: errMsg,
+        summary: `Erro ao despachar comando: ${err.message}`,
         timestamp: new Date().toLocaleTimeString("pt-BR"),
         taskRef: task,
       });
@@ -1013,694 +928,457 @@ export function DiagnosticDrawer({
 
   return (
     <>
-      <BladeContainer $statusColor={statusColor} $collapsed={collapsed}>
-      <HeaderBlock>
-        <HeaderTopRow>
-          <MicroSerial>
-            ESTAÇÃO #{machine.id} • {machine.ip_address} • AGENTE{" "}
-            {machine.agent_version || "2.1.0"}
-          </MicroSerial>
-          <StatusBadge $color={statusColor}>
-            <span className="dot" />
-            {STATUS_LABELS[machine.health_status] || machine.health_status}
-          </StatusBadge>
-        </HeaderTopRow>
+      <BladeContainer $collapsed={collapsed}>
+        <HeaderBlock>
+          <HeaderTopRow>
+            <MicroSerial>
+              ESTAÇÃO #{machine.id} • {machine.ip_address} • v{machine.agent_version || "2.3.0"}
+            </MicroSerial>
+            <StatusBadge $color={statusColor} $bgColor={statusBg}>
+              <span className="dot" />
+              {STATUS_LABELS[machine.health_status] || machine.health_status}
+            </StatusBadge>
+          </HeaderTopRow>
 
-        <div>
-          <HostHeading>{fixTextEncoding(machine.hostname)}</HostHeading>
-          <SubLocation>
-            {fixTextEncoding(machine.unit_name)} •{" "}
-            {fixTextEncoding(machine.sector_name)}
-          </SubLocation>
-          {units.length > 0 && onUpdateLocation && currentUser?.role !== "VIEWER" && (
-            <select
-              value={`${machine.unit_id}:${machine.sector_id}`}
-              onChange={handleSectorChange}
-              style={{
-                marginTop: "6px",
-                width: "100%",
-                padding: "5px 8px",
-                borderRadius: "6px",
-                background: "rgba(15, 23, 42, 0.85)",
-                color: "#CBD5E1",
-                border: "1px solid rgba(255,255,255,0.14)",
-                fontFamily: "inherit",
-                fontSize: "0.75rem",
-                cursor: "pointer",
-              }}
-              title="Alterar em qual Unidade de Saúde e Setor esta máquina está alocada"
-            >
-              {units.map((u) =>
-                (u.sectors || []).map((s) => (
-                  <option key={`${u.id}:${s.id}`} value={`${u.id}:${s.id}`}>
-                    📍 {fixTextEncoding(u.name)} — {fixTextEncoding(s.name)}
-                  </option>
-                ))
-              )}
-            </select>
-          )}
-        </div>
-
-        <ActionToolbar>
-          <HeaderActionBtn $variant="accent" onClick={onFocusCamera}>
-            Focar no Mapa 3D
-          </HeaderActionBtn>
-          <HeaderActionBtn onClick={() => setCollapsed((prev) => !prev)}>
-            {collapsed ? "Expandir Painel" : "Recolher Painel"}
-          </HeaderActionBtn>
-          {onDeleteMachine && currentUser?.role !== "VIEWER" && (
-            <HeaderActionBtn
-              $variant="danger"
-              onClick={() => onDeleteMachine(machine.id)}
-              title="Remover esta estação do painel"
-            >
-              Remover PC
-            </HeaderActionBtn>
-          )}
-        </ActionToolbar>
-      </HeaderBlock>
-
-      <RadialGrid>
-        <RadialGauge value={displayCpu} unit="%" label="Uso de CPU" />
-        <RadialGauge value={displayRam} unit="%" label="Memória RAM" />
-        <RadialGauge
-          value={machine.disk_usage_pct}
-          unit="%"
-          label="Disco SSD"
-        />
-        <RadialGauge
-          value={machine.temperature_c}
-          unit="°C"
-          label="Temperatura"
-        />
-      </RadialGrid>
-
-      <div
-        style={{
-          flexShrink: 0,
-          background: activityState.bg,
-          border: `1.5px solid ${activityState.border}`,
-          borderRadius: "10px",
-          padding: "11px 14px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "4px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: "0.7rem",
-            fontWeight: 800,
-            letterSpacing: "0.05em",
-            color: activityState.color,
-          }}
-        >
-          <span>⏱️ ESTADO DE ATIVIDADE &amp; OCIOSIDADE</span>
-          <span>{activityState.badge}</span>
-        </div>
-        <div
-          style={{
-            fontSize: "0.95rem",
-            fontWeight: 800,
-            color: "#F8FAFC",
-            marginTop: "2px",
-          }}
-        >
-          {activityState.headline}
-        </div>
-        <div
-          style={{
-            fontSize: "0.76rem",
-            color: "#CBD5E1",
-            fontFamily: "JetBrains Mono, monospace",
-          }}
-        >
-          {activityState.subline}
-        </div>
-      </div>
-
-      {!collapsed && (
-        <>
-          <TelemetryOscilloscope
-            machine={{
-              ...machine,
-              cpu_usage_pct: displayCpu,
-              ram_usage_pct: displayRam,
-            }}
-            telemetryHistory={activeTelemetryHistory}
-          />
-
-          <SpecPlate>
-            <div className="spec-grid-2">
-              <div className="spec-cell">
-                <span>Endereço IPv4 / MAC</span>
-                <strong className="mono">
-                  {machine.ip_address} • {machine.mac_address || "N/A"}
-                </strong>
-              </div>
-              <div className="spec-cell">
-                <span>Fila de Impressão (Spooler)</span>
-                <strong
-                  style={{
-                    color: machine.spooler_running ? "#10B981" : "#EF4444",
-                  }}
-                >
-                  {machine.spooler_running
-                    ? "● Serviço Ativo (Normal)"
-                    : "● Serviço Parado (Falha)"}
-                </strong>
-              </div>
-            </div>
-
-            <div className="spec-divider" />
-
-            <div className="spec-cell">
-              <span>Fabricante / Modelo / Número de Série</span>
-              <strong>
-                {fixTextEncoding(machine.manufacturer)}{" "}
-                {fixTextEncoding(machine.model)} ({machine.serial_number})
-              </strong>
-            </div>
-
-            <div className="spec-divider" />
-
-            <div className="spec-cell">
-              <span>Processador (CPU)</span>
-              <strong>
-                {fixTextEncoding(machine.cpu_model || "Processador x64")}
-              </strong>
-            </div>
-
-            <div className="spec-divider" />
-
-            <div className="spec-grid-2">
-              <div className="spec-cell">
-                <span>Memória / Armazenamento</span>
-                <strong className="mono">
-                  {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(1)} GB
-                  RAM • {machine.disk_total_gb} GB {machine.disk_type}
-                </strong>
-              </div>
-              <div className="spec-cell">
-                <span>Sistema Operacional / Ativo</span>
-                <strong>
-                  {fixTextEncoding(machine.os_version || "Windows")} •{" "}
-                  {uptimeHours}h ligado
-                </strong>
-              </div>
-            </div>
-
-            <div className="spec-divider" />
-
-            <div className="spec-grid-2">
-              <div className="spec-cell">
-                <span>⏱️ Tempo de Ociosidade (Sem Uso)</span>
-                <strong
-                  style={{
-                    color: isOffline
-                      ? "#94A3B8"
-                      : liveIdleSeconds >= 180
-                        ? "#F59E0B"
-                        : "#10B981",
-                  }}
-                >
-                  {isOffline
-                    ? "Computador Desligado"
-                    : isLegacyAgent
-                      ? "Requer Agente v2.3"
-                      : liveIdleSeconds === 0
-                        ? "0s (Em uso contínuo)"
-                        : `${formatDurationPt(liveIdleSeconds)} sem uso`}
-                </strong>
-              </div>
-              <div className="spec-cell">
-                <span>🔌 Estado Ligado / Desligado</span>
-                <strong style={{ color: isOffline ? "#EF4444" : "#00E5FF" }}>
-                  {isOffline
-                    ? `Desligado há ${formatDurationPt(offlineSeconds)}`
-                    : `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)}`}
-                </strong>
-              </div>
-            </div>
-          </SpecPlate>
-
-          <SectionBar>
-            <span>
-              Última comunicação:{" "}
-              {machine.last_seen_at
-                ? new Date(machine.last_seen_at).toLocaleTimeString("pt-BR")
-                : "Agora"}
-            </span>
-            <span>Ciclo: 4h + Tempo Real</span>
-          </SectionBar>
-
-          <RefreshTelemetryBtn
-            onClick={handleManualRefresh}
-            disabled={refreshingNow}
-            $loading={refreshingNow}
-          >
-            {refreshingNow
-              ? "⟳ Coletando dados em tempo real do Agente..."
-              : "⟳ Atualizar Telemetria Agora (Tempo Real)"}
-          </RefreshTelemetryBtn>
-
-          {onUpdateMachineAgent && currentUser?.role !== "VIEWER" && (
-            <RefreshTelemetryBtn
-              onClick={handleUpdateAgentNow}
-              disabled={updatingAgent}
-              $loading={updatingAgent}
-              style={{
-                background: updatingAgent
-                  ? "rgba(0, 229, 255, 0.2)"
-                  : "rgba(0, 229, 255, 0.14)",
-                color: "#00E5FF",
-                borderColor: "rgba(0, 229, 255, 0.55)",
-              }}
-              title="Envia a nova versão do Agente para este computador e mostra o progresso na tela do cliente"
-            >
-              {updatingAgent
-                ? "⬆ Enviando atualização ao Agente..."
-                : "⬆ Enviar Atualização do Agente (Mostrar na Tela do PC)"}
-            </RefreshTelemetryBtn>
-          )}
-
-          {onSendMessage && (
-            <div
-              style={{
-                flexShrink: 0,
-                background: "rgba(9, 14, 24, 0.95)",
-                border: "1.5px solid rgba(0, 229, 255, 0.45)",
-                borderRadius: "10px",
-                padding: "12px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-                boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
-              }}
-            >
-              <SectionBar style={{ marginTop: 0, color: "#00E5FF", fontSize: "0.75rem" }}>
-                <span>💬 Chat / Aviso na Tela do PC</span>
-                <span>Super Agente • Tempo Real</span>
-              </SectionBar>
-
-              <div
+          <div>
+            <HostHeading>{fixTextEncoding(machine.hostname)}</HostHeading>
+            <SubLocation>
+              {fixTextEncoding(machine.unit_name)} • {fixTextEncoding(machine.sector_name)}
+            </SubLocation>
+            {units.length > 0 && onUpdateLocation && currentUser?.role !== "VIEWER" && (
+              <select
+                value={`${machine.unit_id}:${machine.sector_id}`}
+                onChange={handleSectorChange}
                 style={{
-                  minHeight: "64px",
-                  maxHeight: "135px",
-                  overflowY: "auto",
-                  fontSize: "0.8rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "6px",
-                  padding: "8px 10px",
-                  background: "rgba(4, 7, 13, 0.85)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: "7px",
+                  marginTop: "6px",
+                  width: "100%",
+                  padding: "5px 8px",
+                  borderRadius: "6px",
+                  background: "#F8FAF8",
+                  color: "#242925",
+                  border: "1px solid #E4E8E3",
+                  fontFamily: "inherit",
+                  fontSize: "0.74rem",
+                  cursor: "pointer",
                 }}
               >
-                {chatMessages.length === 0 ? (
-                  <span style={{ color: "#94A3B8", fontSize: "0.76rem" }}>
-                    Digite abaixo para abrir um aviso ou conversar ao vivo na tela de{" "}
-                    <strong style={{ color: "#E2E8F0" }}>{machine.hostname}</strong>.
-                  </span>
-                ) : (
-                  chatMessages.slice(-8).map((m) => (
-                    <div key={m.id} style={{ lineHeight: 1.4 }}>
-                      <strong
-                        style={{
-                          color:
-                            m.direction === "SERVER_TO_CLIENT"
-                              ? "#D4FF33"
-                              : "#00E5FF",
-                        }}
-                      >
-                        [{m.sender}]:
-                      </strong>{" "}
-                      <span style={{ color: "#F8FAFC" }}>
-                        {fixTextEncoding(m.message)}
-                      </span>
-                    </div>
+                {units.map((u) =>
+                  (u.sectors || []).map((s) => (
+                    <option key={`${u.id}:${s.id}`} value={`${u.id}:${s.id}`}>
+                      📍 {fixTextEncoding(u.name)} — {fixTextEncoding(s.name)}
+                    </option>
                   ))
                 )}
+              </select>
+            )}
+          </div>
+
+          <ActionToolbar>
+            <HeaderActionBtn $variant="accent" onClick={onFocusCamera}>
+              Focar Maquete
+            </HeaderActionBtn>
+            <HeaderActionBtn onClick={() => setCollapsed((prev) => !prev)}>
+              {collapsed ? "Expandir" : "Recolher"}
+            </HeaderActionBtn>
+            {onDeleteMachine && currentUser?.role !== "VIEWER" && (
+              <HeaderActionBtn
+                $variant="danger"
+                onClick={() => onDeleteMachine(machine.id)}
+              >
+                Remover PC
+              </HeaderActionBtn>
+            )}
+          </ActionToolbar>
+        </HeaderBlock>
+
+        {/* Métricas Lineares Limpas e Modernas */}
+        <MetricsLinearGrid>
+          <MetricCard>
+            <div className="m-head">
+              <span>CPU</span>
+              <span className="m-val">{displayCpu.toFixed(0)}%</span>
+            </div>
+            <div className="m-track">
+              <i style={{ width: `${displayCpu}%`, background: '#2D6A4F' }} />
+            </div>
+          </MetricCard>
+
+          <MetricCard>
+            <div className="m-head">
+              <span>RAM</span>
+              <span className="m-val">{displayRam.toFixed(0)}%</span>
+            </div>
+            <div className="m-track">
+              <i style={{ width: `${displayRam}%`, background: '#52796B' }} />
+            </div>
+          </MetricCard>
+
+          <MetricCard>
+            <div className="m-head">
+              <span>DISCO</span>
+              <span className="m-val">{Number(machine.disk_usage_pct || 0).toFixed(0)}%</span>
+            </div>
+            <div className="m-track">
+              <i style={{ width: `${Number(machine.disk_usage_pct || 0)}%`, background: '#718096' }} />
+            </div>
+          </MetricCard>
+
+          <MetricCard>
+            <div className="m-head">
+              <span>TEMPERATURA</span>
+              <span className="m-val">{Number(machine.temperature_c || 45).toFixed(0)}°C</span>
+            </div>
+            <div className="m-track">
+              <i style={{ width: `${Math.min(100, (Number(machine.temperature_c || 45) / 90) * 100)}%`, background: '#D97706' }} />
+            </div>
+          </MetricCard>
+        </MetricsLinearGrid>
+
+        {/* Cartão de Atividade e Ociosidade */}
+        <div
+          style={{
+            flexShrink: 0,
+            background: activityState.bg,
+            border: `1px solid ${activityState.border}`,
+            borderRadius: "6px",
+            padding: "8px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "2px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: "0.66rem",
+              fontWeight: 700,
+              color: activityState.color,
+            }}
+          >
+            <span>ESTADO DE ATIVIDADE</span>
+            <span>{activityState.badge}</span>
+          </div>
+          <div
+            style={{
+              fontSize: "0.86rem",
+              fontWeight: 700,
+              color: "#242925",
+            }}
+          >
+            {activityState.headline}
+          </div>
+          <div
+            style={{
+              fontSize: "0.72rem",
+              color: "#737B75",
+            }}
+          >
+            {activityState.subline}
+          </div>
+        </div>
+
+        {!collapsed && (
+          <>
+            <TelemetryOscilloscope
+              machine={{
+                ...machine,
+                cpu_usage_pct: displayCpu,
+                ram_usage_pct: displayRam,
+              }}
+              telemetryHistory={activeTelemetryHistory}
+            />
+
+            <SpecPlate>
+              <div className="spec-grid-2">
+                <div className="spec-cell">
+                  <span>IPv4 / MAC</span>
+                  <strong className="mono">
+                    {machine.ip_address}
+                  </strong>
+                </div>
+                <div className="spec-cell">
+                  <span>Spooler Impressão</span>
+                  <strong
+                    style={{
+                      color: machine.spooler_running ? "#2D6A4F" : "#DC2626",
+                    }}
+                  >
+                    {machine.spooler_running ? "Ativo" : "Parado"}
+                  </strong>
+                </div>
               </div>
 
-              <form
-                onSubmit={handleSendChatMessage}
-                style={{ display: "flex", gap: "8px" }}
+              <div className="spec-divider" />
+
+              <div className="spec-cell">
+                <span>Hardware</span>
+                <strong>
+                  {fixTextEncoding(machine.manufacturer)} {fixTextEncoding(machine.model)}
+                </strong>
+              </div>
+
+              <div className="spec-divider" />
+
+              <div className="spec-grid-2">
+                <div className="spec-cell">
+                  <span>Memória / Disco</span>
+                  <strong className="mono">
+                    {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(0)} GB • {machine.disk_total_gb} GB SSD
+                  </strong>
+                </div>
+                <div className="spec-cell">
+                  <span>Sistema</span>
+                  <strong>{fixTextEncoding(machine.os_version || "Windows")}</strong>
+                </div>
+              </div>
+            </SpecPlate>
+
+            <RefreshTelemetryBtn
+              onClick={handleManualRefresh}
+              disabled={refreshingNow}
+            >
+              {refreshingNow
+                ? "Atualizando dados..."
+                : "Atualizar Telemetria Agora"}
+            </RefreshTelemetryBtn>
+
+            {onSendMessage && (
+              <div
+                style={{
+                  flexShrink: 0,
+                  background: "#F8FAF8",
+                  border: "1px solid #E4E8E3",
+                  borderRadius: "8px",
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
               >
-                <input
-                  type="text"
-                  placeholder="Digite um aviso para exibir na tela do usuário..."
-                  value={chatText}
-                  onChange={(e) => setChatText(e.target.value)}
+                <SectionBar style={{ marginTop: 0 }}>
+                  <span>Aviso na Tela do Computador</span>
+                </SectionBar>
+
+                <div
                   style={{
-                    flex: 1,
-                    padding: "9px 12px",
-                    borderRadius: "7px",
-                    background: "rgba(15, 23, 42, 0.95)",
-                    border: "1px solid rgba(0, 229, 255, 0.35)",
-                    color: "#F8FAFC",
-                    fontFamily: "inherit",
-                    fontSize: "0.82rem",
-                    outline: "none",
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={sendingChat || !chatText.trim()}
-                  style={{
-                    padding: "9px 14px",
-                    borderRadius: "7px",
-                    background: "#00E5FF",
-                    color: "#050609",
-                    border: "none",
-                    fontWeight: 800,
-                    fontSize: "0.8rem",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
+                    minHeight: "50px",
+                    maxHeight: "110px",
+                    overflowY: "auto",
+                    fontSize: "0.74rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                    padding: "6px 8px",
+                    background: "#FFFFFF",
+                    border: "1px solid #E4E8E3",
+                    borderRadius: "6px",
                   }}
                 >
-                  {sendingChat ? "Enviando..." : "Enviar Aviso"}
-                </button>
-              </form>
-            </div>
-          )}
-
-          <SectionBar>
-            <span>Ações de Manutenção Remota</span>
-            <span>Perfil: {currentUser.role}</span>
-          </SectionBar>
-
-          <TerminalReadout $highlight={Boolean(feedback || busyTask)}>
-            <div className="console-head">
-              <span>⚡ Painel de Diagnóstico &amp; Retorno Remoto</span>
-              <span>{busyTask ? "⏳ EXECUTANDO NO PC..." : "PRONTO"}</span>
-            </div>
-            {feedback ? (
-              <div
-                className={
-                  feedback.type === "err"
-                    ? "line-err"
-                    : feedback.type === "busy"
-                      ? "line-busy"
-                      : "line-ok"
-                }
-                style={{
-                  marginBottom: "10px",
-                  padding: "8px 10px",
-                  borderRadius: "6px",
-                  background: "rgba(15, 23, 42, 0.85)",
-                  border: "1px solid rgba(0, 229, 255, 0.25)",
-                  fontSize: "0.8rem",
-                }}
-              >
-                &gt; {feedback.text}
-              </div>
-            ) : (
-              tasks.length === 0 && (
-                <div style={{ color: "#94A3B8", padding: "6px 0" }}>
-                  &gt; Clique em qualquer ação abaixo (ex.: Diagnóstico de Rede Local ou Saúde de Disco) para ver o diagnóstico detalhado do PC aqui.
+                  {chatMessages.length === 0 ? (
+                    <span style={{ color: "#737B75" }}>
+                      Envie uma mensagem direta para o operador deste PC.
+                    </span>
+                  ) : (
+                    chatMessages.slice(-6).map((m) => (
+                      <div key={m.id}>
+                        <strong style={{ color: "#52796B" }}>
+                          [{m.sender}]:
+                        </strong>{" "}
+                        <span>{fixTextEncoding(m.message)}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
-              )
-            )}
 
-            {(activeReport?.summary || tasks[0]?.output_summary) && (
-              <div style={{ marginBottom: "10px" }}>
-                <DiagItemsGrid>
-                  {parseDiagnosticSummary(
-                    activeReport?.summary || tasks[0]?.output_summary
-                  ).map((item, idx) => (
-                    <DiagItemBox key={idx}>
-                      <span className="diag-k">{item.label}</span>
-                      <span className="diag-v">{item.value}</span>
-                    </DiagItemBox>
-                  ))}
-                </DiagItemsGrid>
+                <form
+                  onSubmit={handleSendChatMessage}
+                  style={{ display: "flex", gap: "6px" }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Digitar aviso..."
+                    value={chatText}
+                    onChange={(e) => setChatText(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      background: "#FFFFFF",
+                      border: "1px solid #E4E8E3",
+                      fontSize: "0.76rem",
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={sendingChat || !chatText.trim()}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      background: "#52796B",
+                      color: "#FFFFFF",
+                      border: "none",
+                      fontWeight: 600,
+                      fontSize: "0.74rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Enviar
+                  </button>
+                </form>
               </div>
             )}
 
-            {tasks.slice(0, 4).map((t) => (
-              <div
-                key={t.task_id}
-                onClick={() => {
-                  const foundSpec = taskCatalog.find((c) => c.code === t.task_code);
-                  setActiveReport({
-                    taskId: t.task_id,
-                    taskCode: t.task_code,
-                    title: fixTextEncoding(foundSpec?.title || t.task_code),
-                    status: t.status || "COMPLETED",
-                    summary: fixTextEncoding(t.output_summary || "Sem detalhes adicionais."),
-                    timestamp: new Date(t.issued_at).toLocaleTimeString("pt-BR"),
-                    taskRef: foundSpec || null,
-                  });
-                }}
-                style={{
-                  cursor: "pointer",
-                  padding: "5px 6px",
-                  borderRadius: "5px",
-                  borderBottom: "1px solid rgba(255,255,255,0.06)",
-                  fontSize: "0.75rem",
-                }}
-                title="Clique para abrir a janela de relatório detalhado desta ação"
-              >
-                [{new Date(t.issued_at).toLocaleTimeString("pt-BR")}]{" "}
-                <strong style={{ color: "#E2E8F0" }}>{t.task_code}</strong> ::{" "}
-                <span className="line-ok">{t.status}</span> —{" "}
-                {fixTextEncoding(t.output_summary)}{" "}
-                <span style={{ color: "#00E5FF", fontWeight: 700 }}>
-                  [Expandir Relatório]
-                </span>
-              </div>
-            ))}
-            {alerts.length > 0 && (
-              <div className="line-n8n">
-                [N8N // WHATSAPP] Protocolo #
-                {alerts[0].external_ticket_id || "ATIVO"} —{" "}
-                {fixTextEncoding(alerts[0].message)}
-              </div>
-            )}
-          </TerminalReadout>
+            <SectionBar>
+              <span>Ações Remotas Autorizadas</span>
+            </SectionBar>
 
-          <KeycapMatrix>
-            {taskCatalog.map((task) => {
-              const allowed = task.permittedForCurrentUser;
-              const isBusy = busyTask === task.code;
-              return (
-                <KeycapButton
-                  key={task.code}
-                  $risk={task.riskLevel}
-                  disabled={!allowed || isBusy}
-                  onClick={() => handleRunTask(task)}
-                  title={task.description}
-                  style={
-                    isBusy
-                      ? {
-                          borderColor: "#00E5FF",
-                          background: "rgba(0, 229, 255, 0.14)",
-                        }
-                      : undefined
+            <TerminalReadout>
+              <div className="console-head">
+                <span>Retorno das Tarefas</span>
+                <span>{busyTask ? "Executando..." : "Pronto"}</span>
+              </div>
+              {feedback ? (
+                <div
+                  className={
+                    feedback.type === "err"
+                      ? "line-err"
+                      : feedback.type === "busy"
+                        ? "line-busy"
+                        : "line-ok"
                   }
                 >
-                  <div className="key-head">
-                    <span className="key-badge">
-                      Risco {RISK_LABELS[task.riskLevel] || task.riskLevel}
+                  &gt; {feedback.text}
+                </div>
+              ) : (
+                <div style={{ color: "#737B75" }}>
+                  &gt; Selecione uma tarefa abaixo para despachar ao agente.
+                </div>
+              )}
+
+              {(activeReport?.summary || tasks[0]?.output_summary) && (
+                <div style={{ marginTop: "6px" }}>
+                  <DiagItemsGrid>
+                    {parseDiagnosticSummary(
+                      activeReport?.summary || tasks[0]?.output_summary
+                    ).map((item, idx) => (
+                      <DiagItemBox key={idx}>
+                        <span className="diag-k">{item.label}</span>
+                        <span className="diag-v">{item.value}</span>
+                      </DiagItemBox>
+                    ))}
+                  </DiagItemsGrid>
+                </div>
+              )}
+            </TerminalReadout>
+
+            <KeycapMatrix>
+              {taskCatalog.map((task) => {
+                const allowed = task.permittedForCurrentUser;
+                const isBusy = busyTask === task.code;
+                return (
+                  <KeycapButton
+                    key={task.code}
+                    $risk={task.riskLevel}
+                    disabled={!allowed || isBusy}
+                    onClick={() => handleRunTask(task)}
+                    title={task.description}
+                  >
+                    <div className="key-head">
+                      <span className="key-badge">
+                        Risco {RISK_LABELS[task.riskLevel] || task.riskLevel}
+                      </span>
+                    </div>
+                    <span className="key-title">
+                      {isBusy ? "Executando..." : fixTextEncoding(task.title)}
                     </span>
-                  </div>
-                  <span className="key-title">
-                    {isBusy
-                      ? "⏳ Executando no PC..."
-                      : fixTextEncoding(task.title)}
-                  </span>
-                </KeycapButton>
-              );
-            })}
-          </KeycapMatrix>
-        </>
-      )}
+                  </KeycapButton>
+                );
+              })}
+            </KeycapMatrix>
+          </>
+        )}
       </BladeContainer>
 
       {activeReport && (
         <DiagnosticModalBackdrop onClick={() => setActiveReport(null)}>
-          <DiagnosticModalCard
-            $statusColor={
-              activeReport.status === "FAILED"
-                ? "#EF4444"
-                : activeReport.status === "RUNNING"
-                  ? "#00E5FF"
-                  : "#10B981"
-            }
-            onClick={(e) => e.stopPropagation()}
-          >
+          <DiagnosticModalCard onClick={(e) => e.stopPropagation()}>
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "flex-start",
-                gap: "12px",
-                borderBottom: "1px solid rgba(255,255,255,0.1)",
-                paddingBottom: "12px",
+                borderBottom: "1px solid #E4E8E3",
+                paddingBottom: "10px",
               }}
             >
               <div>
-                <div
-                  style={{
-                    fontFamily: "JetBrains Mono, monospace",
-                    fontSize: "0.7rem",
-                    color: "#00E5FF",
-                    fontWeight: 700,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  RELATÓRIO DE DIAGNÓSTICO REMOTO // {activeReport.taskCode}
-                </div>
-                <h3
-                  style={{
-                    margin: "4px 0 2px",
-                    fontSize: "1.15rem",
-                    fontWeight: 800,
-                    color: "#F8FAFC",
-                  }}
-                >
+                <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>
                   {activeReport.title}
                 </h3>
-                <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>
-                  Estação:{" "}
-                  <strong style={{ color: "#E2E8F0" }}>
-                    {fixTextEncoding(machine.hostname)}
-                  </strong>{" "}
-                  ({machine.ip_address}) • Horário: {activeReport.timestamp}
+                <div style={{ fontSize: "0.75rem", color: "#737B75" }}>
+                  Estação: {machine.hostname} ({machine.ip_address}) • {activeReport.timestamp}
                 </div>
               </div>
-
               <span
                 style={{
-                  padding: "5px 10px",
+                  padding: "4px 8px",
                   borderRadius: "6px",
-                  fontSize: "0.72rem",
-                  fontWeight: 800,
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
                   background:
                     activeReport.status === "FAILED"
-                      ? "rgba(239, 68, 68, 0.2)"
+                      ? "#FEF2F2"
                       : activeReport.status === "RUNNING"
-                        ? "rgba(0, 229, 255, 0.2)"
-                        : "rgba(16, 185, 129, 0.2)",
+                        ? "#F0FDF4"
+                        : "#F0FDF4",
                   color:
                     activeReport.status === "FAILED"
-                      ? "#EF4444"
-                      : activeReport.status === "RUNNING"
-                        ? "#00E5FF"
-                        : "#10B981",
-                  border: "1px solid currentColor",
-                  whiteSpace: "nowrap",
+                      ? "#DC2626"
+                      : "#2D6A4F",
                 }}
               >
                 {activeReport.status === "RUNNING"
-                  ? "⏳ COLETANDO NO PC..."
+                  ? "Em execução..."
                   : activeReport.status === "FAILED"
-                    ? "❌ FALHA"
-                    : "✅ CONCLUÍDO NO PC"}
+                    ? "Falha"
+                    : "Concluído"}
               </span>
             </div>
 
-            {activeReport.status === "RUNNING" ? (
-              <div
-                style={{
-                  padding: "18px 16px",
-                  borderRadius: "8px",
-                  background: "rgba(0, 229, 255, 0.08)",
-                  border: "1px dashed rgba(0, 229, 255, 0.4)",
-                  color: "#E2E8F0",
-                  fontSize: "0.86rem",
-                  lineHeight: 1.5,
-                }}
-              >
-                ⏳ {activeReport.summary}
-              </div>
-            ) : (
-              <>
-                <DiagItemsGrid>
-                  {parseDiagnosticSummary(activeReport.summary).map(
-                    (item, idx) => (
-                      <DiagItemBox key={idx}>
-                        <span className="diag-k">{item.label}</span>
-                        <span className="diag-v">{item.value}</span>
-                      </DiagItemBox>
-                    )
-                  )}
-                </DiagItemsGrid>
-
-                <div
-                  style={{
-                    background: "#05070C",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "8px",
-                    padding: "10px 12px",
-                    fontFamily: "JetBrains Mono, monospace",
-                    fontSize: "0.75rem",
-                    color: "#CBD5E1",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "0.65rem",
-                      color: "#64748B",
-                      marginBottom: "4px",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Retorno Bruto do Agente Windows:
-                  </div>
-                  &gt; {activeReport.summary}
-                </div>
-              </>
-            )}
+            <DiagItemsGrid>
+              {parseDiagnosticSummary(activeReport.summary).map((item, idx) => (
+                <DiagItemBox key={idx}>
+                  <span className="diag-k">{item.label}</span>
+                  <span className="diag-v">{item.value}</span>
+                </DiagItemBox>
+              ))}
+            </DiagItemsGrid>
 
             <div
               style={{
                 display: "flex",
                 justifyContent: "flex-end",
-                gap: "8px",
                 marginTop: "4px",
               }}
             >
-              {activeReport.taskRef && activeReport.status !== "RUNNING" && (
-                <button
-                  type="button"
-                  onClick={() => handleRunTask(activeReport.taskRef)}
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: "7px",
-                    background: "rgba(0, 229, 255, 0.14)",
-                    border: "1px solid rgba(0, 229, 255, 0.5)",
-                    color: "#00E5FF",
-                    fontWeight: 700,
-                    fontSize: "0.78rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  ⟳ Executar Novamente
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => setActiveReport(null)}
                 style={{
-                  padding: "8px 16px",
-                  borderRadius: "7px",
-                  background: "#10B981",
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  background: "#52796B",
+                  color: "#FFFFFF",
                   border: "none",
-                  color: "#04060A",
-                  fontWeight: 800,
-                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  fontSize: "0.76rem",
                   cursor: "pointer",
                 }}
               >
-                Fechar Relatório
+                Fechar
               </button>
             </div>
           </DiagnosticModalCard>

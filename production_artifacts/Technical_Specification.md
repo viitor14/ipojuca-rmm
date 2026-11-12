@@ -326,3 +326,148 @@ Na tela principal, a gaveta de diagnóstico (`DiagnosticDrawer`, à direita) é 
 ## 13. Gate de Aprovação — FASE 1 (Ciclo #07)
 
 O pipeline está **pausado no Gate de Aprovação da Fase 1**. Responda **`Approved`** para iniciar a implementação (`@frontend`) seguida da validação (`@qa`).
+
+
+---
+
+## 14. Ciclo #08 — Reformulação Completa de Identidade Visual Editorial e Gêmeo Digital Isométrico Habblaude (`@pm` + `@designer` + `@frontend` + `@qa` + `@security`)
+
+### 14.1. Objetivo Principal e Justificativa de Produto
+Atender à missão de reformulação completa da plataforma de monitoramento do parque tecnológico da Rede Municipal de Saúde de Ipojuca, **abandonando de forma definitiva e integral a estética futurista anterior** (neon, glow, hologramas, gradientes espaciais, feixes de luz, bordas cortadas angulares e visual de ficção científica).
+
+A nova aplicação estabelece **duas experiências visuais complementares e integradas**:
+1. **Interface Administrativa Minimalista & Editorial:** Focada em clareza, respiração visual, tipografia refinada, divisórias sutis e paleta neutra e contemporânea, orientada à tomada de decisão rápida e profissional pela equipe de TI da Prefeitura.
+2. **Gêmeo Digital 3D Isométrico (Inspirado no Habblaude):** Uma maquete virtual interativa em miniatura com estética de escritório digital em pixel art/voxel estético, perspectiva isométrica rigorosa, paredes seccionadas (*cutaway*), mobiliários de saúde e escritório estilizados, pequenos computadores e servidores reais integrados às mesas, com micro-indicadores luminosos de estado operacional (sem lasers, sem partículas flutuantes e sem ruído decorativo).
+
+---
+
+### 14.2. Diretrizes de Design System & Identidade Visual (`@designer` + `@pm`)
+
+#### 14.2.1. Nova Paleta Cromática Editorial Neutra
+Substituição total do tema escuro "Obsidian/Acid Lime" por uma paleta clara, suave e ergonômica:
+- **Canvas / Fundo Geral:** `#F4F5F2` (cinza-linho suave e acolhedor).
+- **Superfícies Principais (Cards, Header, Dock, Drawer):** `#FFFFFF` com sombras suaves de elevação (`box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.04)`).
+- **Superfícies Secundárias / Neutras:** `#ECEFEB` e `#E2E6E1`.
+- **Bordas Estruturais:** `#E4E8E3` (discretas, sem brilho).
+- **Tipografia Primária (Títulos e Dados):** `#242925` (preto carvão fosco de alto contraste).
+- **Tipografia Secundária / Rótulos:** `#737B75` (ardósia neutra e legível).
+- **Cor de Identidade Institucional:** `#52796B` (verde sálvia / pinho arquitetônico).
+- **Cores Operacionais Estritas (Apenas Funcionais, Sem Decoração):**
+  - **Online / Normal:** Verde moderado orgânico (`#2D6A4F` / `#38A169`).
+  - **Atenção / Warning:** Âmbar suave (`#D97706`).
+  - **Crítico / Critical:** Vermelho reservado para incidentes reais (`#DC2626`).
+  - **Offline / Desligado:** Cinza ardósia neutro (`#718096`).
+
+#### 14.2.2. Tipografia e Proporções
+- **Família Sans-serif:** `Plus Jakarta Sans`, `Inter`, `-apple-system`, `sans-serif` para 95% da interface (cabeçalhos, abas, nomes de setores, relatórios e botões).
+- **Família Monoespaçada:** `JetBrains Mono` reservada exclusivamente para dados técnicos que exigem alinhamento tabular (endereços IP, MAC address, percentuais de uso de CPU/RAM, portas e comandos).
+- **Raio de Borda (Border Radius):** Abandonar os cortes poligonais futuristas (`clip-path`) e adotar bordas arredondadas modernas padronizadas (`6px`, `8px` e `12px`).
+
+---
+
+### 14.3. Especificação do Novo Gêmeo Digital 3D (Habblaude Aesthetic) (`@frontend` + `@designer`)
+
+#### 14.3.1. Câmera e Projeção Espacial
+- **Projeção:** Câmera ortográfica ou isométrica com inclinação de 35.264° e rotação de 45° (verdadeira perspectiva isométrica de videogame e maquete digital).
+- **Suporte a Modos:**
+  - `ISO 3D` (Modo padrão: maquete isométrica acolhedora e nítida).
+  - `CAD TOPO` (Vista ortográfica superior dos setores e salas).
+  - `FOCO ESTAÇÃO` (Transição suave de aproximação centrada na mesa do computador selecionado).
+  - `ORBITAL 360°` (Rotação suave contínua em torno do centro da unidade de saúde).
+  - `FREE` (Arrastar/Pan e Zoom com OrbitControls sem perda de foco).
+
+#### 14.3.2. Arquitetura da Maquete & Ambientes Seccionados (*Cutaway*)
+- Cada Unidade de Saúde (USF, Policlínica, CAPS) é representada como uma maquete arquitetônica em miniatura sobre uma base de madeira clara/concreto arquitetônico.
+- **Setores Físicos:** Recepção, Consultórios Médicos, Farmácia, Sala de Vacinação, Coordenação, Enfermagem, Sala Administrativa e Sala de Servidores/Rack.
+- **Paredes:** Paredes baixas estilizadas (*half-walls* ou paredes em L seccionadas) para permitir visibilidade interna sem oclusão visual.
+- **Pisos:** Pisos em grade modular isométrica com tons suaves diferenciando setores de circulação e salas de atendimento.
+- **Mobiliários em Estilo Voxel/Pixel Art 3D:**
+  - Mesas de atendimento e escritórios com tampo de madeira clara e pés de metal estilizados.
+  - Cadeiras ergonômicas em miniatura.
+  - Armários e gaveteiros modulares.
+  - Macas de atendimento clínico ou balcão de recepção nos respectivos setores.
+  - Mini rack de infraestrutura de rede na sala de telecomunicações.
+
+#### 14.3.3. Estações de Trabalho e Equipamentos
+- Cada máquina cadastrada no banco de dados é instanciada sobre a mesa do seu respectivo setor.
+- **Modelo em Miniatura:** Gabinete compacto, monitor slim, teclado e mouse estilizados com proporções coerentes.
+- **Indicador de Estado Operacional Integrado:** Pequeno LED luminoso no monitor/gabinete da estação:
+  - 🟢 Online (verde fixo).
+  - 🟡 Atenção (âmbar suave).
+  - 🔴 Crítico (vermelho com sutil pulso de alerta a cada 2s).
+  - ⚫ Offline (cinza apagado).
+- **Impressoras Homologadas:** Pequenas impressoras 3D estilizadas ao lado dos computadores que possuem serviço de spooler ativo.
+
+#### 14.3.4. Interação com os Computadores
+- **Hover (Passar o Mouse):** Sutil elevação/destaque no contorno da mesa e exibição de um tooltip discreto e elegante com `hostname`, `ip_address`, `setor` e `status`.
+- **Clique:** Seleciona a máquina, destaca a estação com uma sutil moldura no piso, sincroniza com o painel lateral de diagnóstico e aciona o foco suave de câmera.
+
+---
+
+### 14.4. Especificação da Nova Interface Administrativa (`@frontend` + `@pm`)
+
+#### 14.4.1. Cabeçalho Minimalista (Top Bar)
+- Identidade discreta: Logotipo institucional minimalista "RMM // Saúde Ipojuca".
+- Seletor de Unidades em abas horizontais limpas com badges numéricos discretos de computadores.
+- Seletor de Perfis de Acesso e botão de download do instalador do Agente (`.exe`).
+- Agrupamento limpo de botões de controle de câmera (ISO, CAD, Foco, Órbita).
+
+#### 14.4.2. Coluna Lateral Esquerda (Radar & Alertas Limpos)
+- Card de Resumo Global: Matriz tipográfica com 4 colunas limpas (Online, Atenção, Crítico, Offline) sem gradientes ou caixas pesadas.
+- Lista de Ocorrências e Alertas n8n/WhatsApp apresentados em lista limpa por ordem de criticidade.
+- Lista de setores com navegação direta (clicar no setor move a câmera para a respectiva sala na maquete).
+
+#### 14.4.3. Barra Inferior de Computadores (Dock Retrátil)
+- Barra elegante com fundo branco translúcido, bordas suaves e botão central de recolher/expandir (▲/▼) com transição suave.
+- Cartões de computadores limpos, exibindo: identificador, hostname, IP, setor, tempo ocioso/desligado e barras discretas de uso de CPU, RAM e Disco.
+- Campo de pesquisa rápida e filtros integrados.
+
+#### 14.4.4. Painel de Diagnóstico Lateral (Diagnostic Drawer)
+- Design limpo com fundo branco e tipografia editorial:
+  - Cabeçalho com hostname, status, IP e versão do agente.
+  - Indicadores de atividade: Uptime, Tempo de Ociosidade em tempo real e Tempo Desligado.
+  - Métricas de telemetria apresentadas em barras de progresso lineares limpas e gráfico minimalista de osciloscópio (sem mostradores circulares gigantes ou neon).
+  - Catálogo de Ações Remotas Autorizadas organizado em botões elegantes e bem espaçados com confirmação visual clara.
+  - Console de Retorno e Chat de Suporte estilizados como caixas de diálogo e log limpos em tom neutro.
+
+---
+
+### 14.5. Preservação Funcional Absoluta (`@lead` + `@engineer` + `@qa`)
+Fica expressamente garantido que:
+1. **Nenhum endpoint ou rota de backend será quebrado ou desativado.**
+2. **A comunicação bidirecional Socket.io continua operando em tempo real** (telemetria, tasks, presença, chat).
+3. **Os dados dos computadores são 100% reais**, originados do banco de dados MySQL e dos agentes Windows.
+4. **O catálogo de tarefas remotas autorizadas permanece 100% funcional.**
+5. **A responsividade e o comportamento em diferentes resoluções (1366x768 até 4K) são garantidos.**
+
+---
+
+### 14.6. Critérios de Aceitação do Ciclo #08 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que (Contexto) | Quando (Ação) | Então (Resultado Esperado) |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-21** | Eliminação Total da Estética Neon/Futurista | O operador acessa a plataforma | Visualiza a tela principal | Não há qualquer elemento com brilho neon, glow, gradientes cósmicos, hologramas, polígonos cortados ou fundo preto sci-fi. A interface exibe paleta editorial neutra (`#F4F5F2`), tipografia legível e superfícies limpas. |
+| **CA-22** | Maquete Isométrica Estilo Habblaude | A cena 3D é renderizada | O operador visualiza a Unidade de Saúde | A unidade é apresentada como uma maquete 3D em miniatura com perspectiva isométrica, paredes seccionadas, pisos modulares, mobiliários de escritório/saúde em voxel e computadores em miniatura. |
+| **CA-23** | Indicadores Luminosos Discretos nos PCs | Existem máquinas com status Online, Atenção, Crítico e Offline | O operador observa a maquete | Cada computador possui um LED de status integrado discreto (verde, âmbar, vermelho suave ou cinza). O cenário geral não é banhado em luz colorida. |
+| **CA-24** | Interação e Sincronização Maquete ↔ Drawer | O operador passa o mouse ou clica em um computador na maquete | Interage com a cena 3D | Ao hover: exibe tooltip discreto com hostname/IP/status. Ao clicar: o computador é destacado com sutil indicador no piso, a câmera foca suavemente e a gaveta lateral de diagnóstico abre sincronizada. |
+| **CA-25** | Preservação de Recursos de Câmera | O operador alterna entre os modos ISO 3D, CAD TOPO, FOCO e ORBITAL | Clica nos botões correspondentes no topo | A maquete responde instantaneamente às mudanças de câmera, mantendo a navegação suave e o centro geométrico da unidade. |
+| **CA-26** | Painel de Diagnóstico Lateral Minimalista | Uma máquina é selecionada | O operador examina a gaveta de diagnóstico | As métricas de telemetria, estado de ociosidade, catálogo de tarefas e console de retorno são exibidos de forma limpa, sem mostradores circulares exagerados e sem rolagem bloqueada. |
+| **CA-27** | Integridade dos Dados Reais e Ações Remotas | O operador aciona uma tarefa remota (ex.: Limpar DNS) | Ação é despachada | O agente executa a ação normalmente, o retorno surge no console e o status em tempo real é refletido fielmente. |
+
+---
+
+### 14.7. Arquivos Previstos para a Implementação
+- `frontend/src/styles/theme.js` (nova paleta editorial, tokens cromáticos e tipografia).
+- `frontend/src/styles/GlobalStyles.js` (fundo neutro claro `#F4F5F2`, scrollbars limpas, remoção de retículas e overlays neon).
+- `frontend/src/App.jsx` (reestruturação do cabeçalho editorial, cards laterais limpos, dock inferior minimalista e controles).
+- `frontend/src/components/DigitalTwin3D.jsx` (reconstrução da maquete isométrica estilo Habblaude com materiais, pisos, paredes seccionadas e mobiliários em voxel/miniatura).
+- `frontend/src/components/DiagnosticDrawer.jsx` (redesenho minimalista do painel de diagnóstico, telemetria linear e catálogo de ações).
+- `production_artifacts/Design_Specification.md` (atualização completa do guia de design e tokens).
+- `production_artifacts/QA_Report.md` (registro detalhado dos testes de regressão e aceitação).
+
+---
+
+## 15. Gate de Aprovação — FASE 1 (Ciclo #08)
+
+O pipeline do Ciclo #08 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` iniciem imediatamente a implementação em código-fonte de todas as etapas da reformulação!

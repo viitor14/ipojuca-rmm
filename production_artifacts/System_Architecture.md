@@ -256,3 +256,20 @@ Para respeitar o padrão oficial do `startcycle.md` e manter compatibilidade com
    - Modo de câmera adicional `ORBIT` (rotação orbital suave automática ao redor do complexo hospitalar) somado a `ISO`, `TOP` e `FOCUS`.
    - Filtro rápido de busca textual e seletor de status no Dock inferior + gráfico SVG Sparkline e telemetria expandida na lâmina [`DiagnosticDrawer`](file:///c:/Users/Usuario/Desktop/VSCODE/SMS/ipojuca-rmm/frontend/src/components/DiagnosticDrawer.jsx).
 
+
+
+---
+
+## 8. Evolução Arquitetural — Ciclo #08 (Digital Twin Isométrico Habblaude & UI Editorial)
+
+### 8.1. Arquitetura da Cena 3D Isométrica
+A maquete 3D é refatorada em componentes modulares estruturados hierarquicamente sobre uma grade ortogonal:
+1. **`IsometricBoard`**: Base da maquete tridimensional estilizada em madeira clara e concreto arquitetônico com iluminação direcional difusa e sombras suaves (*contact shadows*).
+2. **`SectorRoomVoxel`**: Renderização dos setores de saúde com piso modular com textura/ladrilhos suaves em paleta neutra, paredes cortadas em L (*cutaway*) para desobstrução de visão interna e sinalização minimalista dos setores.
+3. **`ClinicalFurnitureVoxel`**: Mobiliários estilizados em pixel art/voxel estético por sala (mesas, cadeiras de escritório, armários, macas de atendimento na enfermagem/consultório, balcão de recepção e mini rack de servidores).
+4. **`ComputerAvatarVoxel`**: Miniatura de computador estilizado pousado sobre a mesa real de trabalho:
+   - Monitor, gabinete, teclado e mouse proporcionais.
+   - Micro-LED de status no topo do monitor refletindo o estado operacional (`NORMAL`, `WARNING`, `CRITICAL`, `OFFLINE`).
+   - Tooltip HTML flutuante sutil ao pairar o mouse (*hover*) com nome da máquina, IP e setor.
+   - Sincronização de clique com foco de câmera e abertura do painel de diagnóstico lateral.
+5. **`IsometricCameraRig`**: Controlador de câmera com suporte a transições suaves (*lerp*) para os modos `ISO` (visão 45° clássica de maquete), `TOP` (CAD topo ortogonal), `FOCUS` (zoom na mesa da estação selecionada) e `ORBIT` (rotação de inspeção contínua).

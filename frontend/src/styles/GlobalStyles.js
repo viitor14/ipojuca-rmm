@@ -10,36 +10,28 @@ export const GlobalStyles = createGlobalStyle`
   html, body, #root {
     width: 100vw;
     height: 100vh;
-    background-color: #050609;
+    background-color: ${({ theme }) => theme.colors.bgCanvas};
     color: ${({ theme }) => theme.colors.textPrimary};
     font-family: ${({ theme }) => theme.fonts.sans};
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     overflow: hidden;
-    user-select: none;
   }
 
-  /* Retícula técnica sutil estilo CAD no fundo */
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background-image: radial-gradient(rgba(244, 244, 240, 0.05) 1px, transparent 0);
-    background-size: 28px 28px;
-    z-index: 1;
-  }
-
+  /* Barras de rolagem discretas e refinadas */
   ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: rgba(15, 23, 42, 0.35);
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(212, 255, 51, 0.4);
-    border-radius: 3px;
+    background: #CBD5E1;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
   }
 `;

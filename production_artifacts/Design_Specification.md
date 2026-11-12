@@ -74,3 +74,26 @@ Para romper completamente com o visual padronizado de dashboards gerados por IA 
      - `CAMADA: HOLOGRAMAS` (exibe/oculta os callouts flutuantes 3D)
      - `CAMADA: LUZ VOLUMÉTRICA` (feixes atmosféricos sobre os setores e o rack central)
    - Novo modo de câmera **`ORBITAL AUTO`** para apresentação contínua em monitores de NOC/Sala de Situação da TI de Ipojuca.
+
+
+---
+
+## 5. Reformulação Visual e Artística — Ciclo #08: Editorial Minimalista & Maquete Isométrica Habblaude
+
+### 5.1. Novo Paradigma Visual: "Quiet Infrastructure & Architectural Diorama"
+Substituição definitiva da estética futurista por um design editorial requintado e acolhedor:
+- **Zero Neon, Zero Glow, Zero Hologramas**: Todo brilho excessivo, partículas e feixes cósmicos foram eliminados.
+- **Paleta Editorial Neutra**: Fundos claros `#F4F5F2`, cartões brancos `#FFFFFF` com sombras suaves difusas, divisórias discretas `#E4E8E3` e tipografia carvão `#242925`. Cor institucional de apoio `#52796B`.
+- **Cores Semânticas Reservadas**: Verde suave `#2D6A4F` para Online, Âmbar `#D97706` para Atenção, Vermelho `#DC2626` para Crítico e Cinza `#718096` para Offline.
+
+### 5.2. Direção Artística da Maquete 3D (Inspiração Habblaude)
+- **Perspectiva Isométrica de Diorama**: Câmera ajustada no clássico ângulo isométrico de 35.264° com rotação de 45°, transmitindo a sensação de uma maquete tátil em miniatura sobre uma base arquitetônica de madeira clara.
+- **Paredes Cortadas em L (*Cutaway Half-Walls*)**: As paredes dos setores possuem altura reduzida e cortes estratégicos para permitir visualização completa do interior das salas sem bloqueio visual.
+- **Mobiliários em Estilo Voxel / Pixel Art 3D**:
+  - Mesas de trabalho estilizadas com acabamento em carvalho claro e pés metálicos escuros.
+  - Cadeiras ergonômicas em miniatura.
+  - Balcão de atendimento na recepção, macas clínicas e biombos nos consultórios/enfermagem, armários modulares de farmácia e mini-rack de telecomunicações.
+- **Computadores em Miniatura com Micro-LEDs de Status**:
+  - Mini gabinetes e telas slim proporcionais sobre as mesas reais.
+  - Indicadores luminosos sutis apenas no bezel do monitor, sem iluminar a cena inteira.
+  - Efeito suave de destaque na mesa e tooltip discreto ao pairar o mouse (*hover*).
