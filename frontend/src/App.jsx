@@ -303,16 +303,71 @@ const IncidentItem = styled.div`
   }
 `;
 
+const DockShell = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+`;
+
+const DockToggleBtn = styled.button`
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 14px;
+  margin-bottom: -1px;
+  background: rgba(8, 9, 13, 0.92);
+  backdrop-filter: blur(22px);
+  color: #d4ff33;
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-bottom: ${({ $collapsed, theme }) =>
+    $collapsed ? `1px solid ${theme.colors.borderSubtle}` : '1px solid transparent'};
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+
+  .arrow {
+    display: inline-block;
+    font-size: 0.7rem;
+    transition: transform 0.25s ease;
+    transform: rotate(${({ $collapsed }) => ($collapsed ? '180deg' : '0deg')});
+  }
+
+  &:hover {
+    background: rgba(212, 255, 51, 0.14);
+  }
+
+  &:focus-visible {
+    outline: 1px solid #d4ff33;
+    outline-offset: 2px;
+  }
+`;
+
 const BottomMatrixDock = styled.footer`
   pointer-events: auto;
+  align-self: stretch;
   background: rgba(8, 9, 13, 0.88);
   backdrop-filter: blur(22px);
   border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding: 8px 12px;
+  padding: ${({ $collapsed }) => ($collapsed ? '0 12px' : '8px 12px')};
+  max-height: ${({ $collapsed }) => ($collapsed ? '0px' : '220px')};
+  opacity: ${({ $collapsed }) => ($collapsed ? 0 : 1)};
+  border-width: ${({ $collapsed }) => ($collapsed ? '0' : '1px')};
+  visibility: ${({ $collapsed }) => ($collapsed ? 'hidden' : 'visible')};
   display: flex;
   align-items: center;
   gap: 10px;
   overflow-x: auto;
+  overflow-y: hidden;
+  transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease,
+    visibility 0.25s;
 `;
 
 const DockControlsBlock = styled.div`
@@ -423,6 +478,21 @@ export default function App() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [cameraMode, setCameraMode] = useState('ISO');
   const [searchQuery, setSearchQuery] = useState('');
+  const [dockCollapsed, setDockCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem('rmm.dockCollapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('rmm.dockCollapsed', dockCollapsed ? '1' : '0');
+    } catch {
+      /* armazenamento indisponível: mantém apenas em memória */
+    }
+  }, [dockCollapsed]);
   const [nowTimestamp, setNowTimestamp] = useState(Date.now());
   const [sceneLayers, setSceneLayers] = useState({
     furniture: true,
@@ -896,7 +966,20 @@ export default function App() {
           />
         </MiddleWorkspace>
 
-        <BottomMatrixDock>
+        <DockShell>
+        <DockToggleBtn
+          type="button"
+          $collapsed={dockCollapsed}
+          onClick={() => setDockCollapsed((prev) => !prev)}
+          aria-expanded={!dockCollapsed}
+          aria-controls="rmm-bottom-dock"
+          aria-label={dockCollapsed ? 'Expandir lista de computadores' : 'Recolher lista de computadores'}
+          title={dockCollapsed ? 'Expandir lista de computadores' : 'Recolher lista de computadores'}
+        >
+          <span className="arrow" aria-hidden="true">▼</span>
+          {dockCollapsed && <span>{machines.length} PCs</span>}
+        </DockToggleBtn>
+        <BottomMatrixDock id="rmm-bottom-dock" $collapsed={dockCollapsed} aria-hidden={dockCollapsed}>
           <DockControlsBlock>
             <span className="dock-title">
               DOCK // {activeUnit?.code || 'UNIDADE'} ({filteredMachines.length})
@@ -1029,6 +1112,7 @@ export default function App() {
             );
           })}
         </BottomMatrixDock>
+        </DockShell>
       </HudOverlay>
     </ThemeProvider>
   );

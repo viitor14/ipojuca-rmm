@@ -57,3 +57,21 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 | **CA-09** | Controles de Camadas Holográficas, Giro Orbital 360° e Osciloscópio SVG | Verificado seletor `sceneLayers` (`MOBILIÁRIO`, `FIBRA GPON`, `HUD 3D`, `LUZ VOLUM.`), modo `ORBITAL 360°`, filtro no Dock em [`App.jsx`](file:///c:/Users/Usuario/Desktop/VSCODE/SMS/ipojuca-rmm/frontend/src/App.jsx) e `TelemetryOscilloscope` em [`DiagnosticDrawer.jsx`](file:///c:/Users/Usuario/Desktop/VSCODE/SMS/ipojuca-rmm/frontend/src/components/DiagnosticDrawer.jsx). | **APROVADO** |
 | **Regressão Backend** | Suíte `npm --prefix backend test` (`8/8` testes) | Todos os 8 testes de API, RBAC, Auto-Enrollment e Telemetria Sob Demanda passaram com `0` falhas (`1028 ms`). | **APROVADO** |
 
+
+
+---
+
+## Ciclo #07 — Layout da Gaveta + Botão Recolher/Expandir da Barra Inferior (`@qa`)
+
+**Data:** 2026-11-12
+
+| Verificação | Resultado |
+| :--- | :--- |
+| Build de produção (`vite build`) | ✅ OK (664 módulos, sem erros; apenas aviso pré-existente de chunk > 500 kB) |
+| CA-17 — Gaveta limitada ao espaço disponível (`max-height: 100%` + rolagem interna) | ✅ Implementado — validação visual pendente pelo usuário (1366×768 / 1920×1080) |
+| CA-18 / CA-19 — Botão ▼/▲ centralizado recolhe/expande a barra com transição de 0,25s | ✅ Implementado — validação visual pendente |
+| CA-20 — Persistência em `localStorage` (`rmm.dockCollapsed`) | ✅ Implementado, com fallback se o storage estiver indisponível |
+| Acessibilidade (`aria-expanded`, `aria-controls`, `aria-label`, foco visível) | ✅ |
+
+**Arquivos modificados:** `frontend/src/App.jsx`, `frontend/src/components/DiagnosticDrawer.jsx`.
+**Segurança:** sem impacto (somente UI; preferência booleana local, sem dados pessoais).

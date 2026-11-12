@@ -280,3 +280,49 @@ Conforme definido em `.agents/workflows/startcycle.md`:
 
 
 
+
+---
+
+## 12. Ciclo #07 — Correção de Layout da Gaveta de Diagnóstico + Botão Recolher/Expandir da Barra Inferior (`@pm` + `@designer` + `@frontend`)
+
+### 12.1. Problema Relatado
+Na tela principal, a gaveta de diagnóstico (`DiagnosticDrawer`, à direita) é **cortada/sobreposta** pela barra inferior de computadores (`BottomMatrixDock`): os cartões do Catálogo de Tarefas (ex.: *"Reiniciar Computador (Aviso 30s)"*, *"Atualizar Agente Windows (OTA)"*) ficam truncados na borda da barra e o restante do conteúdo (console de retorno, chat, etc.) não fica acessível de forma adequada.
+
+**Causa raiz (análise `@frontend`):**
+- `BladeContainer` usa `max-height: calc(100vh - 172px)` — valor fixo que **não considera** a altura real da barra superior + barra inferior (cartões de máquina com ~95px + padding).
+- O contêiner pai `MiddleWorkspace` tem `overflow: hidden`, então a parte excedente da gaveta é cortada, em vez de a gaveta rolar internamente.
+
+### 12.2. Requisitos Funcionais (`@pm`)
+1. **RF-28 (Gaveta ajustada ao espaço disponível):** A gaveta de diagnóstico deve ocupar no máximo a altura real disponível entre a barra superior e a barra inferior (`max-height: 100%` do `MiddleWorkspace`), com **rolagem interna** para acessar todo o conteúdo. Nenhum conteúdo pode ficar escondido atrás da barra inferior.
+2. **RF-29 (Botão seta no meio da barra inferior):** Adicionar um botão com **seta para baixo (▼)** centralizado horizontalmente na borda superior da barra inferior de computadores.
+   - Ao clicar: a barra **recolhe** (desliza para baixo, ficando visível apenas uma aba fina com o botão), liberando espaço vertical para o Digital Twin 3D e para a gaveta.
+   - Quando recolhida: o botão passa a exibir **seta para cima (▲)** e um rótulo compacto com o total de computadores (ex.: `12 PCs`); ao clicar, a barra **reexpande**.
+   - Transição animada suave (~0,25s), sem quebrar a busca/filtro nem a seleção de máquina.
+   - Acessibilidade: `aria-label` ("Recolher/Expandir lista de computadores") e `aria-expanded`.
+3. **RF-30 (Preferência persistida localmente):** O estado recolhido/expandido é salvo em `localStorage` do navegador (sem dados pessoais), mantendo a escolha após recarregar a página.
+
+### 12.3. Fora do Escopo
+- Sem mudanças no backend, banco de dados, agente Windows ou n8n.
+- Sem alteração no conteúdo dos cartões de máquina.
+
+### 12.4. Segurança / LGPD (`@security`)
+- Alteração puramente visual. `localStorage` guarda apenas um booleano de preferência de UI (`rmm.dockCollapsed`). Sem impacto em autenticação, autorização ou dados sensíveis.
+
+### 12.5. Critérios de Aceitação do Ciclo #07 (`@pm`)
+
+| ID | Cenário | Dado que (Contexto) | Quando (Ação) | Então (Resultado Esperado) |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-17** | Gaveta não sobreposta | Uma máquina está selecionada e a gaveta aberta | O operador rola a gaveta até o final | Todo o conteúdo (tarefas, console, chat) fica visível acima da barra inferior, sem cortes, em resoluções 1366×768 e 1920×1080. |
+| **CA-18** | Recolher barra | A barra inferior está expandida | O operador clica na seta ▼ no meio da barra | A barra recolhe animadamente, resta uma aba com ▲ e total de PCs, e a gaveta/3D ganham a área liberada. |
+| **CA-19** | Expandir barra | A barra está recolhida | O operador clica na seta ▲ | A barra reaparece com todos os computadores, filtro e seleção preservados. |
+| **CA-20** | Persistência | A barra foi recolhida | O operador recarrega a página | A barra permanece recolhida. |
+
+### 12.6. Arquivos Previstos
+- `frontend/src/App.jsx` (barra inferior + botão + estado).
+- `frontend/src/components/DiagnosticDrawer.jsx` (`max-height` da gaveta).
+
+---
+
+## 13. Gate de Aprovação — FASE 1 (Ciclo #07)
+
+O pipeline está **pausado no Gate de Aprovação da Fase 1**. Responda **`Approved`** para iniciar a implementação (`@frontend`) seguida da validação (`@qa`).

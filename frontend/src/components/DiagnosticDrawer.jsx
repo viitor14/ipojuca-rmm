@@ -4,7 +4,9 @@ import { STATUS_LABELS, RISK_LABELS, fixTextEncoding, theme } from "../styles/th
 
 const BladeContainer = styled.aside`
   width: ${({ $collapsed }) => ($collapsed ? "300px" : "468px")};
-  max-height: calc(100vh - 172px);
+  /* Limita a gaveta ao espaço real entre a barra superior e a barra inferior (rolagem interna) */
+  max-height: 100%;
+  min-height: 0;
   background: rgba(13, 16, 24, 0.94);
   backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.14);
