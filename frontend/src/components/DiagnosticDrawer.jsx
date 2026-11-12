@@ -1235,6 +1235,15 @@ export function DiagnosticDrawer({
 
                   <div className="spec-divider" />
 
+                  <div className="spec-cell">
+                    <span>Processador</span>
+                    <strong>
+                      {fixTextEncoding(machine.cpu_model || machine.processor || "Não informado")}
+                    </strong>
+                  </div>
+
+                  <div className="spec-divider" />
+
                   <div className="spec-grid-2">
                     <div className="spec-cell">
                       <span>Memória / Disco</span>
