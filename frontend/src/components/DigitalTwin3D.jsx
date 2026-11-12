@@ -238,6 +238,9 @@ function ClinicalFurnitureVoxel({ sector }) {
   const isPharma = sector.code === 'FAR' || sector.code === 'FARM' || sector.id === 3;
   const isNurse = sector.code === 'ENF' || sector.code === 'ADM' || sector.id === 4 || sector.id === 6;
   const isServer = sector.code === 'TI' || sector.id === 8;
+  const halfW = Number(sector.width_3d || 6.5) / 2;
+  const halfD = Number(sector.depth_3d || 5) / 2;
+  const backZ = -halfD + 0.5; // mobiliário encostado na parede dos fundos (livre das estações)
 
   return (
     <group position={[baseX, 0, baseZ]}>
@@ -245,7 +248,7 @@ function ClinicalFurnitureVoxel({ sector }) {
       {isReception && (
         <group>
           {/* Balcão de atendimento com tampo de madeira nobre e frisos */}
-          <group position={[-0.8, 0, 0.8]}>
+          <group position={[-1.2, 0, backZ + 0.1]}>
             {/* Corpo do balcão */}
             <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
               <boxGeometry args={[2.1, 1.0, 0.65]} />
@@ -269,7 +272,7 @@ function ClinicalFurnitureVoxel({ sector }) {
           </group>
 
           {/* Bebedouro de coluna com galão de água mineral azul translúcido */}
-          <group position={[1.4, 0, -1.2]}>
+          <group position={[halfW - 0.8, 0, backZ + 0.1]}>
             {/* Gabinete metálico do bebedouro */}
             <mesh position={[0, 0.48, 0]} castShadow receiveShadow>
               <boxGeometry args={[0.38, 0.96, 0.38]} />
@@ -313,7 +316,7 @@ function ClinicalFurnitureVoxel({ sector }) {
           </group>
 
           {/* Vaso de cerâmica com planta verde exuberante voxel (estilo monstera/samambaia) */}
-          <group position={[1.5, 0, 1.0]}>
+          <group position={[halfW - 0.5, 0, halfD - 0.5]}>
             {/* Vaso de cerâmica cilíndrico */}
             <mesh position={[0, 0.28, 0]} castShadow receiveShadow>
               <cylinderGeometry args={[0.22, 0.17, 0.56, 10]} />
@@ -339,7 +342,7 @@ function ClinicalFurnitureVoxel({ sector }) {
           </group>
 
           {/* Longarina de espera de 3 lugares para pacientes */}
-          <group position={[-1.2, 0, -1.3]}>
+          <group position={[-halfW + 0.55, 0, 0.2]} rotation={[0, Math.PI / 2, 0]}>
             {/* Barra tubular metálica de sustentação */}
             <mesh position={[0, 0.2, 0]}>
               <boxGeometry args={[1.7, 0.04, 0.06]} />
@@ -377,7 +380,7 @@ function ClinicalFurnitureVoxel({ sector }) {
       {(isConsult || isNurse) && (
         <group>
           {/* Maca de Exame Clínico Detalhada */}
-          <group position={[1.4, 0, -0.7]}>
+          <group position={[halfW - 1.5, 0, backZ + 0.1]}>
             {/* Estrutura metálica tubular branca/cinza */}
             <mesh position={[0, 0.3, 0]} castShadow receiveShadow>
               <boxGeometry args={[1.7, 0.6, 0.72]} />
@@ -412,7 +415,7 @@ function ClinicalFurnitureVoxel({ sector }) {
           </group>
 
           {/* Suporte de Soro Fisiológico Cromado com bolsa translúcida */}
-          <group position={[0.4, 0, -1.3]}>
+          <group position={[-0.4, 0, backZ + 0.1]}>
             {/* Base com 4 rodízios em cruz */}
             <mesh position={[0, 0.04, 0]}>
               <boxGeometry args={[0.36, 0.04, 0.06]} />
@@ -440,7 +443,7 @@ function ClinicalFurnitureVoxel({ sector }) {
           </group>
 
           {/* Biombo hospitalar sanfonado com 3 folhas articuladas */}
-          <group position={[2.0, 0, 0.5]}>
+          <group position={[-halfW + 0.5, 0, 0.2]}>
             {/* Folha 1 */}
             <mesh position={[0, 0.75, -0.42]} rotation={[0, 0.15, 0]} castShadow>
               <boxGeometry args={[0.04, 1.4, 0.42]} />
@@ -462,7 +465,7 @@ function ClinicalFurnitureVoxel({ sector }) {
 
       {/* 3. FARMÁCIA & VACINAÇÃO: Estantes duplas repletas de caixas de remédios em tons pastéis */}
       {isPharma && (
-        <group position={[0.2, 0, -1.5]}>
+        <group position={[0, 0, backZ]}>
           {/* Armário / Estante estruturada com prateleiras de madeira clara e moldura branca */}
           <mesh position={[0, 0.95, 0]} castShadow receiveShadow>
             <boxGeometry args={[2.5, 1.9, 0.5]} />
@@ -489,7 +492,7 @@ function ClinicalFurnitureVoxel({ sector }) {
             </group>
           ))}
           {/* Balcão de dispensação com vidro protetor */}
-          <group position={[0, 0, 1.3]}>
+          <group position={[halfW - 0.5, 0, halfD - 0.3]} rotation={[0, -Math.PI / 2, 0]}>
             <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
               <boxGeometry args={[1.8, 1.0, 0.5]} />
               <meshStandardMaterial color="#FFFFFF" roughness={0.6} />
@@ -504,7 +507,7 @@ function ClinicalFurnitureVoxel({ sector }) {
 
       {/* 4. SALA DE SERVIDORES / TI: Mini-rack 19" estruturado com switch, organizador de cabos e no-break */}
       {isServer && (
-        <group position={[0, 0, -0.6]}>
+        <group position={[0, 0, backZ + 0.2]}>
           {/* Gabinete Rack 19" preto fosco com estrutura de aço */}
           <mesh position={[0, 0.95, 0]} castShadow receiveShadow>
             <boxGeometry args={[1.0, 1.9, 0.85]} />
@@ -562,11 +565,46 @@ function ClinicalFurnitureVoxel({ sector }) {
   );
 }
 
+/* Distribui as estações em grade dentro de cada setor (sem sobreposição e longe do mobiliário) */
+function computeMachineLayout(machines, sectors) {
+  const result = new Map();
+  const bySector = new Map();
+  machines.forEach((m) => {
+    const key = Number(m.sector_id);
+    if (!bySector.has(key)) bySector.set(key, []);
+    bySector.get(key).push(m);
+  });
+  bySector.forEach((list, sectorId) => {
+    const sector = sectors.find((sec) => Number(sec.id) === sectorId);
+    const ordered = [...list].sort((a, b) => Number(a.id) - Number(b.id));
+    if (!sector) {
+      ordered.forEach((m) =>
+        result.set(m.id, { x: Number(m.pos_x || 0), z: Number(m.pos_z || 0) })
+      );
+      return;
+    }
+    const bx = Number(sector.bounds_x || 0);
+    const bz = Number(sector.bounds_z || 0);
+    const w = Number(sector.width_3d || 6.5);
+    const cols = ordered.length <= 4 ? 2 : 3;
+    const spacing = Math.min(2.2, (w - 1.6) / cols);
+    ordered.forEach((m, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      result.set(m.id, {
+        x: bx + (col - (cols - 1) / 2) * spacing,
+        z: bz - 0.5 + row * 1.9,
+      });
+    });
+  });
+  return result;
+}
+
 /* Estação de Trabalho com Mesa Habblaude, Cadeira Ergonômica e Miniatura Rica de Computador */
-function ComputerAvatarVoxel({ machine, isSelected, onSelect }) {
+function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos }) {
   const [hovered, setHovered] = useState(false);
-  const posX = Number(machine.pos_x || 0);
-  const posZ = Number(machine.pos_z || 0);
+  const posX = layoutPos ? layoutPos.x : Number(machine.pos_x || 0);
+  const posZ = layoutPos ? layoutPos.z : Number(machine.pos_z || 0);
   const statusColor = theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
 
   const isCritical = machine.health_status === 'CRITICAL';
@@ -836,6 +874,17 @@ export function DigitalTwin3D({
 }) {
   const sectors = activeUnit?.sectors || [];
   const controlsRef = useRef();
+  const machineLayout = useMemo(
+    () => computeMachineLayout(machines, sectors),
+    [machines, sectors]
+  );
+  const focusMachine = selectedMachine
+    ? {
+        ...selectedMachine,
+        pos_x: machineLayout.get(selectedMachine.id)?.x ?? selectedMachine.pos_x,
+        pos_z: machineLayout.get(selectedMachine.id)?.z ?? selectedMachine.pos_z,
+      }
+    : null;
 
   return (
     <StageContainer>
@@ -865,7 +914,7 @@ export function DigitalTwin3D({
         {/* Controlador Suave de Câmera */}
         <CameraRig
           cameraMode={cameraMode}
-          selectedMachine={selectedMachine}
+          selectedMachine={focusMachine}
           selectedSector={selectedSector}
           controlsRef={controlsRef}
         />
@@ -899,6 +948,7 @@ export function DigitalTwin3D({
             machine={machine}
             isSelected={selectedMachine?.id === machine.id}
             onSelect={onSelectMachine}
+            layoutPos={machineLayout.get(machine.id)}
           />
         ))}
 

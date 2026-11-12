@@ -171,3 +171,15 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 - `frontend/dist/` (assets de produção gerados)
 - `production_artifacts/Technical_Specification.md`
 - `production_artifacts/QA_Report.md`
+
+---
+
+## Ciclo #12 - Correcao: CPU no painel lateral e PCs ocultos na maquete (@qa)
+
+| Item | Resultado | Observacoes |
+| :--- | :--- | :--- |
+| Metricas CPU/RAM/DISCO/TEMP | Corrigido | Linha fixa de 4 metricas acima das abas (sempre visivel); usa ultima leitura quando o valor atual vem zerado. |
+| PCs ocultos na maquete | Corrigido | Grade automatica de estacoes por setor (sem sobreposicao) e mobiliario movido para paredes/cantos. |
+| BUILD (vite build) | Sucesso | 664 modulos, dist/assets/index-CrDUGAFg.js. Validacao visual pendente do usuario (browser automatizado indisponivel). |
+
+Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/DigitalTwin3D.jsx

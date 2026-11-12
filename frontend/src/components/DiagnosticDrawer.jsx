@@ -130,8 +130,9 @@ const HeaderActionBtn = styled.button`
 
 const MetricsLinearGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  flex-shrink: 0;
 `;
 
 const MetricCard = styled.div`
@@ -143,17 +144,22 @@ const MetricCard = styled.div`
   flex-direction: column;
   gap: 4px;
 
+  min-width: 0;
+
   .m-head {
     display: flex;
-    justify-content: space-between;
-    font-size: 0.68rem;
-    font-weight: 600;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
     color: #737b75;
   }
 
   .m-val {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.95rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #242925;
   }
@@ -751,6 +757,15 @@ export function DiagnosticDrawer({
       ? Number(machine.ram_usage_pct)
       : Number(latestSample?.ram_usage_pct || 0);
 
+  const displayDisk =
+    Number(machine.disk_usage_pct) > 0
+      ? Number(machine.disk_usage_pct)
+      : Number(latestSample?.disk_usage_pct || 0);
+  const displayTemp =
+    Number(machine.temperature_c) > 0
+      ? Number(machine.temperature_c)
+      : Number(latestSample?.temperature_c || 45);
+
   const statusColor =
     theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
   const statusBg =
@@ -1052,6 +1067,49 @@ export function DiagnosticDrawer({
           </ActionToolbar>
         </HeaderBlock>
 
+          {/* Métricas Lineares Limpas e Modernas */}
+          <MetricsLinearGrid>
+            <MetricCard>
+              <div className="m-head">
+                <span>CPU</span>
+                <span className="m-val">{displayCpu.toFixed(0)}%</span>
+              </div>
+              <div className="m-track">
+                <i style={{ width: `${Math.min(100, displayCpu)}%`, background: '#2D6A4F' }} />
+              </div>
+            </MetricCard>
+
+            <MetricCard>
+              <div className="m-head">
+                <span>RAM</span>
+                <span className="m-val">{displayRam.toFixed(0)}%</span>
+              </div>
+              <div className="m-track">
+                <i style={{ width: `${Math.min(100, displayRam)}%`, background: '#52796B' }} />
+              </div>
+            </MetricCard>
+
+            <MetricCard>
+              <div className="m-head">
+                <span>DISCO</span>
+                <span className="m-val">{displayDisk.toFixed(0)}%</span>
+              </div>
+              <div className="m-track">
+                <i style={{ width: `${Math.min(100, displayDisk)}%`, background: '#718096' }} />
+              </div>
+            </MetricCard>
+
+            <MetricCard>
+              <div className="m-head">
+                <span>TEMP</span>
+                <span className="m-val">{displayTemp.toFixed(0)}°C</span>
+              </div>
+              <div className="m-track">
+                <i style={{ width: `${Math.min(100, (displayTemp / 90) * 100)}%`, background: '#D97706' }} />
+              </div>
+            </MetricCard>
+          </MetricsLinearGrid>
+
         {/* Abas Superiores Compactas para Eliminar Rolagem Excessiva */}
         {!collapsed && (
           <DrawerTabNav>
@@ -1076,49 +1134,6 @@ export function DiagnosticDrawer({
         {/* CONTEÚDO DA ABA 1: DIAGNÓSTICO & HARDWARE (Também exibido quando recolhido) */}
         {(collapsed || activeTab === "DIAG") && (
           <>
-            {/* Métricas Lineares Limpas e Modernas */}
-            <MetricsLinearGrid>
-              <MetricCard>
-                <div className="m-head">
-                  <span>CPU</span>
-                  <span className="m-val">{displayCpu.toFixed(0)}%</span>
-                </div>
-                <div className="m-track">
-                  <i style={{ width: `${displayCpu}%`, background: '#2D6A4F' }} />
-                </div>
-              </MetricCard>
-
-              <MetricCard>
-                <div className="m-head">
-                  <span>RAM</span>
-                  <span className="m-val">{displayRam.toFixed(0)}%</span>
-                </div>
-                <div className="m-track">
-                  <i style={{ width: `${displayRam}%`, background: '#52796B' }} />
-                </div>
-              </MetricCard>
-
-              <MetricCard>
-                <div className="m-head">
-                  <span>DISCO</span>
-                  <span className="m-val">{Number(machine.disk_usage_pct || 0).toFixed(0)}%</span>
-                </div>
-                <div className="m-track">
-                  <i style={{ width: `${Number(machine.disk_usage_pct || 0)}%`, background: '#718096' }} />
-                </div>
-              </MetricCard>
-
-              <MetricCard>
-                <div className="m-head">
-                  <span>TEMPERATURA</span>
-                  <span className="m-val">{Number(machine.temperature_c || 45).toFixed(0)}°C</span>
-                </div>
-                <div className="m-track">
-                  <i style={{ width: `${Math.min(100, (Number(machine.temperature_c || 45) / 90) * 100)}%`, background: '#D97706' }} />
-                </div>
-              </MetricCard>
-            </MetricsLinearGrid>
-
             {/* Aviso Explícito de Equipamento Desconectado (Consistência de Estados) */}
             {isOffline && (
               <OfflineStaticNotice>
