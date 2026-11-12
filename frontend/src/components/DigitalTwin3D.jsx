@@ -129,97 +129,515 @@ function CameraRig({ cameraMode, selectedMachine, selectedSector, controlsRef })
   return null;
 }
 
-/* Base de Madeira e Concreto Arquitetônico da Maquete (Enquadramento Compacto Habblaude) */
+/* Texturas Procedurais e Materiais Estilo Habblaude */
+const _habblaudeTextureCache = new Map();
+
+function getHabblaudeTexture(type, p1, p2) {
+  if (typeof document === 'undefined') return null;
+  const key = `${type}_${p1 || ''}_${p2 || ''}`;
+  if (_habblaudeTextureCache.has(key)) return _habblaudeTextureCache.get(key);
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  if (type === 'parquet') {
+    canvas.width = 128;
+    canvas.height = 128;
+    ctx.fillStyle = '#C89D66';
+    ctx.fillRect(0, 0, 128, 128);
+    const plankH = 16;
+    for (let y = 0; y < 128; y += plankH) {
+      const shift = (y / plankH) % 2 === 0 ? 0 : 32;
+      for (let x = -32; x < 128; x += 64) {
+        const px = x + shift;
+        const shade = Math.sin(px * 1.5 + y) * 0.5 + 0.5;
+        ctx.fillStyle = shade > 0.5 ? '#D7AC77' : '#BA8F58';
+        ctx.fillRect(px + 1, y + 1, 62, plankH - 2);
+        ctx.fillStyle = 'rgba(92, 58, 25, 0.15)';
+        ctx.fillRect(px + 6, y + 5, 48, 1);
+        ctx.fillRect(px + 14, y + 11, 32, 1);
+      }
+      ctx.fillStyle = '#8C6036';
+      ctx.fillRect(0, y, 128, 1);
+    }
+  } else if (type === 'checker') {
+    canvas.width = 64;
+    canvas.height = 64;
+    const c1 = p1 || '#FAF9F6';
+    const c2 = p2 || '#BBD8E9';
+    ctx.fillStyle = '#94B4C7';
+    ctx.fillRect(0, 0, 64, 64);
+    const size = 32;
+    for (let y = 0; y < 64; y += size) {
+      for (let x = 0; x < 64; x += size) {
+        ctx.fillStyle = (x / size + y / size) % 2 === 0 ? c1 : c2;
+        ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
+      }
+    }
+  } else if (type === 'porcelain') {
+    canvas.width = 64;
+    canvas.height = 64;
+    ctx.fillStyle = '#D6CFC3';
+    ctx.fillRect(0, 0, 64, 64);
+    const size = 32;
+    for (let y = 0; y < 64; y += size) {
+      for (let x = 0; x < 64; x += size) {
+        ctx.fillStyle = (x + y) % 64 === 0 ? '#FBF9F4' : '#F4F2EC';
+        ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
+      }
+    }
+  } else if (type === 'grass') {
+    canvas.width = 64;
+    canvas.height = 64;
+    ctx.fillStyle = '#5A8A4B';
+    ctx.fillRect(0, 0, 64, 64);
+    const colors = ['#679C55', '#4E7840', '#74AC61', '#476F3A'];
+    for (let y = 0; y < 64; y += 4) {
+      for (let x = 0; x < 64; x += 4) {
+        const r = Math.abs(Math.floor(Math.sin(x * 7 + y * 13) * 4)) % colors.length;
+        ctx.fillStyle = colors[r];
+        ctx.fillRect(x, y, 4, 4);
+      }
+    }
+  } else if (type === 'deck') {
+    canvas.width = 64;
+    canvas.height = 64;
+    ctx.fillStyle = '#B08968';
+    ctx.fillRect(0, 0, 64, 64);
+    for (let x = 0; x < 64; x += 16) {
+      ctx.fillStyle = '#C29C7C';
+      ctx.fillRect(x + 1, 0, 14, 64);
+      ctx.fillStyle = '#7F5539';
+      ctx.fillRect(x + 15, 0, 1, 64);
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  _habblaudeTextureCache.set(key, texture);
+  return texture;
+}
+
+/* Base em Gramado Vivo, Decks de Madeira e Corredor de Circulação Habblaude */
 function IsometricBoard() {
+  const grassTex = useMemo(() => {
+    const tex = getHabblaudeTexture('grass');
+    if (tex) {
+      const cloned = tex.clone();
+      cloned.repeat.set(16, 12);
+      cloned.needsUpdate = true;
+      return cloned;
+    }
+    return null;
+  }, []);
+
+  const deckTex = useMemo(() => {
+    const tex = getHabblaudeTexture('deck');
+    if (tex) {
+      const cloned = tex.clone();
+      cloned.repeat.set(4, 8);
+      cloned.needsUpdate = true;
+      return cloned;
+    }
+    return null;
+  }, []);
+
   return (
     <group position={[0, -0.35, 0]}>
-      {/* Plinto de concreto neutro e equilibrado com o tamanho dos setores */}
-      <mesh receiveShadow position={[0, -0.25, 0]}>
-        <boxGeometry args={[20.4, 0.5, 15.4]} />
-        <meshStandardMaterial color="#D5D9D3" roughness={0.7} />
+      {/* 1. Substrato de terra/madeira escura de sustentação do diorama */}
+      <mesh receiveShadow position={[0, -0.28, 0]}>
+        <boxGeometry args={[23.2, 0.52, 17.8]} />
+        <meshStandardMaterial color="#3D2817" roughness={0.9} />
       </mesh>
-      {/* Moldura de madeira carvalho natural do diorama */}
-      <mesh receiveShadow position={[0, 0.04, 0]}>
-        <boxGeometry args={[19.8, 0.12, 14.8]} />
-        <meshStandardMaterial color="#C5B095" roughness={0.55} />
+
+      {/* 2. Gramado Verde Vivo do Diorama Habblaude */}
+      <mesh receiveShadow position={[0, 0.02, 0]}>
+        <boxGeometry args={[22.6, 0.14, 17.2]} />
+        {grassTex ? (
+          <meshStandardMaterial map={grassTex} roughness={0.8} />
+        ) : (
+          <meshStandardMaterial color="#588157" roughness={0.8} />
+        )}
       </mesh>
-      {/* Base interna plana acolchoada da maquete */}
-      <mesh receiveShadow position={[0, 0.11, 0]}>
-        <boxGeometry args={[19.2, 0.04, 14.2]} />
-        <meshStandardMaterial color="#F4F2ED" roughness={0.8} />
+
+      {/* 3. Deck de madeira natural na entrada frontal/lateral */}
+      <mesh receiveShadow position={[-10.4, 0.11, 0]}>
+        <boxGeometry args={[1.8, 0.06, 4.4]} />
+        {deckTex ? (
+          <meshStandardMaterial map={deckTex} roughness={0.6} />
+        ) : (
+          <meshStandardMaterial color="#B08968" roughness={0.6} />
+        )}
       </mesh>
+
+      {/* 4. Corredor Central de Circulação com Passadeira entre as Salas */}
+      <group position={[-0.75, 0.1, 0]}>
+        {/* Piso de circulação em porcelanato claro */}
+        <mesh receiveShadow position={[0, 0.01, 0]}>
+          <boxGeometry args={[17.6, 0.03, 1.8]} />
+          <meshStandardMaterial color="#ECE8DE" roughness={0.5} />
+        </mesh>
+        {/* Passadeira central cinza-azulada com bordas (igual referência Habblaude) */}
+        <mesh receiveShadow position={[0, 0.026, 0]}>
+          <boxGeometry args={[17.4, 0.005, 1.0]} />
+          <meshStandardMaterial color="#7D98A9" roughness={0.7} />
+        </mesh>
+        <mesh position={[0, 0.028, -0.48]}>
+          <boxGeometry args={[17.4, 0.004, 0.04]} />
+          <meshStandardMaterial color="#4A6572" />
+        </mesh>
+        <mesh position={[0, 0.028, 0.48]}>
+          <boxGeometry args={[17.4, 0.004, 0.04]} />
+          <meshStandardMaterial color="#4A6572" />
+        </mesh>
+      </group>
+
+      {/* 5. Cerca viva e arbustos voxel no jardim externo */}
+      {/* Canto Noroeste */}
+      <group position={[-10.4, 0.25, -7.6]}>
+        <mesh castShadow position={[0, 0.2, 0]}>
+          <boxGeometry args={[1.4, 0.45, 1.4]} />
+          <meshStandardMaterial color="#386641" roughness={0.85} />
+        </mesh>
+        <mesh castShadow position={[0, 0.46, 0]}>
+          <boxGeometry args={[1.0, 0.35, 1.0]} />
+          <meshStandardMaterial color="#4A7C59" roughness={0.85} />
+        </mesh>
+      </group>
+      {/* Canto Sudoeste */}
+      <group position={[-10.4, 0.25, 7.6]}>
+        <mesh castShadow position={[0, 0.2, 0]}>
+          <boxGeometry args={[1.4, 0.45, 1.4]} />
+          <meshStandardMaterial color="#386641" roughness={0.85} />
+        </mesh>
+        <mesh castShadow position={[0, 0.46, 0]}>
+          <boxGeometry args={[1.0, 0.35, 1.0]} />
+          <meshStandardMaterial color="#4A7C59" roughness={0.85} />
+        </mesh>
+      </group>
+      {/* Canto Nordeste */}
+      <group position={[10.2, 0.25, -7.6]}>
+        <mesh castShadow position={[0, 0.2, 0]}>
+          <boxGeometry args={[1.4, 0.45, 1.4]} />
+          <meshStandardMaterial color="#386641" roughness={0.85} />
+        </mesh>
+        <mesh castShadow position={[0, 0.46, 0]}>
+          <boxGeometry args={[1.0, 0.35, 1.0]} />
+          <meshStandardMaterial color="#4A7C59" roughness={0.85} />
+        </mesh>
+      </group>
+      {/* Canto Sudeste */}
+      <group position={[10.2, 0.25, 7.6]}>
+        <mesh castShadow position={[0, 0.2, 0]}>
+          <boxGeometry args={[1.4, 0.45, 1.4]} />
+          <meshStandardMaterial color="#386641" roughness={0.85} />
+        </mesh>
+        <mesh castShadow position={[0, 0.46, 0]}>
+          <boxGeometry args={[1.0, 0.35, 1.0]} />
+          <meshStandardMaterial color="#4A7C59" roughness={0.85} />
+        </mesh>
+      </group>
     </group>
   );
 }
 
-/* Paleta de pisos suaves por tipo de setor */
-const SECTOR_FLOOR_COLORS = {
-  1: '#E8E5DD', // Recepção (ladrilho claro bege)
-  2: '#E1EBE6', // Consultório Médico (menta suave)
-  3: '#DFE8E3', // Farmácia (verde sálvia pastel)
-  4: '#DEE7EC', // Vacinação (azul pastel acolhedor)
-  5: '#EBE7DE', // Coordenação (madeira clara suave)
-  6: '#E4E9E5', // Enfermagem
-  7: '#EAE6E1', // Administrativo
-  8: '#D2D7D4', // Sala de Servidores / TI (cinza técnico)
+/* Configurações visuais ricas e aconchegantes por setor (Estilo Habblaude) */
+const SECTOR_THEMES = {
+  // 1. Recepção & Triagem: Madeira acolhedora, tapete azul royal, painel amadeirado
+  REC: {
+    floorType: 'parquet',
+    wallColor: '#F5EBE0', // Areia/bege acolhedor
+    wallCapColor: '#8D6E63',
+    baseboardColor: '#6F4E37', // Rodapé em madeira nobre
+    hasRug: true,
+    rugColor: '#1D4ED8', // Tapete azul royal Habblaude
+    rugBorderColor: '#60A5FA',
+    rugSize: [3.4, 2.2],
+    rugPos: [-0.6, 0.025, 0.4],
+    hasClock: true,
+    hasArt: true,
+    hasPanel: true,
+  },
+  // 2. Consultório Médico: Menta pastel suave, porcelanato claro, tapete calmo
+  CONS: {
+    floorType: 'porcelain',
+    wallColor: '#DCE9E2', // Menta/sálvia suave acolhedor
+    wallCapColor: '#8D6E63',
+    baseboardColor: '#6F4E37',
+    hasRug: true,
+    rugColor: '#84A98C', // Tapete verde sálvia suave
+    rugBorderColor: '#DAD7CD',
+    rugSize: [2.6, 1.8],
+    rugPos: [0.6, 0.025, 0.6],
+    hasClock: true,
+    hasArt: true,
+    hasPanel: false,
+  },
+  // 3. Farmácia & Vacinação: Xadrez clássico (checkerboard), azulejo claro
+  FARM: {
+    floorType: 'checker',
+    checkerColor1: '#FAF9F6',
+    checkerColor2: '#CDE5D7', // Menta pastel
+    wallColor: '#E6F0EE', // Azulejo claro suave
+    wallCapColor: '#78909C',
+    baseboardColor: '#546E7A',
+    hasRug: false,
+    hasClock: true,
+    hasCross: true,
+    hasArt: false,
+    hasPanel: false,
+  },
+  // 4. Coordenação / Enfermagem / ADM: Madeira nobre, grande tapete verde musgo
+  ADM: {
+    floorType: 'parquet',
+    wallColor: '#D7E3E7', // Azul ardósia suave
+    wallCapColor: '#8D6E63',
+    baseboardColor: '#6F4E37',
+    hasRug: true,
+    rugColor: '#386641', // Grande tapete verde musgo Habblaude
+    rugBorderColor: '#E9D8A6',
+    rugSize: [3.2, 2.4],
+    rugPos: [0.4, 0.025, 0.4],
+    hasClock: true,
+    hasNoticeBoard: true,
+    hasArt: true,
+    hasPanel: false,
+  },
+  // 8. Sala de Servidores / TI: Técnico limpo azul ardósia
+  TI: {
+    floorType: 'porcelain',
+    wallColor: '#D2DCE4',
+    wallCapColor: '#455A64',
+    baseboardColor: '#263238',
+    hasRug: false,
+    hasClock: false,
+    hasNoticeBoard: true,
+    hasArt: false,
+    hasPanel: true,
+  },
 };
 
-/* Sala com paredes seccionadas (Cutaway) em estilo Habblaude */
+function getSectorTheme(sector) {
+  const code = String(sector?.code || '').toUpperCase();
+  if (code.includes('REC') || sector?.id === 1) return SECTOR_THEMES.REC;
+  if (code.includes('MED') || code.includes('CONS') || sector?.id === 2) return SECTOR_THEMES.CONS;
+  if (code.includes('FAR') || sector?.id === 3) return SECTOR_THEMES.FARM;
+  if (code.includes('TI') || sector?.id === 8) return SECTOR_THEMES.TI;
+  return SECTOR_THEMES.ADM;
+}
+
+/* Sala com paredes coloridas, rodapés em madeira, pisos texturizados e tapetes Habblaude */
 function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
   const baseX = Number(sector.bounds_x || 0);
   const baseZ = Number(sector.bounds_z || 0);
   const width = Number(sector.width_3d || 4.8);
   const depth = Number(sector.depth_3d || 4.2);
 
-  const floorColor = SECTOR_FLOOR_COLORS[sector.id] || '#E8E6E0';
-  const wallColor = '#FFFFFF';
-  const wallCapColor = '#DCD8CE';
-  const wallHeight = 1.25;
+  const themeConfig = getSectorTheme(sector);
+  const wallHeight = 1.35;
   const wallThickness = 0.18;
+
+  // Textura do piso específico do setor
+  const floorTexture = useMemo(() => {
+    let tex = null;
+    if (themeConfig.floorType === 'parquet') {
+      tex = getHabblaudeTexture('parquet');
+      if (tex) {
+        const cloned = tex.clone();
+        cloned.repeat.set(Math.round(width * 1.5), Math.round(depth * 1.5));
+        cloned.needsUpdate = true;
+        return cloned;
+      }
+    } else if (themeConfig.floorType === 'checker') {
+      tex = getHabblaudeTexture('checker', themeConfig.checkerColor1, themeConfig.checkerColor2);
+      if (tex) {
+        const cloned = tex.clone();
+        cloned.repeat.set(Math.round(width * 1.2), Math.round(depth * 1.2));
+        cloned.needsUpdate = true;
+        return cloned;
+      }
+    } else {
+      tex = getHabblaudeTexture('porcelain');
+      if (tex) {
+        const cloned = tex.clone();
+        cloned.repeat.set(Math.round(width * 1.2), Math.round(depth * 1.2));
+        cloned.needsUpdate = true;
+        return cloned;
+      }
+    }
+    return null;
+  }, [themeConfig, width, depth]);
 
   return (
     <group position={[baseX, 0, baseZ]}>
-      {/* Piso modular do setor */}
-      <mesh receiveShadow position={[0, 0.01, 0]}>
-        <boxGeometry args={[width - 0.08, 0.04, depth - 0.08]} />
-        <meshStandardMaterial color={floorColor} roughness={0.65} />
+      {/* 1. Piso modular do setor com textura estilizada */}
+      <mesh receiveShadow position={[0, 0.015, 0]}>
+        <boxGeometry args={[width - 0.06, 0.04, depth - 0.06]} />
+        {floorTexture ? (
+          <meshStandardMaterial map={floorTexture} roughness={0.6} />
+        ) : (
+          <meshStandardMaterial color={themeConfig.wallColor} roughness={0.65} />
+        )}
       </mesh>
 
-      {/* Grade sutil dos ladrilhos do chão */}
-      <gridHelper
-        position={[0, 0.032, 0]}
-        args={[Math.max(width, depth), Math.round(Math.max(width, depth)), '#CBD3CB', '#CBD3CB']}
-      />
+      {/* 2. Tapete decorativo característico do Habblaude (se aplicável ao setor) */}
+      {themeConfig.hasRug && (
+        <group position={themeConfig.rugPos}>
+          {/* Corpo do tapete */}
+          <mesh receiveShadow position={[0, 0.02, 0]}>
+            <boxGeometry args={[themeConfig.rugSize[0], 0.012, themeConfig.rugSize[1]]} />
+            <meshStandardMaterial color={themeConfig.rugColor} roughness={0.8} />
+          </mesh>
+          {/* Borda / moldura do tapete */}
+          <mesh receiveShadow position={[0, 0.021, 0]}>
+            <boxGeometry args={[themeConfig.rugSize[0] + 0.08, 0.008, themeConfig.rugSize[1] + 0.08]} />
+            <meshStandardMaterial color={themeConfig.rugBorderColor} roughness={0.8} />
+          </mesh>
+        </group>
+      )}
 
-      {/* Paredes seccionadas (Cutaway Walls) — Apenas fundos para não tapar visão isométrica */}
+      {/* 3. Paredes seccionadas (Cutaway Walls) com cores acolhedoras e rodapés de madeira */}
       {/* Parede Traseira Z- (Back Wall) */}
       <group position={[0, wallHeight / 2, -depth / 2 + wallThickness / 2]}>
+        {/* Parede colorida principal */}
         <mesh castShadow receiveShadow>
           <boxGeometry args={[width, wallHeight, wallThickness]} />
-          <meshStandardMaterial color={wallColor} roughness={0.8} />
+          <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
         </mesh>
-        {/* Rodapé e acabamento superior de madeira */}
+
+        {/* Rodapé inferior de madeira nobre */}
+        <mesh position={[0, -wallHeight / 2 + 0.06, wallThickness / 2 + 0.01]}>
+          <boxGeometry args={[width + 0.02, 0.12, 0.02]} />
+          <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
+        </mesh>
+
+        {/* Moldura superior de acabamento (Rodateto) */}
         <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
           <boxGeometry args={[width + 0.02, 0.05, wallThickness + 0.02]} />
-          <meshStandardMaterial color={wallCapColor} roughness={0.5} />
+          <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
         </mesh>
+
+        {/* Detalhe: Painel de madeira ripado (Recepção) */}
+        {themeConfig.hasPanel && (
+          <mesh position={[0, 0.05, wallThickness / 2 + 0.015]}>
+            <boxGeometry args={[2.4, 0.85, 0.02]} />
+            <meshStandardMaterial color="#DDB892" roughness={0.5} />
+          </mesh>
+        )}
+
+        {/* Detalhe: Relógio de parede redondo clássico Habblaude */}
+        {themeConfig.hasClock && (
+          <group position={[width / 3.8, 0.28, wallThickness / 2 + 0.02]}>
+            {/* Moldura cilíndrica de madeira escura */}
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.18, 0.18, 0.03, 16]} />
+              <meshStandardMaterial color="#5C4033" roughness={0.6} />
+            </mesh>
+            {/* Mostrador branco */}
+            <mesh position={[0, 0, 0.018]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.15, 0.15, 0.01, 16]} />
+              <meshStandardMaterial color="#FFFDF7" roughness={0.4} />
+            </mesh>
+            {/* Ponteiro das horas */}
+            <mesh position={[0, 0.03, 0.025]}>
+              <boxGeometry args={[0.02, 0.08, 0.005]} />
+              <meshBasicMaterial color="#1F242B" />
+            </mesh>
+            {/* Ponteiro dos minutos */}
+            <mesh position={[0.03, 0, 0.025]}>
+              <boxGeometry args={[0.08, 0.02, 0.005]} />
+              <meshBasicMaterial color="#1F242B" />
+            </mesh>
+          </group>
+        )}
+
+        {/* Detalhe: Quadro de arte emoldurado */}
+        {themeConfig.hasArt && (
+          <group position={[-width / 3.6, 0.22, wallThickness / 2 + 0.02]}>
+            {/* Moldura de madeira nobre */}
+            <mesh>
+              <boxGeometry args={[0.9, 0.65, 0.025]} />
+              <meshStandardMaterial color="#7F5539" roughness={0.6} />
+            </mesh>
+            {/* Tela com pintura pixel art de paisagem */}
+            <mesh position={[0, 0, 0.015]}>
+              <boxGeometry args={[0.78, 0.53, 0.005]} />
+              <meshStandardMaterial color="#588157" roughness={0.7} />
+            </mesh>
+            {/* Detalhe de montanha/sol no quadro */}
+            <mesh position={[0.18, 0.12, 0.02]}>
+              <circleGeometry args={[0.08, 8]} />
+              <meshBasicMaterial color="#F4A261" />
+            </mesh>
+          </group>
+        )}
+
+        {/* Detalhe: Mural de avisos de cortiça com post-its (ADM / Coordenação) */}
+        {themeConfig.hasNoticeBoard && (
+          <group position={[-width / 3.4, 0.22, wallThickness / 2 + 0.02]}>
+            <mesh>
+              <boxGeometry args={[1.1, 0.65, 0.025]} />
+              <meshStandardMaterial color="#C5A059" roughness={0.8} />
+            </mesh>
+            {/* Post-it Amarelo */}
+            <mesh position={[-0.32, 0.12, 0.016]}>
+              <boxGeometry args={[0.16, 0.16, 0.005]} />
+              <meshBasicMaterial color="#FDE047" />
+            </mesh>
+            {/* Post-it Azul */}
+            <mesh position={[0.05, 0.12, 0.016]}>
+              <boxGeometry args={[0.16, 0.16, 0.005]} />
+              <meshBasicMaterial color="#93C5FD" />
+            </mesh>
+            {/* Post-it Rosa */}
+            <mesh position={[-0.15, -0.12, 0.016]}>
+              <boxGeometry args={[0.16, 0.16, 0.005]} />
+              <meshBasicMaterial color="#F472B6" />
+            </mesh>
+          </group>
+        )}
+
+        {/* Detalhe: Símbolo de Cruz Médica na Farmácia */}
+        {themeConfig.hasCross && (
+          <group position={[0, 0.32, wallThickness / 2 + 0.02]}>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[0.12, 0.38, 0.015]} />
+              <meshBasicMaterial color="#2D6A4F" />
+            </mesh>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[0.38, 0.12, 0.015]} />
+              <meshBasicMaterial color="#2D6A4F" />
+            </mesh>
+          </group>
+        )}
       </group>
 
       {/* Parede Lateral X- (Left Wall) */}
       <group position={[-width / 2 + wallThickness / 2, wallHeight / 2, 0]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[wallThickness, wallHeight, depth]} />
-          <meshStandardMaterial color={wallColor} roughness={0.8} />
+          <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
         </mesh>
+
+        {/* Rodapé inferior de madeira nobre */}
+        <mesh position={[wallThickness / 2 + 0.01, -wallHeight / 2 + 0.06, 0]}>
+          <boxGeometry args={[0.02, 0.12, depth + 0.02]} />
+          <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
+        </mesh>
+
+        {/* Moldura superior de acabamento (Rodateto) */}
         <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
           <boxGeometry args={[wallThickness + 0.02, 0.05, depth + 0.02]} />
-          <meshStandardMaterial color={wallCapColor} roughness={0.5} />
+          <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
         </mesh>
       </group>
 
       {/* Rótulo de identificação do setor */}
       {showLabels && (
-        <Html position={[0, 1.45, 0]} center distanceFactor={16}>
+        <Html position={[0, 1.55, 0]} center distanceFactor={16}>
           <SectorTag3D>
             {fixTextEncoding(sector.name)} ({sectorMachines.length} PCs)
           </SectorTag3D>

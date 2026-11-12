@@ -599,5 +599,79 @@ O objetivo é transformar a cena 3D atual em uma **verdadeira maquete digital in
 
 ## 21. Gate de Aprovação — FASE 1 (Ciclo #11)
 
-O pipeline do Ciclo #11 encontra-se **pausado no Gate de Aprovação da Fase 1**.
-Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` iniciem a implementação das melhorias no código-fonte!
+Aprovado pelo usuário e executado com sucesso nos Ciclos #11, #12 e #13.
+
+---
+
+## 22. Ciclo #14 — Reformulação Cromática e Arquitetônica: Pisos Texturizados, Paredes Acolhedoras, Tapetes e Entorno Habblaude (`@pm` + `@designer` + `@frontend`)
+
+### 22.1. Diagnóstico da Situação Atual e Referência Visual Oficial
+
+O usuário solicitou explicitamente a eliminação do aspecto monótono e cinzento da maquete 3D, fornecendo como referência direta a captura oficial do Habblaude (`media_1794508475555_4c47db04.jpg`).
+
+Na implementação atual do `DigitalTwin3D.jsx`, as paredes são brancas/cinzas lisas (`#FFFFFF`), a base do diorama é um bloco de concreto neutro (`#D5D9D3`), e os pisos utilizam cores sólidas desbotadas com um gridHelper cinza genérico.
+
+Na referência oficial do Habblaude (imagem enviada):
+1. **Pisos com Texturas e Padrões Reais:**
+   - Pisos de **madeira nobre / parquet / tábua corrida** (tons quentes de carvalho/mel).
+   - Pisos **xadrez quadriculados (checkerboard)** em tons suaves (azul celeste e branco, ou cinza claro e bege) para áreas de serviços, copa e recepção.
+   - **Tapetes decorativos e funcionais** (tapete azul marinho/royal na recepção, tapete verde musgo/sálvia no lounge/espera, passadeiras no corredor).
+2. **Paredes com Identidade, Cores e Elementos Arquitetônicos:**
+   - Cores acolhedoras e harmoniosas por setor (bege acolhedor, menta/verde sálvia suave, madeira clara e azul petróleo discreto).
+   - **Rodapé inferior em madeira** (`#6D4C41` / `#8D6E63`) e moldura superior em madeira/rodateto.
+   - **Elementos de parede Habblaude:** relógio de parede redondo com ponteiros, quadros decorativos com paisagens e murais/planners de avisos.
+3. **Entorno Externo da Maquete (Jardim / Gramado Pixel-Art):**
+   - Substituição do plinto cinza de concreto por um **gramado verde acolhedor com acabamento em terra e decks de madeira natural**, emoldurando o prédio como um diorama vivo e agradável.
+
+---
+
+### 22.2. Requisitos Funcionais do Ciclo #14 (`@pm` + `@designer` + `@frontend`)
+
+1. **RF-40 (Pisos Ricos e Texturizados por Setor):**
+   - Implementar padrões procedurais de piso em alta performance (Three.js CanvasTexture / geometrias modulares de ladrilho):
+     - **Recepção & Triagem:** Piso de madeira clara acolhedora (`#D4A373` / `#C59B6D`) complementado por um tapete azul marinho/royal elegante na área de atendimento.
+     - **Consultório Médico & Enfermagem:** Piso de cerâmica/porcelanato claro hospitalar com juntas nítidas e tapete suave sob a mesa clínica.
+     - **Farmácia & Vacinação:** Piso xadrez quadriculado (checkerboard) em dois tons suaves (menta suave `#D1E7DD` e branco `#F8F9FA`).
+     - **Coordenação / ADM / Servidores:** Piso amadeirado carvalho escovado com tapete corporativo.
+   - Adicionar faixa/passadeira de circulação entre os ambientes para conectar os setores.
+
+2. **RF-41 (Paredes Acolhedoras, Rodapés e Detalhes Arquitetônicos):**
+   - Eliminar as paredes brancas/cinzas lisas genéricas.
+   - Aplicar paleta de paredes diferenciada por ambiente:
+     - Recepção: tom areia/bege acolhedor (`#F3EBDD`) com painel ripado em madeira.
+     - Consultório/Enfermagem: tom menta suave pastel (`#D8E8E0`) com faixa sanitária lavável.
+     - Farmácia: acabamento cerâmico/azulejado suave (`#E8F1F2`).
+     - Sala de Servidores/TI: tom técnico suave azul petróleo/ardósia (`#E2E8F0` com divisória escura).
+   - Incluir rodapé inferior contínuo de madeira natural de 0.12m de altura em todas as paredes.
+   - Adicionar detalhes nas paredes traseiras:
+     - **Relógio de parede redondo** com moldura de madeira e ponteiros.
+     - **Quadros de arte emoldurados** com paisagens pixel-art.
+     - **Mural de avisos / cortiça** para recados institucionais da saúde.
+
+3. **RF-42 (Base Externa em Gramado e Deck de Madeira Estilo Diorama):**
+   - Substituir o plinto cinza de concreto por uma base de diorama viva inspirada no Habblaude:
+     - Gramado verde vibrante e acolhedor (`#588157` / `#4A7C59`) ao redor da unidade.
+     - Pequenos arbustos e floreiras voxel nos cantos externos.
+     - Passarela / deck de madeira natural (`#B08968`) nas entradas da unidade de saúde.
+
+4. **RF-43 (Preservação de Performance, Câmera e Dados em Tempo Real):**
+   - Garantir renderização fluida a 60 FPS utilizando texturas procedurais leves geradas no cliente (sem dependência de assets pesados externos).
+   - Preservar integralmente as estações de trabalho, o monitor com LED de status, a câmera por setor/máquina e a sincronização com a telemetria da VPS.
+
+---
+
+### 22.3. Critérios de Aceitação do Ciclo #14 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-38** | Diversidade Cromática e Texturas de Piso | O operador abre o Gêmeo Digital 3D | Observa o piso dos setores | Não visualiza uma superfície cinza genérica; identifica pisos de madeira acolhedora, xadrez clássico, cerâmica polida e tapetes coloridos (azul royal, verde e bege) delimitando os espaços. |
+| **CA-39** | Paredes com Identidade e Rodapé de Madeira | O operador visualiza as salas seccionadas | Examina as paredes traseiras e laterais | Observa cores acolhedoras (bege, menta, madeira, azul ardósia), rodapé de madeira nobre na base, relógio de parede redondo e quadros decorativos emoldurados. |
+| **CA-40** | Entorno com Gramado e Deck de Madeira | O operador observa os limites externos da maquete | Analisa a base do diorama | Visualiza gramado verde com vegetação em miniatura e deck de madeira nas entradas, recriando fielmente o visual da referência Habblaude. |
+| **CA-41** | Preservação de Performance e Funcionalidades RMM | O operador interage com a maquete e painel | Seleciona computadores e gira a câmera | A aplicação mantém taxa estável de 60 FPS, sem lentidão, e todas as métricas reais, CPU, status e ações do painel permanecem plenamente operacionais. |
+
+---
+
+## 23. Gate de Aprovação — FASE 1 (Ciclo #14)
+
+O pipeline do Ciclo #14 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` iniciem a implementação da nova paleta de paredes, pisos texturizados, tapetes e entorno de gramado/deck no código-fonte!
