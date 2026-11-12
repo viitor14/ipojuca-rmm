@@ -291,34 +291,6 @@ const SectorMiniRow = styled.div`
   }
 `;
 
-const IncidentItem = styled.div`
-  padding: 8px 10px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  margin-top: 6px;
-  cursor: pointer;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.7rem;
-  transition: background 0.15s ease;
-
-  &:hover {
-    background: #fee2e2;
-  }
-
-  .tck {
-    color: #dc2626;
-    font-weight: 700;
-    display: flex;
-    justify-content: space-between;
-  }
-  .msg {
-    color: #4b5563;
-    margin-top: 3px;
-    line-height: 1.35;
-  }
-`;
-
 const DockShell = styled.div`
   flex-shrink: 0;
   display: flex;
@@ -910,43 +882,6 @@ export default function App() {
                   </SectorMiniRow>
                 );
               })}
-            </RadarCard>
-
-            <RadarCard>
-              <div className="card-tag">
-                <span>OCORRÊNCIAS &amp; ALERTAS</span>
-              </div>
-              {alerts.length === 0 && (
-                <div
-                  style={{
-                    fontSize: '0.68rem',
-                    color: '#737B75',
-                    padding: '4px 0',
-                  }}
-                >
-                  Nenhum alerta ativo na rede.
-                </div>
-              )}
-              {alerts.slice(0, 3).map((a) => (
-                <IncidentItem
-                  key={a.id}
-                  onClick={() => {
-                    const targetMachine = machines.find(
-                      (m) => m.id === a.machine_id
-                    );
-                    if (targetMachine) {
-                      setSelectedMachineId(targetMachine.id);
-                      setCameraMode('FOCUS');
-                    }
-                  }}
-                >
-                  <div className="tck">
-                    <span>#{a.external_ticket_id || `INC-${a.id}`}</span>
-                    <span>{a.hostname}</span>
-                  </div>
-                  <div className="msg">{a.message}</div>
-                </IncidentItem>
-              ))}
             </RadarCard>
           </LeftRadarColumn>
 

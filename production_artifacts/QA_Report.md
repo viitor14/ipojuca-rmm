@@ -127,3 +127,23 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 - `frontend/dist/` (assets de produção gerados)
 - `production_artifacts/Technical_Specification.md`
 - `production_artifacts/QA_Report.md`
+
+
+---
+
+## Ciclo #10 — Remoção do Card de Ocorrências e Foco Estrito em RMM (`@qa`)
+
+**Data:** 2026-11-12  
+**Ambiente:** Frontend React + Vite
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-31** | Ausência de Ocorrências/Tickets | ✅ APROVADO | O card "OCORRÊNCIAS & ALERTAS" e as caixas vermelhas com `#TCK-N8N-...` foram completamente eliminados. |
+| **CA-32** | Coluna Lateral Limpa e Funcional | ✅ APROVADO | A coluna lateral esquerda apresenta com elegância e clareza apenas a Rede Global, as Camadas da Maquete e a lista de Setores da Unidade. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso em 10.75s (`dist/assets/index-CPdLNDcT.js`). |
+
+**Arquivos Modificados:**
+- `frontend/src/App.jsx`
+- `frontend/dist/` (assets de produção gerados)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/QA_Report.md`

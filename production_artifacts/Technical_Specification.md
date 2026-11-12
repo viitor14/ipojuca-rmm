@@ -506,3 +506,38 @@ Na visualização geral da maquete isométrica 3D, a carcaça e a tela do monito
 
 O pipeline do Ciclo #09 encontra-se **pausado no Gate de Aprovação da Fase 1**.
 Responda com **`Approved`** para que eu aplique a alteração no componente 3D e recompile o frontend!
+
+
+---
+
+## 18. Ciclo #10 — Remoção do Card de Ocorrências/Chamados e Foco Estrito em RMM (`@pm` + `@designer` + `@frontend`)
+
+### 18.1. Regra de Negócio & Motivação de Produto
+O usuário e a equipe técnica definiram que o **RMM Ipojuca tem como propósito o monitoramento do parque tecnológico, telemetria em tempo real, saúde das estações e gerenciamento remoto autorizado**, e **não a abertura ou acompanhamento de chamados/tickets** (esta responsabilidade já pertence ao sistema oficial de helpdesk/chamados da Prefeitura).
+
+A presença do card *"OCORRÊNCIAS & ALERTAS"* com protocolos no formato `#TCK-N8N-...` gera sobreposição desnecessária de responsabilidades, distrai o operador e polui a coluna lateral esquerda com caixas de alerta vermelhas.
+
+### 18.2. Requisitos Funcionais (`@pm` + `@designer`)
+1. **RF-34 (Remoção do Card de Ocorrências):**
+   - Remover integralmente o bloco *"OCORRÊNCIAS & ALERTAS"* da coluna lateral esquerda (`LeftRadarColumn` no `frontend/src/App.jsx`).
+   - Eliminar os estilos e componentes relacionados a itens de ocorrência (`IncidentItem`).
+2. **RF-35 (Refinamento da Coluna Lateral Esquerda):**
+   - A coluna lateral esquerda passará a conter estritamente informações essenciais de RMM:
+     1. **Rede Global:** Matriz com o total de estações divididas em Online, Atenção, Crítico e Offline.
+     2. **Camadas da Maquete:** Alternância rápida entre Mobiliário e Rótulos.
+     3. **Setores da Unidade:** Mapeamento das salas com quantidade de computadores e estado geral.
+   - Isso garante uma interface mais limpa, minimalista, focada e sem poluição visual.
+
+### 18.3. Critérios de Aceitação do Ciclo #10 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-31** | Ausência de Ocorrências/Tickets | O operador acessa a aplicação | Observa a coluna lateral esquerda | Não há nenhum card ou lista de "OCORRÊNCIAS & ALERTAS" nem menção a números de ticket `#TCK-N8N-...`. |
+| **CA-32** | Coluna Lateral Limpa e Funcional | O operador navega pelo painel | Examina a barra lateral | A coluna exibe apenas a Matriz Global, as Camadas da Maquete e a lista de Setores da Unidade, de forma minimalista e elegante. |
+
+---
+
+## 19. Gate de Aprovação — FASE 1 (Ciclo #10)
+
+O pipeline do Ciclo #10 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` realizem a remoção do card, compilem e enviem para o repositório!
