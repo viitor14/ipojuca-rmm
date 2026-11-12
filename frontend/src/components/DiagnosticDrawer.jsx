@@ -260,6 +260,66 @@ const SpecPlate = styled.div`
   }
 `;
 
+const DrawerTabNav = styled.div`
+  display: flex;
+  gap: 4px;
+  background: #f4f5f2;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid #e4e8e3;
+  margin-top: 2px;
+`;
+
+const DrawerTabBtn = styled.button`
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid ${({ $active }) => ($active ? "#cbd3cb" : "transparent")};
+  background: ${({ $active }) => ($active ? "#ffffff" : "transparent")};
+  color: ${({ $active }) => ($active ? "#242925" : "#737b75")};
+  border-radius: 6px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: ${({ $active }) => ($active ? "0 1px 4px rgba(0,0,0,0.04)" : "none")};
+
+  &:hover {
+    color: #242925;
+  }
+
+  .badge-count {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.64rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: ${({ $active }) => ($active ? "#ecefeb" : "#e4e8e3")};
+    color: #52796b;
+  }
+`;
+
+const OfflineStaticNotice = styled.div`
+  background: #f8faf8;
+  border: 1px dashed #cbd3cb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  color: #5a625c;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+
+  strong {
+    color: #242925;
+    font-size: 0.74rem;
+  }
+`;
+
 const SectionBar = styled.div`
   display: flex;
   justify-content: space-between;
@@ -621,6 +681,7 @@ export function DiagnosticDrawer({
   const [feedback, setFeedback] = useState(null);
   const [activeReport, setActiveReport] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState("DIAG"); // 'DIAG' | 'ACTIONS'
   const [nowTimestamp, setNowTimestamp] = useState(Date.now());
 
   useEffect(() => {
@@ -991,159 +1052,204 @@ export function DiagnosticDrawer({
           </ActionToolbar>
         </HeaderBlock>
 
-        {/* Métricas Lineares Limpas e Modernas */}
-        <MetricsLinearGrid>
-          <MetricCard>
-            <div className="m-head">
-              <span>CPU</span>
-              <span className="m-val">{displayCpu.toFixed(0)}%</span>
-            </div>
-            <div className="m-track">
-              <i style={{ width: `${displayCpu}%`, background: '#2D6A4F' }} />
-            </div>
-          </MetricCard>
-
-          <MetricCard>
-            <div className="m-head">
-              <span>RAM</span>
-              <span className="m-val">{displayRam.toFixed(0)}%</span>
-            </div>
-            <div className="m-track">
-              <i style={{ width: `${displayRam}%`, background: '#52796B' }} />
-            </div>
-          </MetricCard>
-
-          <MetricCard>
-            <div className="m-head">
-              <span>DISCO</span>
-              <span className="m-val">{Number(machine.disk_usage_pct || 0).toFixed(0)}%</span>
-            </div>
-            <div className="m-track">
-              <i style={{ width: `${Number(machine.disk_usage_pct || 0)}%`, background: '#718096' }} />
-            </div>
-          </MetricCard>
-
-          <MetricCard>
-            <div className="m-head">
-              <span>TEMPERATURA</span>
-              <span className="m-val">{Number(machine.temperature_c || 45).toFixed(0)}°C</span>
-            </div>
-            <div className="m-track">
-              <i style={{ width: `${Math.min(100, (Number(machine.temperature_c || 45) / 90) * 100)}%`, background: '#D97706' }} />
-            </div>
-          </MetricCard>
-        </MetricsLinearGrid>
-
-        {/* Cartão de Atividade e Ociosidade */}
-        <div
-          style={{
-            flexShrink: 0,
-            background: activityState.bg,
-            border: `1px solid ${activityState.border}`,
-            borderRadius: "6px",
-            padding: "8px 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "2px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              fontSize: "0.66rem",
-              fontWeight: 700,
-              color: activityState.color,
-            }}
-          >
-            <span>ESTADO DE ATIVIDADE</span>
-            <span>{activityState.badge}</span>
-          </div>
-          <div
-            style={{
-              fontSize: "0.86rem",
-              fontWeight: 700,
-              color: "#242925",
-            }}
-          >
-            {activityState.headline}
-          </div>
-          <div
-            style={{
-              fontSize: "0.72rem",
-              color: "#737B75",
-            }}
-          >
-            {activityState.subline}
-          </div>
-        </div>
-
+        {/* Abas Superiores Compactas para Eliminar Rolagem Excessiva */}
         {!collapsed && (
-          <>
-            <TelemetryOscilloscope
-              machine={{
-                ...machine,
-                cpu_usage_pct: displayCpu,
-                ram_usage_pct: displayRam,
-              }}
-              telemetryHistory={activeTelemetryHistory}
-            />
-
-            <SpecPlate>
-              <div className="spec-grid-2">
-                <div className="spec-cell">
-                  <span>IPv4 / MAC</span>
-                  <strong className="mono">
-                    {machine.ip_address}
-                  </strong>
-                </div>
-                <div className="spec-cell">
-                  <span>Spooler Impressão</span>
-                  <strong
-                    style={{
-                      color: machine.spooler_running ? "#2D6A4F" : "#DC2626",
-                    }}
-                  >
-                    {machine.spooler_running ? "Ativo" : "Parado"}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="spec-divider" />
-
-              <div className="spec-cell">
-                <span>Hardware</span>
-                <strong>
-                  {fixTextEncoding(machine.manufacturer)} {fixTextEncoding(machine.model)}
-                </strong>
-              </div>
-
-              <div className="spec-divider" />
-
-              <div className="spec-grid-2">
-                <div className="spec-cell">
-                  <span>Memória / Disco</span>
-                  <strong className="mono">
-                    {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(0)} GB • {machine.disk_total_gb} GB SSD
-                  </strong>
-                </div>
-                <div className="spec-cell">
-                  <span>Sistema</span>
-                  <strong>{fixTextEncoding(machine.os_version || "Windows")}</strong>
-                </div>
-              </div>
-            </SpecPlate>
-
-            <RefreshTelemetryBtn
-              onClick={handleManualRefresh}
-              disabled={refreshingNow}
+          <DrawerTabNav>
+            <DrawerTabBtn
+              type="button"
+              $active={activeTab === "DIAG"}
+              onClick={() => setActiveTab("DIAG")}
             >
-              {refreshingNow
-                ? "Atualizando dados..."
-                : "Atualizar Telemetria Agora"}
-            </RefreshTelemetryBtn>
+              <span>📊 Diagnóstico &amp; Hardware</span>
+            </DrawerTabBtn>
+            <DrawerTabBtn
+              type="button"
+              $active={activeTab === "ACTIONS"}
+              onClick={() => setActiveTab("ACTIONS")}
+            >
+              <span>⚡ Ações &amp; Suporte</span>
+              <span className="badge-count">{taskCatalog.length}</span>
+            </DrawerTabBtn>
+          </DrawerTabNav>
+        )}
 
+        {/* CONTEÚDO DA ABA 1: DIAGNÓSTICO & HARDWARE (Também exibido quando recolhido) */}
+        {(collapsed || activeTab === "DIAG") && (
+          <>
+            {/* Métricas Lineares Limpas e Modernas */}
+            <MetricsLinearGrid>
+              <MetricCard>
+                <div className="m-head">
+                  <span>CPU</span>
+                  <span className="m-val">{displayCpu.toFixed(0)}%</span>
+                </div>
+                <div className="m-track">
+                  <i style={{ width: `${displayCpu}%`, background: '#2D6A4F' }} />
+                </div>
+              </MetricCard>
+
+              <MetricCard>
+                <div className="m-head">
+                  <span>RAM</span>
+                  <span className="m-val">{displayRam.toFixed(0)}%</span>
+                </div>
+                <div className="m-track">
+                  <i style={{ width: `${displayRam}%`, background: '#52796B' }} />
+                </div>
+              </MetricCard>
+
+              <MetricCard>
+                <div className="m-head">
+                  <span>DISCO</span>
+                  <span className="m-val">{Number(machine.disk_usage_pct || 0).toFixed(0)}%</span>
+                </div>
+                <div className="m-track">
+                  <i style={{ width: `${Number(machine.disk_usage_pct || 0)}%`, background: '#718096' }} />
+                </div>
+              </MetricCard>
+
+              <MetricCard>
+                <div className="m-head">
+                  <span>TEMPERATURA</span>
+                  <span className="m-val">{Number(machine.temperature_c || 45).toFixed(0)}°C</span>
+                </div>
+                <div className="m-track">
+                  <i style={{ width: `${Math.min(100, (Number(machine.temperature_c || 45) / 90) * 100)}%`, background: '#D97706' }} />
+                </div>
+              </MetricCard>
+            </MetricsLinearGrid>
+
+            {/* Aviso Explícito de Equipamento Desconectado (Consistência de Estados) */}
+            {isOffline && (
+              <OfflineStaticNotice>
+                <strong>EQUIPAMENTO DESCONECTADO</strong>
+                <span>
+                  Exibindo última leitura de telemetria registrada em{" "}
+                  {machine.last_seen_at
+                    ? new Date(machine.last_seen_at).toLocaleTimeString("pt-BR")
+                    : "horário anterior"}
+                  . Novas métricas pausadas até a reconexão do agente.
+                </span>
+              </OfflineStaticNotice>
+            )}
+
+            {/* Cartão de Atividade e Ociosidade */}
+            <div
+              style={{
+                flexShrink: 0,
+                background: activityState.bg,
+                border: `1px solid ${activityState.border}`,
+                borderRadius: "6px",
+                padding: "8px 12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "2px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "0.66rem",
+                  fontWeight: 700,
+                  color: activityState.color,
+                }}
+              >
+                <span>ESTADO DE ATIVIDADE</span>
+                <span>{activityState.badge}</span>
+              </div>
+              <div
+                style={{
+                  fontSize: "0.86rem",
+                  fontWeight: 700,
+                  color: "#242925",
+                }}
+              >
+                {activityState.headline}
+              </div>
+              <div
+                style={{
+                  fontSize: "0.72rem",
+                  color: "#737B75",
+                }}
+              >
+                {activityState.subline}
+              </div>
+            </div>
+
+            {!collapsed && (
+              <>
+                <TelemetryOscilloscope
+                  machine={{
+                    ...machine,
+                    cpu_usage_pct: displayCpu,
+                    ram_usage_pct: displayRam,
+                  }}
+                  telemetryHistory={activeTelemetryHistory}
+                />
+
+                <SpecPlate>
+                  <div className="spec-grid-2">
+                    <div className="spec-cell">
+                      <span>IPv4 / MAC</span>
+                      <strong className="mono">
+                        {machine.ip_address}
+                      </strong>
+                    </div>
+                    <div className="spec-cell">
+                      <span>Spooler Impressão</span>
+                      <strong
+                        style={{
+                          color: machine.spooler_running ? "#2D6A4F" : "#DC2626",
+                        }}
+                      >
+                        {machine.spooler_running ? "Ativo" : "Parado"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="spec-divider" />
+
+                  <div className="spec-cell">
+                    <span>Hardware</span>
+                    <strong>
+                      {fixTextEncoding(machine.manufacturer)} {fixTextEncoding(machine.model)}
+                    </strong>
+                  </div>
+
+                  <div className="spec-divider" />
+
+                  <div className="spec-grid-2">
+                    <div className="spec-cell">
+                      <span>Memória / Disco</span>
+                      <strong className="mono">
+                        {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(0)} GB • {machine.disk_total_gb} GB SSD
+                      </strong>
+                    </div>
+                    <div className="spec-cell">
+                      <span>Sistema</span>
+                      <strong>{fixTextEncoding(machine.os_version || "Windows")}</strong>
+                    </div>
+                  </div>
+                </SpecPlate>
+
+                <RefreshTelemetryBtn
+                  onClick={handleManualRefresh}
+                  disabled={refreshingNow}
+                >
+                  {refreshingNow
+                    ? "Atualizando dados..."
+                    : "Atualizar Telemetria Agora"}
+                </RefreshTelemetryBtn>
+              </>
+            )}
+          </>
+        )}
+
+        {/* CONTEÚDO DA ABA 2: AÇÕES REMOTAS & SUPORTE */}
+        {!collapsed && activeTab === "ACTIONS" && (
+          <>
             {onSendMessage && (
               <div
                 style={{

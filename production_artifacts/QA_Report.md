@@ -147,3 +147,27 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 - `frontend/dist/` (assets de produção gerados)
 - `production_artifacts/Technical_Specification.md`
 - `production_artifacts/QA_Report.md`
+
+---
+
+## Ciclo #11 — Segunda Rodada de Refinamento: Maquete Habblaude Rica, Foco por Setor e Painel em Abas (`@qa`)
+
+**Data:** 2026-11-12  
+**Ambiente:** Frontend React + Three.js / R3F / Drei + Vite (Build Produção)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-33** | Detalhamento Artístico Voxel Habblaude | ✅ APROVADO | Mesas com tampo espesso e gaveteiro com puxadores; cadeiras ergonômicas com apoios de braço; computadores com gabinete torre (grade e LED frontal), teclado com relevo e mousepad; impressora com folha de papel na bandeja; recepção com bebedouro (galão azul translúcido), vaso com planta verde voxel e longarina de 3 lugares; consultório/enfermagem com maca acolchoada, travesseiro, escadinha, suporte de soro e biombo dobrável; farmácia com estante modular e caixas de remédios em tons pastéis; sala de servidores com mini-rack 19", portas com LEDs e no-break. |
+| **CA-34** | Ocupação Espacial e Enquadramento da Câmera | ✅ APROVADO | Base da maquete redimensionada proporcionalmente para 20.4 × 15.4, eliminando o excesso de bordas vazias. Câmera padrão aproximada para `[-11.5, 11.0, 11.5]` com FOV calibrado (36°), preenchendo a tela com visual aconchegante de diorama. |
+| **CA-35** | Navegação e Foco por Setor | ✅ APROVADO | Clicar em um setor na lista lateral esquerda aproxima a câmera suavemente da sala (`CameraRig` com modo `SECTOR`), destacando o setor selecionado. Botão "↺ Visão Geral" permite retorno imediato à visão global ISO. |
+| **CA-36** | Painel Lateral Compactado em Abas | ✅ APROVADO | Implementadas duas abas superiores no `DiagnosticDrawer`: "📊 Diagnóstico & Hardware" (métricas, estado, osciloscópio, especificações) e "⚡ Ações & Suporte" (chat na tela, terminal de retorno e catálogo de tarefas com risco). Fim da rolagem vertical infinita. |
+| **CA-37** | Consistência de Estados Offline | ✅ APROVADO | Máquinas desconectadas apresentam banner explícito de aviso indicando que os valores apresentados são estáticos da última leitura registrada em seu respectivo horário, mantendo coerência e confiança operacional. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso em 8.52s (`dist/assets/index-CnZ4ccLI.js`). |
+
+**Arquivos Modificados:**
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/src/components/DiagnosticDrawer.jsx`
+- `frontend/src/App.jsx`
+- `frontend/dist/` (assets de produção gerados)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/QA_Report.md`

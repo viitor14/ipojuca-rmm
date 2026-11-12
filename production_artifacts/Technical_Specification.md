@@ -541,3 +541,63 @@ A presença do card *"OCORRÊNCIAS & ALERTAS"* com protocolos no formato `#TCK-N
 
 O pipeline do Ciclo #10 encontra-se **pausado no Gate de Aprovação da Fase 1**.
 Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` realizem a remoção do card, compilem e enviem para o repositório!
+
+
+---
+
+## 20. Ciclo #11 — Segunda Rodada de Refinamento: Maquete Habblaude Enriquecida, Ocupação Espacial, Foco por Setor e Drawer Compacto (`@pm` + `@designer` + `@frontend`)
+
+### 20.1. Objetivo Principal e Diretrizes
+Elevar a qualidade artística e a experiência de uso do Gêmeo Digital, **sem recomeçar a aplicação do zero e preservando rigorosamente todas as funcionalidades já desenvolvidas**.
+
+O objetivo é transformar a cena 3D atual em uma **verdadeira maquete digital interativa inspirada no Habblaude**, rica em detalhes, acolhedora, com móveis estilizados reconhecíveis (em voxel/pixel-art 3D), proporções coerentes, menor espaço ocioso e navegação espacial por salas/setores.
+
+---
+
+### 20.2. Requisitos Funcionais do Ciclo #11 (`@pm` + `@designer` + `@frontend`)
+
+1. **RF-36 (Otimização da Composição e Eliminação de Espaço Vazio):**
+   - Redimensionar a base da maquete (`IsometricBoard`) para eliminar áreas mortas e fazer com que os ambientes da Unidade de Saúde preencham harmoniosamente a tela.
+   - Calibrar o enquadramento padrão da câmera isométrica (`ISO 3D`) para uma visão aconchegante e sem perda de resolução.
+   - Refinar paredes cortadas em L (*cutaway*): adicionar rodapés de madeira natural, batentes nas passagens entre salas e textura sutil de ladrilho/madeira no piso.
+
+2. **RF-37 (Enriquecimento Artístico dos Mobiliários — Habblaude Voxel):**
+   - **Mesas:** Tampo de madeira em carvalho com espessura realista, pernas estruturadas e gaveteiros com puxadores.
+   - **Cadeiras:** Estrutura ergonômica com assento, encosto e braços estilizados em tom cinza-chumbo ou azul marinho.
+   - **Estações de Trabalho:** Telas iluminadas com a cor do status (mantidas do ciclo #09), teclado com teclas em relevo, mousepad e gabinete torre com aletas frontais de ventilação.
+   - **Impressoras de Prontuário:** Bandeja de papel com folha branca de receituário, carcaça em dois tons e LED funcional do spooler.
+   - **Mobiliário Clínico e Decoração:**
+     - *Recepção:* Balcão de atendimento com divisória de atendimento, bebedouro de água com galão azul translúcido e vaso cerâmico com planta verde natural (*monstera/costela-de-adão* em voxel).
+     - *Consultório / Enfermagem:* Maca de exame clínico acolchoada, biombo médico sanfonado em 3 folhas e suporte metálico com bolsa de soro.
+     - *Farmácia / Sala de Vacina:* Armário vitrine de remédios com frascos/caixas em tons pastéis organizados nas prateleiras.
+     - *Sala de Servidores / TI:* Rack de telecomunicações estilizado com organizador de cabos e portas de switch.
+
+3. **RF-38 (Navegação Espacial por Setor com Foco Suave):**
+   - Na lista *"SETORES DA UNIDADE"* da barra lateral esquerda (`SectorMiniRow`), permitir que o operador clique em qualquer setor.
+   - Ao clicar em um setor: a câmera faz uma transição suave (*lerp*) aproximando-se do centro daquela sala específica, facilitando a inspeção dos equipamentos daquele ambiente.
+   - Um botão discreto *"Visão Geral"* ou o botão `ISO 3D` retorna suavemente ao enquadramento global da unidade.
+
+4. **RF-39 (Compactação e Hierarquia do Painel Lateral `DiagnosticDrawer`):**
+   - Substituir a rolagem vertical longa por uma navegação segmentada em abas limpas no topo da gaveta:
+     - **Aba 1: "Diagnóstico & Telemetria"** (Métricas lineares de CPU, RAM, Disco e Temperatura, Estado de Atividade/Ociosidade, Histórico no osciloscópio e Ficha Técnica).
+     - **Aba 2: "Manutenção & Suporte"** (Catálogo de Tarefas Remotas Autorizadas, Console de Retorno dos Comandos e Chat com o usuário da máquina).
+   - **Consistência de Estados:** Se a máquina estiver `OFFLINE`, exibir explicitamente *"Última telemetria coletada em DD/MM às HH:mm"*, deixando evidente que os dados mostrados refletem o último estado registrado antes do desligamento.
+
+---
+
+### 20.3. Critérios de Aceitação do Ciclo #11 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-33** | Composição Equilibrada da Maquete | O operador abre a visualização 3D | Observa o enquadramento geral | A maquete ocupa a tela de forma harmoniosa, sem excesso de espaço vazio cinza ao redor dos setores. |
+| **CA-34** | Detalhamento Artístico Voxel Habblaude | O operador inspeciona as salas da unidade | Examina móveis e equipamentos | Identifica claramente mesas com gaveteiros, cadeiras estruturadas, bebedouro, plantas decorativas, macas hospitalares, biombos, armários de farmácia e mini-rack de TI. |
+| **CA-35** | Navegação por Setor na Lateral | O operador clica em um setor (ex: "Farmácia") na lista esquerda | Clica na linha do setor | A câmera aproxima-se suavemente da sala selecionada, mantendo o ângulo isométrico agradável. |
+| **CA-36** | Gaveta Lateral Segmentada e Compacta | Uma máquina é selecionada no painel | O operador navega pelas abas da gaveta lateral | Alterna com agilidade entre "Diagnóstico" e "Manutenção/Tarefas" sem necessidade de rolagem vertical exaustiva. |
+| **CA-37** | Consistência de Leitura Offline | A estação selecionada está com status `OFFLINE` | O operador verifica o painel | Os indicadores e a ficha técnica destacam claramente a data e horário da última comunicação registrada. |
+
+---
+
+## 21. Gate de Aprovação — FASE 1 (Ciclo #11)
+
+O pipeline do Ciclo #11 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` iniciem a implementação das melhorias no código-fonte!

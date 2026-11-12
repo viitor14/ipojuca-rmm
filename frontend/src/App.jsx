@@ -274,12 +274,19 @@ const SectorMiniRow = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 6px 8px;
-  background: #f8faf8;
-  border: 1px solid #e4e8e3;
+  background: ${({ $selected }) => ($selected ? '#ECEFEB' : '#f8faf8')};
+  border: 1px solid ${({ $selected }) => ($selected ? '#52796B' : '#e4e8e3')};
   border-radius: 6px;
   margin-bottom: 5px;
   font-family: ${({ theme }) => theme.fonts.sans};
   font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${({ $selected }) => ($selected ? '#E2E6E1' : '#f0f3ef')};
+    border-color: #52796b;
+  }
 
   .s-name {
     color: #242925;
@@ -472,6 +479,7 @@ export default function App() {
   const [selectedUnitId, setSelectedUnitId] = useState(1);
   const [machines, setMachines] = useState([]);
   const [selectedMachineId, setSelectedMachineId] = useState(null);
+  const [selectedSectorId, setSelectedSectorId] = useState(null);
   const [diagnostics, setDiagnostics] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [taskCatalog, setTaskCatalog] = useState([]);
@@ -626,6 +634,10 @@ export default function App() {
     units.find((u) => u.id === Number(selectedUnitId)) || units[0];
   const selectedMachine =
     machines.find((m) => m.id === Number(selectedMachineId)) || machines[0];
+  const selectedSector = useMemo(
+    () => (activeUnit?.sectors || []).find((s) => s.id === Number(selectedSectorId)) || null,
+    [activeUnit, selectedSectorId]
+  );
 
   const filteredMachines = useMemo(() => {
     if (!searchQuery.trim()) return machines;
@@ -702,6 +714,7 @@ export default function App() {
         activeUnit={activeUnit}
         machines={machines}
         selectedMachine={selectedMachine}
+        selectedSector={selectedSector}
         cameraMode={cameraMode}
         sceneLayers={sceneLayers}
         onUserOrbit={() => {
@@ -709,6 +722,7 @@ export default function App() {
         }}
         onSelectMachine={(m) => {
           setSelectedMachineId(m.id);
+          setSelectedSectorId(null);
           setCameraMode('FOCUS');
         }}
       />
@@ -734,6 +748,7 @@ export default function App() {
                 onClick={() => {
                   setSelectedUnitId(u.id);
                   setSelectedMachineId(null);
+                  setSelectedSectorId(null);
                   setCameraMode('ISO');
                 }}
               >
@@ -746,7 +761,10 @@ export default function App() {
           <RightControlPod>
             <CamModeBtn
               $active={cameraMode === 'ISO'}
-              onClick={() => setCameraMode('ISO')}
+              onClick={() => {
+                setSelectedSectorId(null);
+                setCameraMode('ISO');
+              }}
             >
               ISO 3D
             </CamModeBtn>
@@ -866,14 +884,50 @@ export default function App() {
             <RadarCard>
               <div className="card-tag">
                 <span>SETORES DA UNIDADE</span>
-                <span>{(activeUnit?.sectors || []).length}</span>
+                {selectedSectorId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSectorId(null);
+                      setCameraMode('ISO');
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#52796B',
+                      fontSize: '0.64rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                    title="Voltar para a visão geral da maquete"
+                  >
+                    ↺ Visão Geral
+                  </button>
+                ) : (
+                  <span>{(activeUnit?.sectors || []).length}</span>
+                )}
               </div>
               {(activeUnit?.sectors || []).map((sec) => {
                 const secNodes = machines.filter(
                   (m) => Number(m.sector_id) === Number(sec.id)
                 );
+                const isSecSelected = selectedSectorId === sec.id;
                 return (
-                  <SectorMiniRow key={sec.id}>
+                  <SectorMiniRow
+                    key={sec.id}
+                    $selected={isSecSelected}
+                    onClick={() => {
+                      if (isSecSelected) {
+                        setSelectedSectorId(null);
+                        setCameraMode('ISO');
+                      } else {
+                        setSelectedSectorId(sec.id);
+                        setCameraMode('SECTOR');
+                      }
+                    }}
+                    title={`Aproximar câmera no setor ${fixTextEncoding(sec.name)}`}
+                  >
                     <div>
                       <div className="s-name">{fixTextEncoding(sec.name)}</div>
                       <div className="s-meta">[{sec.code}]</div>
