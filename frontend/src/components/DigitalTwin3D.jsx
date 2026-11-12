@@ -338,7 +338,20 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect }) {
   const statusColor = theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
 
   const isCritical = machine.health_status === 'CRITICAL';
+  const isWarning = machine.health_status === 'WARNING';
   const isOffline = machine.health_status === 'OFFLINE';
+
+  // Cores semânticas da tela do monitor para identificação imediata na maquete
+  const screenColor = isOffline
+    ? '#2D3748'
+    : isCritical
+      ? '#DC2626'
+      : isWarning
+        ? '#D97706'
+        : '#2D6A4F';
+
+  const screenEmissive = isOffline ? '#000000' : screenColor;
+  const screenEmissiveIntensity = isOffline ? 0 : isCritical ? 0.65 : 0.45;
 
   return (
     <group position={[posX, 0, posZ]}>
@@ -424,13 +437,24 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect }) {
             <boxGeometry args={[0.04, 0.18, 0.03]} />
             <meshStandardMaterial color="#374151" />
           </mesh>
-          {/* Tela do monitor */}
+          {/* Carcaça / Moldura traseira e bordas do monitor */}
           <mesh castShadow position={[0, 0.06, 0]}>
             <boxGeometry args={[0.54, 0.32, 0.03]} />
-            <meshStandardMaterial color="#111827" roughness={0.4} />
+            <meshStandardMaterial color="#1F242B" roughness={0.7} />
           </mesh>
 
-          {/* Micro-LED de status no monitor */}
+          {/* Display frontal aceso na cor do status para fácil identificação visual */}
+          <mesh position={[0, 0.06, 0.018]}>
+            <boxGeometry args={[0.48, 0.26, 0.005]} />
+            <meshStandardMaterial
+              color={screenColor}
+              emissive={screenEmissive}
+              emissiveIntensity={screenEmissiveIntensity}
+              roughness={0.25}
+            />
+          </mesh>
+
+          {/* Micro-LED de status no bezel do monitor */}
           <mesh position={[0.22, -0.06, 0.02]}>
             <sphereGeometry args={[0.022, 8, 8]} />
             <meshBasicMaterial color={statusColor} />
@@ -438,10 +462,17 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect }) {
         </group>
 
         {/* Gabinete Compacto ao lado da mesa */}
-        <mesh position={[0.45, 0.18, -0.05]} castShadow>
-          <boxGeometry args={[0.16, 0.36, 0.36]} />
-          <meshStandardMaterial color="#1F2937" roughness={0.6} />
-        </mesh>
+        <group position={[0.45, 0.18, -0.05]}>
+          <mesh castShadow>
+            <boxGeometry args={[0.16, 0.36, 0.36]} />
+            <meshStandardMaterial color="#1F2937" roughness={0.6} />
+          </mesh>
+          {/* LED frontal de status no gabinete */}
+          <mesh position={[0, 0.12, 0.185]}>
+            <boxGeometry args={[0.08, 0.02, 0.01]} />
+            <meshBasicMaterial color={statusColor} />
+          </mesh>
+        </group>
 
         {/* Teclado e Mouse */}
         <mesh position={[0, 0.01, 0.14]}>

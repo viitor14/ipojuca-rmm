@@ -471,3 +471,38 @@ Fica expressamente garantido que:
 
 O pipeline do Ciclo #08 encontra-se **pausado no Gate de Aprovação da Fase 1**.
 Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` iniciem imediatamente a implementação em código-fonte de todas as etapas da reformulação!
+
+
+---
+
+## 16. Ciclo #09 — Iluminação e Cores Semânticas na Tela dos Monitores da Maquete 3D (`@pm` + `@designer` + `@frontend`)
+
+### 16.1. Problema e Oportunidade Visual
+Na visualização geral da maquete isométrica 3D, a carcaça e a tela do monitor dos computadores estavam em tom preto/cinza escuro (`#111827`), dependendo exclusivamente de uma pequena esfera LED de status no canto. Isso dificultava a identificação rápida, à distância, do estado de saúde dos equipamentos distribuídos pelas salas da Unidade de Saúde.
+
+### 16.2. Requisitos Funcionais (`@pm` + `@designer`)
+1. **RF-31 (Tela com Cor do Estado Operacional):**
+   - O vidro/display frontal do monitor deixa de ser preto estático e passa a exibir a cor semântica do estado da máquina:
+     - **🟢 Online / Normal:** Display em verde sutil com brilho suave emissivo (`#2D6A4F` / emissive: `#38A169`).
+     - **🟡 Atenção / Warning:** Display em tom âmbar luminoso (`#D97706` / emissive: `#F59E0B`).
+     - **🔴 Crítico / Critical:** Display em vermelho de alerta (`#DC2626` / emissive: `#EF4444`).
+     - **⚫ Offline / Desligado:** Display em cinza escuro fosco apagado (`#374151` / sem emissão de luz).
+2. **RF-32 (Bezel e Moldura Preservados):**
+   - A moldura externa e a carcaça traseira do monitor permanecem em acabamento plástico fosco cinza escuro (`#1F242B`), simulando perfeitamente a tela acesa/ligada do computador em miniatura sem parecer um bloco monocromático sólido.
+3. **RF-33 (Performance e Harmonia):**
+   - A intensidade emissiva deve ser equilibrada (`emissiveIntensity: 0.35` quando ligado e `0` quando desligado), sem produzir glow excessivo nem ofuscar o restante da maquete.
+
+### 16.3. Critérios de Aceitação do Ciclo #09 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-28** | Identificação Imediata à Distância | O operador observa a maquete 3D da unidade com vários PCs | Olha os ambientes na visão isométrica | Identifica visualmente de imediato quais computadores estão ligados normais (tela verde), com alerta (âmbar), críticos (vermelho) ou desligados (cinza escuro apagado). |
+| **CA-29** | Máquina Desligada Apagada | Uma máquina está com status `OFFLINE` | O operador localiza o PC na maquete | A tela do monitor exibe aspecto de tela desligada (cinza escuro sem emissão luminosa). |
+| **CA-30** | Preservação de Moldura e Base | A tela do monitor está acesa com cor de status | O operador aproxima a câmera | A borda/bezel, base e haste do monitor mantêm o acabamento cinza escuro, com proporção estética de miniatura de escritório. |
+
+---
+
+## 17. Gate de Aprovação — FASE 1 (Ciclo #09)
+
+O pipeline do Ciclo #09 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Responda com **`Approved`** para que eu aplique a alteração no componente 3D e recompile o frontend!

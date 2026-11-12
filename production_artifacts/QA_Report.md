@@ -106,3 +106,24 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 - `production_artifacts/Design_Specification.md`
 - `production_artifacts/Technical_Specification.md`
 - `production_artifacts/QA_Report.md`
+
+
+---
+
+## Ciclo #09 — Iluminação e Cores Semânticas na Tela dos Monitores da Maquete 3D (`@qa`)
+
+**Data:** 2026-11-12  
+**Ambiente:** Frontend React + Three.js / R3F / Drei (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-28** | Identificação Imediata à Distância | ✅ APROVADO | Telas dos monitores iluminadas suavemente com a cor do estado (verde, âmbar, vermelho ou cinza escuro). |
+| **CA-29** | Máquina Desligada Apagada | ✅ APROVADO | Quando `OFFLINE`, o display frontal é exibido em cinza escuro fosco (`#2D3748`) sem emissão de luz. |
+| **CA-30** | Preservação de Moldura e Base | ✅ APROVADO | Moldura traseira, suporte e bezel preservados em cinza escuro de escritório (`#1F242B`). LED frontal no gabinete adicionado. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso em 9.66s (`dist/assets/index-BaG2IaiX.js`). |
+
+**Arquivos Modificados:**
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/dist/` (assets de produção gerados)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/QA_Report.md`
