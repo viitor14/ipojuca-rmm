@@ -85,8 +85,8 @@ const SectorTag3D = styled.div`
 
 /* Rig de Câmera Isométrica com interpolação suave e foco por setor/máquina */
 function CameraRig({ cameraMode, selectedMachine, selectedSector, controlsRef }) {
-  const targetLookAt = useRef(new THREE.Vector3(0, 0.5, 0));
-  const targetCamPos = useRef(new THREE.Vector3(-11.5, 11.0, 11.5));
+  const targetLookAt = useRef(new THREE.Vector3(0, 0.4, 0));
+  const targetCamPos = useRef(new THREE.Vector3(-13.0, 12.0, 13.0));
 
   useFrame(({ camera }) => {
     if (cameraMode === 'FOCUS' && selectedMachine) {
@@ -101,20 +101,20 @@ function CameraRig({ cameraMode, selectedMachine, selectedSector, controlsRef })
       targetCamPos.current.set(secX - 5.4, 6.4, secZ + 5.4);
     } else if (cameraMode === 'TOP') {
       targetLookAt.current.set(0, 0, 0);
-      targetCamPos.current.set(0, 17.5, 0.01);
+      targetCamPos.current.set(0, 18.5, 0.01);
     } else if (cameraMode === 'ORBIT') {
       const time = Date.now() * 0.00035;
-      const radius = 15;
-      targetLookAt.current.set(0, 0.5, 0);
+      const radius = 16.5;
+      targetLookAt.current.set(0, 0.4, 0);
       targetCamPos.current.set(
         Math.cos(time) * radius,
-        11.0,
+        12.0,
         Math.sin(time) * radius
       );
     } else {
       // ISO Padrão Habblaude equilibrado e aproximado
-      targetLookAt.current.set(0, 0.5, 0);
-      targetCamPos.current.set(-11.5, 11.0, 11.5);
+      targetLookAt.current.set(0, 0.4, 0);
+      targetCamPos.current.set(-13.0, 12.0, 13.0);
     }
 
     if (cameraMode !== 'FREE') {
@@ -222,6 +222,7 @@ function getHabblaudeTexture(type, p1, p2) {
 }
 
 /* Base em Gramado Vivo, Decks de Madeira e Corredor de Circulação Habblaude */
+/* Base de Diorama Isométrico com Laje Estrutural Contígua, Jardim Externo e Corredor Hospitalar Habblaude */
 function IsometricBoard() {
   const grassTex = useMemo(() => {
     const tex = getHabblaudeTexture('grass');
@@ -246,16 +247,16 @@ function IsometricBoard() {
   }, []);
 
   return (
-    <group position={[0, -0.35, 0]}>
+    <group position={[0, 0, 0]}>
       {/* 1. Substrato de terra/madeira escura de sustentação do diorama */}
-      <mesh receiveShadow position={[0, -0.28, 0]}>
-        <boxGeometry args={[23.2, 0.52, 17.8]} />
+      <mesh receiveShadow position={[0, -0.42, 0]}>
+        <boxGeometry args={[24.0, 0.50, 18.0]} />
         <meshStandardMaterial color="#3D2817" roughness={0.9} />
       </mesh>
 
-      {/* 2. Gramado Verde Vivo do Diorama Habblaude */}
-      <mesh receiveShadow position={[0, 0.02, 0]}>
-        <boxGeometry args={[22.6, 0.14, 17.2]} />
+      {/* 2. Gramado Verde Vivo do Diorama Habblaude (Apenas no Perímetro Externo) */}
+      <mesh receiveShadow position={[0, -0.16, 0]}>
+        <boxGeometry args={[23.4, 0.14, 17.4]} />
         {grassTex ? (
           <meshStandardMaterial map={grassTex} roughness={0.8} />
         ) : (
@@ -263,41 +264,160 @@ function IsometricBoard() {
         )}
       </mesh>
 
-      {/* 3. Deck de madeira natural na entrada frontal/lateral */}
-      <mesh receiveShadow position={[-10.4, 0.11, 0]}>
-        <boxGeometry args={[1.8, 0.06, 4.4]} />
+      {/* 3. Laje Estrutural Contígua da Edificação (BuildingFoundationSlab) */}
+      {/* Cobre 100% da área construída sob todas as salas e corredor, eliminando qualquer grama interna */}
+      <group position={[0, -0.05, 0]}>
+        {/* Base de alvenaria e fundação sólida */}
+        <mesh receiveShadow position={[0, 0, 0]}>
+          <boxGeometry args={[18.4, 0.14, 12.4]} />
+          <meshStandardMaterial color="#D7DDD5" roughness={0.7} />
+        </mesh>
+        {/* Friso arquitetônico de rodapé externo de pedra */}
+        <mesh position={[0, -0.05, 0]}>
+          <boxGeometry args={[18.5, 0.04, 12.5]} />
+          <meshStandardMaterial color="#8B9B90" roughness={0.8} />
+        </mesh>
+      </group>
+
+      {/* 4. Deck de madeira natural na entrada frontal da fachada oeste (acesso à recepção) */}
+      <mesh receiveShadow position={[-10.2, -0.04, 0]}>
+        <boxGeometry args={[2.0, 0.08, 3.4]} />
         {deckTex ? (
           <meshStandardMaterial map={deckTex} roughness={0.6} />
         ) : (
           <meshStandardMaterial color="#B08968" roughness={0.6} />
         )}
       </mesh>
+      {/* Rampa suave de acessibilidade na ponta do deck */}
+      <mesh receiveShadow position={[-11.3, -0.07, 0]} rotation={[0, 0, 0.12]}>
+        <boxGeometry args={[0.5, 0.04, 3.2]} />
+        <meshStandardMaterial color="#A57D5C" roughness={0.7} />
+      </mesh>
+      {/* Capacho de entrada hospitalar 'Saúde Ipojuca' */}
+      <mesh receiveShadow position={[-8.4, 0.021, 0]}>
+        <boxGeometry args={[1.0, 0.006, 1.8]} />
+        <meshStandardMaterial color="#1E3A8A" roughness={0.9} />
+      </mesh>
 
-      {/* 4. Corredor Central de Circulação com Passadeira entre as Salas */}
-      <group position={[-0.75, 0.1, 0]}>
-        {/* Piso de circulação em porcelanato claro */}
+      {/* 5. Corredor Central Interno de Circulação Hospitalar com Passadeira */}
+      <group position={[0, 0, 0]}>
+        {/* Piso de circulação em porcelanato polido claro */}
         <mesh receiveShadow position={[0, 0.01, 0]}>
-          <boxGeometry args={[17.6, 0.03, 1.8]} />
-          <meshStandardMaterial color="#ECE8DE" roughness={0.5} />
+          <boxGeometry args={[18.0, 0.02, 2.0]} />
+          <meshStandardMaterial color="#F2EFEB" roughness={0.45} />
         </mesh>
-        {/* Passadeira central cinza-azulada com bordas (igual referência Habblaude) */}
-        <mesh receiveShadow position={[0, 0.026, 0]}>
-          <boxGeometry args={[17.4, 0.005, 1.0]} />
-          <meshStandardMaterial color="#7D98A9" roughness={0.7} />
+        {/* Passadeira central cinza-azulada com bordas (estilo Habblaude) */}
+        <mesh receiveShadow position={[0, 0.022, 0]}>
+          <boxGeometry args={[17.8, 0.005, 1.1]} />
+          <meshStandardMaterial color="#5E7C8D" roughness={0.65} />
         </mesh>
-        <mesh position={[0, 0.028, -0.48]}>
-          <boxGeometry args={[17.4, 0.004, 0.04]} />
-          <meshStandardMaterial color="#4A6572" />
+        <mesh position={[0, 0.025, -0.53]}>
+          <boxGeometry args={[17.8, 0.004, 0.04]} />
+          <meshStandardMaterial color="#354E5F" />
         </mesh>
-        <mesh position={[0, 0.028, 0.48]}>
-          <boxGeometry args={[17.4, 0.004, 0.04]} />
-          <meshStandardMaterial color="#4A6572" />
+        <mesh position={[0, 0.025, 0.53]}>
+          <boxGeometry args={[17.8, 0.004, 0.04]} />
+          <meshStandardMaterial color="#354E5F" />
         </mesh>
+
+        {/* Soleiras em madeira nobre nos 4 vãos de porta que dão para as salas */}
+        {/* Soleira REC (Norte-Oeste) */}
+        <mesh position={[-4.5, 0.023, -0.99]}>
+          <boxGeometry args={[1.3, 0.006, 0.16]} />
+          <meshStandardMaterial color="#7F5539" roughness={0.5} />
+        </mesh>
+        {/* Soleira CONS (Norte-Leste) */}
+        <mesh position={[4.5, 0.023, -0.99]}>
+          <boxGeometry args={[1.3, 0.006, 0.16]} />
+          <meshStandardMaterial color="#7F5539" roughness={0.5} />
+        </mesh>
+        {/* Soleira FARM (Sul-Oeste) */}
+        <mesh position={[-4.5, 0.023, 0.99]}>
+          <boxGeometry args={[1.3, 0.006, 0.16]} />
+          <meshStandardMaterial color="#7F5539" roughness={0.5} />
+        </mesh>
+        {/* Soleira ADM (Sul-Leste) */}
+        <mesh position={[4.5, 0.023, 0.99]}>
+          <boxGeometry args={[1.3, 0.006, 0.16]} />
+          <meshStandardMaterial color="#7F5539" roughness={0.5} />
+        </mesh>
+
+        {/* 6. Mobiliário de Corredor: Longarinas de Espera, Bebedouro e Extintor */}
+        {/* Longarina 1 (Norte, em frente ao Consultório) */}
+        <group position={[2.0, 0.02, -0.74]}>
+          {/* Barra de sustentação metálica */}
+          <mesh position={[0, 0.18, 0]}>
+            <boxGeometry args={[1.6, 0.03, 0.06]} />
+            <meshStandardMaterial color="#94A3B8" metalness={0.6} roughness={0.3} />
+          </mesh>
+          {/* Pés metálicos */}
+          <mesh position={[-0.7, 0.09, 0]}>
+            <boxGeometry args={[0.04, 0.18, 0.32]} />
+            <meshStandardMaterial color="#475569" metalness={0.7} />
+          </mesh>
+          <mesh position={[0.7, 0.09, 0]}>
+            <boxGeometry args={[0.04, 0.18, 0.32]} />
+            <meshStandardMaterial color="#475569" metalness={0.7} />
+          </mesh>
+          {/* 3 Assentos de espera em azul marinho */}
+          {[-0.5, 0, 0.5].map((offX, idx) => (
+            <group key={`bench-n-${idx}`} position={[offX, 0, 0]}>
+              <mesh position={[0, 0.22, 0]}>
+                <boxGeometry args={[0.42, 0.05, 0.38]} />
+                <meshStandardMaterial color="#1E3A8A" roughness={0.6} />
+              </mesh>
+              <mesh position={[0, 0.40, -0.16]}>
+                <boxGeometry args={[0.42, 0.32, 0.05]} />
+                <meshStandardMaterial color="#1E3A8A" roughness={0.6} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+
+        {/* Longarina 2 (Sul, em frente à Coordenação) */}
+        <group position={[2.0, 0.02, 0.74]}>
+          <mesh position={[0, 0.18, 0]}>
+            <boxGeometry args={[1.6, 0.03, 0.06]} />
+            <meshStandardMaterial color="#94A3B8" metalness={0.6} roughness={0.3} />
+          </mesh>
+          <mesh position={[-0.7, 0.09, 0]}>
+            <boxGeometry args={[0.04, 0.18, 0.32]} />
+            <meshStandardMaterial color="#475569" metalness={0.7} />
+          </mesh>
+          <mesh position={[0.7, 0.09, 0]}>
+            <boxGeometry args={[0.04, 0.18, 0.32]} />
+            <meshStandardMaterial color="#475569" metalness={0.7} />
+          </mesh>
+          {[-0.5, 0, 0.5].map((offX, idx) => (
+            <group key={`bench-s-${idx}`} position={[offX, 0, 0]}>
+              <mesh position={[0, 0.22, 0]}>
+                <boxGeometry args={[0.42, 0.05, 0.38]} />
+                <meshStandardMaterial color="#2D6A4F" roughness={0.6} />
+              </mesh>
+              <mesh position={[0, 0.40, 0.16]}>
+                <boxGeometry args={[0.42, 0.32, 0.05]} />
+                <meshStandardMaterial color="#2D6A4F" roughness={0.6} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+
+        {/* Extintor de incêndio na parede central */}
+        <group position={[-0.1, 0.65, -0.92]}>
+          <mesh castShadow>
+            <cylinderGeometry args={[0.06, 0.06, 0.28, 12]} />
+            <meshStandardMaterial color="#DC2626" roughness={0.3} />
+          </mesh>
+          <mesh position={[0, 0.16, 0]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.04, 8]} />
+            <meshStandardMaterial color="#1F2937" metalness={0.7} />
+          </mesh>
+        </group>
       </group>
 
-      {/* 5. Cerca viva e arbustos voxel no jardim externo */}
-      {/* Canto Noroeste */}
-      <group position={[-10.4, 0.25, -7.6]}>
+      {/* 7. Arbustos e Cerca Viva estritamente no jardim externo (fora do prédio) */}
+      {/* Noroeste */}
+      <group position={[-10.4, 0.25, -7.4]}>
         <mesh castShadow position={[0, 0.2, 0]}>
           <boxGeometry args={[1.4, 0.45, 1.4]} />
           <meshStandardMaterial color="#386641" roughness={0.85} />
@@ -307,8 +427,8 @@ function IsometricBoard() {
           <meshStandardMaterial color="#4A7C59" roughness={0.85} />
         </mesh>
       </group>
-      {/* Canto Sudoeste */}
-      <group position={[-10.4, 0.25, 7.6]}>
+      {/* Sudoeste */}
+      <group position={[-10.4, 0.25, 7.4]}>
         <mesh castShadow position={[0, 0.2, 0]}>
           <boxGeometry args={[1.4, 0.45, 1.4]} />
           <meshStandardMaterial color="#386641" roughness={0.85} />
@@ -318,8 +438,8 @@ function IsometricBoard() {
           <meshStandardMaterial color="#4A7C59" roughness={0.85} />
         </mesh>
       </group>
-      {/* Canto Nordeste */}
-      <group position={[10.2, 0.25, -7.6]}>
+      {/* Nordeste */}
+      <group position={[10.2, 0.25, -7.4]}>
         <mesh castShadow position={[0, 0.2, 0]}>
           <boxGeometry args={[1.4, 0.45, 1.4]} />
           <meshStandardMaterial color="#386641" roughness={0.85} />
@@ -329,8 +449,8 @@ function IsometricBoard() {
           <meshStandardMaterial color="#4A7C59" roughness={0.85} />
         </mesh>
       </group>
-      {/* Canto Sudeste */}
-      <group position={[10.2, 0.25, 7.6]}>
+      {/* Sudeste */}
+      <group position={[10.2, 0.25, 7.4]}>
         <mesh castShadow position={[0, 0.2, 0]}>
           <boxGeometry args={[1.4, 0.45, 1.4]} />
           <meshStandardMaterial color="#386641" roughness={0.85} />
@@ -429,16 +549,21 @@ function getSectorTheme(sector) {
   return SECTOR_THEMES.ADM;
 }
 
-/* Sala com paredes coloridas, rodapés em madeira, pisos texturizados e tapetes Habblaude */
+/* Sala com paredes coloridas, rodapés em madeira, pisos texturizados, janelas e portas com batente */
 function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
   const baseX = Number(sector.bounds_x || 0);
   const baseZ = Number(sector.bounds_z || 0);
-  const width = Number(sector.width_3d || 4.8);
-  const depth = Number(sector.depth_3d || 4.2);
+  const width = Number(sector.width_3d || 9.0);
+  const depth = Number(sector.depth_3d || 5.0);
 
   const themeConfig = getSectorTheme(sector);
-  const wallHeight = 1.35;
+  const wallHeight = 1.45;
   const wallThickness = 0.18;
+
+  const isNorth = baseZ < 0;
+  const isSouth = baseZ > 0;
+  const isWest = baseX < 0;
+  const isEast = baseX > 0;
 
   // Textura do piso específico do setor
   const floorTexture = useMemo(() => {
@@ -471,11 +596,14 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
     return null;
   }, [themeConfig, width, depth]);
 
+  const doorWidth = 1.2;
+  const wallSegmentW = Math.max(0.5, (width - doorWidth) / 2);
+
   return (
     <group position={[baseX, 0, baseZ]}>
-      {/* 1. Piso modular do setor com textura estilizada */}
+      {/* 1. Piso modular do setor com textura estilizada contíguo à laje da edificação */}
       <mesh receiveShadow position={[0, 0.015, 0]}>
-        <boxGeometry args={[width - 0.06, 0.04, depth - 0.06]} />
+        <boxGeometry args={[width - 0.02, 0.025, depth - 0.02]} />
         {floorTexture ? (
           <meshStandardMaterial map={floorTexture} roughness={0.6} />
         ) : (
@@ -486,158 +614,346 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
       {/* 2. Tapete decorativo característico do Habblaude (se aplicável ao setor) */}
       {themeConfig.hasRug && (
         <group position={themeConfig.rugPos}>
-          {/* Corpo do tapete */}
-          <mesh receiveShadow position={[0, 0.02, 0]}>
+          <mesh receiveShadow position={[0, 0.026, 0]}>
             <boxGeometry args={[themeConfig.rugSize[0], 0.012, themeConfig.rugSize[1]]} />
             <meshStandardMaterial color={themeConfig.rugColor} roughness={0.8} />
           </mesh>
-          {/* Borda / moldura do tapete */}
-          <mesh receiveShadow position={[0, 0.021, 0]}>
+          <mesh receiveShadow position={[0, 0.028, 0]}>
             <boxGeometry args={[themeConfig.rugSize[0] + 0.08, 0.008, themeConfig.rugSize[1] + 0.08]} />
             <meshStandardMaterial color={themeConfig.rugBorderColor} roughness={0.8} />
           </mesh>
         </group>
       )}
 
-      {/* 3. Paredes seccionadas (Cutaway Walls) com cores acolhedoras e rodapés de madeira */}
-      {/* Parede Traseira Z- (Back Wall) */}
-      <group position={[0, wallHeight / 2, -depth / 2 + wallThickness / 2]}>
-        {/* Parede colorida principal */}
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[width, wallHeight, wallThickness]} />
-          <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
-        </mesh>
-
-        {/* Rodapé inferior de madeira nobre */}
-        <mesh position={[0, -wallHeight / 2 + 0.06, wallThickness / 2 + 0.01]}>
-          <boxGeometry args={[width + 0.02, 0.12, 0.02]} />
-          <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
-        </mesh>
-
-        {/* Moldura superior de acabamento (Rodateto) */}
-        <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
-          <boxGeometry args={[width + 0.02, 0.05, wallThickness + 0.02]} />
-          <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
-        </mesh>
-
-        {/* Detalhe: Painel de madeira ripado (Recepção) */}
-        {themeConfig.hasPanel && (
-          <mesh position={[0, 0.05, wallThickness / 2 + 0.015]}>
-            <boxGeometry args={[2.4, 0.85, 0.02]} />
-            <meshStandardMaterial color="#DDB892" roughness={0.5} />
+      {/* 3. PAREDE NORTE (Z-) */}
+      {isNorth ? (
+        /* Para salas ao norte: Parede Externa dos Fundos do Prédio (Altura Total com 2 Janelas e Decorações) */
+        <group position={[0, wallHeight / 2, -depth / 2 + wallThickness / 2]}>
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[width, wallHeight, wallThickness]} />
+            <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
           </mesh>
-        )}
+          <mesh position={[0, -wallHeight / 2 + 0.06, wallThickness / 2 + 0.01]}>
+            <boxGeometry args={[width + 0.02, 0.12, 0.02]} />
+            <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
+          </mesh>
+          <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
+            <boxGeometry args={[width + 0.02, 0.05, wallThickness + 0.02]} />
+            <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
+          </mesh>
 
-        {/* Detalhe: Relógio de parede redondo clássico Habblaude */}
-        {themeConfig.hasClock && (
-          <group position={[width / 3.8, 0.28, wallThickness / 2 + 0.02]}>
-            {/* Moldura cilíndrica de madeira escura */}
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.18, 0.18, 0.03, 16]} />
-              <meshStandardMaterial color="#5C4033" roughness={0.6} />
+          {/* Duas Janelas Arquitetônicas Habblaude com vidro translúcido voltadas para o jardim externo */}
+          {[-width / 3.4, width / 3.4].map((winX, idx) => (
+            <group key={`win-n-${idx}`} position={[winX, 0.22, 0]}>
+              <mesh position={[0, 0, wallThickness / 2 + 0.015]}>
+                <boxGeometry args={[1.3, 0.75, 0.03]} />
+                <meshStandardMaterial color="#6B4F35" roughness={0.6} />
+              </mesh>
+              <mesh position={[0, 0, wallThickness / 2 + 0.02]}>
+                <boxGeometry args={[1.14, 0.61, 0.01]} />
+                <meshStandardMaterial color="#D1E8FA" transparent opacity={0.65} roughness={0.1} />
+              </mesh>
+              <mesh position={[0, 0, wallThickness / 2 + 0.025]}>
+                <boxGeometry args={[0.04, 0.61, 0.012]} />
+                <meshStandardMaterial color="#5C4033" />
+              </mesh>
+              <mesh position={[0, 0, wallThickness / 2 + 0.025]}>
+                <boxGeometry args={[1.14, 0.04, 0.012]} />
+                <meshStandardMaterial color="#5C4033" />
+              </mesh>
+              <mesh position={[0, -0.40, wallThickness / 2 + 0.03]}>
+                <boxGeometry args={[1.4, 0.05, 0.08]} />
+                <meshStandardMaterial color="#5C4033" roughness={0.5} />
+              </mesh>
+            </group>
+          ))}
+
+          {/* Painel ripado na recepção */}
+          {themeConfig.hasPanel && (
+            <mesh position={[0, 0.05, wallThickness / 2 + 0.015]}>
+              <boxGeometry args={[2.4, 0.85, 0.02]} />
+              <meshStandardMaterial color="#DDB892" roughness={0.5} />
             </mesh>
-            {/* Mostrador branco */}
-            <mesh position={[0, 0, 0.018]} rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.15, 0.15, 0.01, 16]} />
-              <meshStandardMaterial color="#FFFDF7" roughness={0.4} />
+          )}
+
+          {/* Relógio analógico Habblaude */}
+          {themeConfig.hasClock && (
+            <group position={[0, 0.32, wallThickness / 2 + 0.02]}>
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.18, 0.18, 0.03, 16]} />
+                <meshStandardMaterial color="#5C4033" roughness={0.6} />
+              </mesh>
+              <mesh position={[0, 0, 0.018]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.15, 0.15, 0.01, 16]} />
+                <meshStandardMaterial color="#FFFDF7" roughness={0.4} />
+              </mesh>
+              <mesh position={[0, 0.03, 0.025]}>
+                <boxGeometry args={[0.02, 0.08, 0.005]} />
+                <meshBasicMaterial color="#1F242B" />
+              </mesh>
+              <mesh position={[0.03, 0, 0.025]}>
+                <boxGeometry args={[0.08, 0.02, 0.005]} />
+                <meshBasicMaterial color="#1F242B" />
+              </mesh>
+            </group>
+          )}
+
+          {/* Quadro de arte emoldurado */}
+          {themeConfig.hasArt && (
+            <group position={[-width / 3.4, 0.22, wallThickness / 2 + 0.05]}>
+              <mesh>
+                <boxGeometry args={[0.9, 0.65, 0.025]} />
+                <meshStandardMaterial color="#7F5539" roughness={0.6} />
+              </mesh>
+              <mesh position={[0, 0, 0.015]}>
+                <boxGeometry args={[0.78, 0.53, 0.005]} />
+                <meshStandardMaterial color="#588157" roughness={0.7} />
+              </mesh>
+              <mesh position={[0.18, 0.12, 0.02]}>
+                <circleGeometry args={[0.08, 8]} />
+                <meshBasicMaterial color="#F4A261" />
+              </mesh>
+            </group>
+          )}
+
+          {/* Mural de avisos de cortiça (ADM) */}
+          {themeConfig.hasNoticeBoard && (
+            <group position={[-width / 3.4, 0.22, wallThickness / 2 + 0.05]}>
+              <mesh>
+                <boxGeometry args={[1.1, 0.65, 0.025]} />
+                <meshStandardMaterial color="#C5A059" roughness={0.8} />
+              </mesh>
+              <mesh position={[-0.32, 0.12, 0.016]}>
+                <boxGeometry args={[0.16, 0.16, 0.005]} />
+                <meshBasicMaterial color="#FDE047" />
+              </mesh>
+              <mesh position={[0.05, 0.12, 0.016]}>
+                <boxGeometry args={[0.16, 0.16, 0.005]} />
+                <meshBasicMaterial color="#93C5FD" />
+              </mesh>
+              <mesh position={[-0.15, -0.12, 0.016]}>
+                <boxGeometry args={[0.16, 0.16, 0.005]} />
+                <meshBasicMaterial color="#F472B6" />
+              </mesh>
+            </group>
+          )}
+        </group>
+      ) : (
+        /* Para salas ao sul: Parede Divisória Interna Voltada Para o Corredor (Com Vão de Porta de 1.2m e Portal de Madeira) */
+        <group position={[0, 0, -depth / 2 + wallThickness / 2]}>
+          <group position={[-doorWidth / 2 - wallSegmentW / 2, wallHeight / 2, 0]}>
+            <mesh castShadow receiveShadow>
+              <boxGeometry args={[wallSegmentW, wallHeight, wallThickness]} />
+              <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
             </mesh>
-            {/* Ponteiro das horas */}
-            <mesh position={[0, 0.03, 0.025]}>
-              <boxGeometry args={[0.02, 0.08, 0.005]} />
-              <meshBasicMaterial color="#1F242B" />
+            <mesh position={[0, -wallHeight / 2 + 0.06, wallThickness / 2 + 0.01]}>
+              <boxGeometry args={[wallSegmentW, 0.12, 0.02]} />
+              <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
             </mesh>
-            {/* Ponteiro dos minutos */}
-            <mesh position={[0.03, 0, 0.025]}>
-              <boxGeometry args={[0.08, 0.02, 0.005]} />
-              <meshBasicMaterial color="#1F242B" />
+            <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
+              <boxGeometry args={[wallSegmentW, 0.05, wallThickness + 0.02]} />
+              <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
             </mesh>
           </group>
-        )}
 
-        {/* Detalhe: Quadro de arte emoldurado */}
-        {themeConfig.hasArt && (
-          <group position={[-width / 3.6, 0.22, wallThickness / 2 + 0.02]}>
-            {/* Moldura de madeira nobre */}
-            <mesh>
-              <boxGeometry args={[0.9, 0.65, 0.025]} />
-              <meshStandardMaterial color="#7F5539" roughness={0.6} />
+          <group position={[doorWidth / 2 + wallSegmentW / 2, wallHeight / 2, 0]}>
+            <mesh castShadow receiveShadow>
+              <boxGeometry args={[wallSegmentW, wallHeight, wallThickness]} />
+              <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
             </mesh>
-            {/* Tela com pintura pixel art de paisagem */}
-            <mesh position={[0, 0, 0.015]}>
-              <boxGeometry args={[0.78, 0.53, 0.005]} />
-              <meshStandardMaterial color="#588157" roughness={0.7} />
+            <mesh position={[0, -wallHeight / 2 + 0.06, wallThickness / 2 + 0.01]}>
+              <boxGeometry args={[wallSegmentW, 0.12, 0.02]} />
+              <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
             </mesh>
-            {/* Detalhe de montanha/sol no quadro */}
-            <mesh position={[0.18, 0.12, 0.02]}>
-              <circleGeometry args={[0.08, 8]} />
-              <meshBasicMaterial color="#F4A261" />
+            <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
+              <boxGeometry args={[wallSegmentW, 0.05, wallThickness + 0.02]} />
+              <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
             </mesh>
           </group>
-        )}
 
-        {/* Detalhe: Mural de avisos de cortiça com post-its (ADM / Coordenação) */}
-        {themeConfig.hasNoticeBoard && (
-          <group position={[-width / 3.4, 0.22, wallThickness / 2 + 0.02]}>
-            <mesh>
-              <boxGeometry args={[1.1, 0.65, 0.025]} />
-              <meshStandardMaterial color="#C5A059" roughness={0.8} />
+          <group position={[0, 1.28, 0]}>
+            <mesh castShadow receiveShadow>
+              <boxGeometry args={[doorWidth + 0.02, 0.34, wallThickness]} />
+              <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
             </mesh>
-            {/* Post-it Amarelo */}
-            <mesh position={[-0.32, 0.12, 0.016]}>
-              <boxGeometry args={[0.16, 0.16, 0.005]} />
-              <meshBasicMaterial color="#FDE047" />
-            </mesh>
-            {/* Post-it Azul */}
-            <mesh position={[0.05, 0.12, 0.016]}>
-              <boxGeometry args={[0.16, 0.16, 0.005]} />
-              <meshBasicMaterial color="#93C5FD" />
-            </mesh>
-            {/* Post-it Rosa */}
-            <mesh position={[-0.15, -0.12, 0.016]}>
-              <boxGeometry args={[0.16, 0.16, 0.005]} />
-              <meshBasicMaterial color="#F472B6" />
+            <mesh position={[0, 0.17 + 0.02, 0]}>
+              <boxGeometry args={[doorWidth + 0.02, 0.05, wallThickness + 0.02]} />
+              <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
             </mesh>
           </group>
-        )}
 
-        {/* Detalhe: Símbolo de Cruz Médica na Farmácia */}
-        {themeConfig.hasCross && (
-          <group position={[0, 0.32, wallThickness / 2 + 0.02]}>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[0.12, 0.38, 0.015]} />
-              <meshBasicMaterial color="#2D6A4F" />
+          <group position={[0, 0, 0]}>
+            <mesh position={[-doorWidth / 2, 0.55, 0]}>
+              <boxGeometry args={[0.08, 1.12, wallThickness + 0.03]} />
+              <meshStandardMaterial color="#5C4033" roughness={0.5} />
             </mesh>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[0.38, 0.12, 0.015]} />
-              <meshBasicMaterial color="#2D6A4F" />
+            <mesh position={[doorWidth / 2, 0.55, 0]}>
+              <boxGeometry args={[0.08, 1.12, wallThickness + 0.03]} />
+              <meshStandardMaterial color="#5C4033" roughness={0.5} />
+            </mesh>
+            <mesh position={[0, 1.11, 0]}>
+              <boxGeometry args={[doorWidth + 0.08, 0.08, wallThickness + 0.04]} />
+              <meshStandardMaterial color="#5C4033" roughness={0.5} />
+            </mesh>
+            <mesh position={[0, 1.25, -wallThickness / 2 - 0.02]}>
+              <boxGeometry args={[1.0, 0.16, 0.02]} />
+              <meshStandardMaterial color="#2B3A42" roughness={0.3} />
             </mesh>
           </group>
-        )}
-      </group>
+        </group>
+      )}
 
-      {/* Parede Lateral X- (Left Wall) */}
+      {/* 4. PAREDE SUL (Z+) */}
+      {isNorth ? (
+        /* Para salas ao norte: Parede Divisória Interna Voltada Para o Corredor (Com Vão de Porta de 1.2m e Portal de Madeira) */
+        <group position={[0, 0, depth / 2 - wallThickness / 2]}>
+          <group position={[-doorWidth / 2 - wallSegmentW / 2, wallHeight / 2, 0]}>
+            <mesh castShadow receiveShadow>
+              <boxGeometry args={[wallSegmentW, wallHeight, wallThickness]} />
+              <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
+            </mesh>
+            <mesh position={[0, -wallHeight / 2 + 0.06, -wallThickness / 2 - 0.01]}>
+              <boxGeometry args={[wallSegmentW, 0.12, 0.02]} />
+              <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
+            </mesh>
+            <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
+              <boxGeometry args={[wallSegmentW, 0.05, wallThickness + 0.02]} />
+              <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
+            </mesh>
+          </group>
+
+          <group position={[doorWidth / 2 + wallSegmentW / 2, wallHeight / 2, 0]}>
+            <mesh castShadow receiveShadow>
+              <boxGeometry args={[wallSegmentW, wallHeight, wallThickness]} />
+              <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
+            </mesh>
+            <mesh position={[0, -wallHeight / 2 + 0.06, -wallThickness / 2 - 0.01]}>
+              <boxGeometry args={[wallSegmentW, 0.12, 0.02]} />
+              <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
+            </mesh>
+            <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
+              <boxGeometry args={[wallSegmentW, 0.05, wallThickness + 0.02]} />
+              <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
+            </mesh>
+          </group>
+
+          <group position={[0, 1.28, 0]}>
+            <mesh castShadow receiveShadow>
+              <boxGeometry args={[doorWidth + 0.02, 0.34, wallThickness]} />
+              <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
+            </mesh>
+            <mesh position={[0, 0.17 + 0.02, 0]}>
+              <boxGeometry args={[doorWidth + 0.02, 0.05, wallThickness + 0.02]} />
+              <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
+            </mesh>
+          </group>
+
+          <group position={[0, 0, 0]}>
+            <mesh position={[-doorWidth / 2, 0.55, 0]}>
+              <boxGeometry args={[0.08, 1.12, wallThickness + 0.03]} />
+              <meshStandardMaterial color="#5C4033" roughness={0.5} />
+            </mesh>
+            <mesh position={[doorWidth / 2, 0.55, 0]}>
+              <boxGeometry args={[0.08, 1.12, wallThickness + 0.03]} />
+              <meshStandardMaterial color="#5C4033" roughness={0.5} />
+            </mesh>
+            <mesh position={[0, 1.11, 0]}>
+              <boxGeometry args={[doorWidth + 0.08, 0.08, wallThickness + 0.04]} />
+              <meshStandardMaterial color="#5C4033" roughness={0.5} />
+            </mesh>
+            <mesh position={[0, 1.25, wallThickness / 2 + 0.02]}>
+              <boxGeometry args={[1.0, 0.16, 0.02]} />
+              <meshStandardMaterial color="#2B3A42" roughness={0.3} />
+            </mesh>
+          </group>
+        </group>
+      ) : (
+        /* Para salas ao sul: Parede Frontal Externa em Perfil Baixo Cutaway (Permite Ver o Interior das Salas Limpo) */
+        <group position={[0, 0.18, depth / 2 - wallThickness / 2]}>
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[width, 0.36, wallThickness]} />
+            <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
+          </mesh>
+          <mesh position={[0, -0.12, -wallThickness / 2 - 0.01]}>
+            <boxGeometry args={[width + 0.02, 0.12, 0.02]} />
+            <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
+          </mesh>
+          <mesh position={[0, 0.18 + 0.015, 0]}>
+            <boxGeometry args={[width + 0.02, 0.04, wallThickness + 0.02]} />
+            <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
+          </mesh>
+        </group>
+      )}
+
+      {/* 5. PAREDE LATERAL OESTE (X-) */}
       <group position={[-width / 2 + wallThickness / 2, wallHeight / 2, 0]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[wallThickness, wallHeight, depth]} />
           <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
         </mesh>
-
-        {/* Rodapé inferior de madeira nobre */}
         <mesh position={[wallThickness / 2 + 0.01, -wallHeight / 2 + 0.06, 0]}>
           <boxGeometry args={[0.02, 0.12, depth + 0.02]} />
           <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
         </mesh>
-
-        {/* Moldura superior de acabamento (Rodateto) */}
         <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
           <boxGeometry args={[wallThickness + 0.02, 0.05, depth + 0.02]} />
           <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
         </mesh>
+
+        {/* Janela lateral oeste caso seja fachada externa */}
+        {isWest && (
+          <group position={[0, 0.22, 0]}>
+            <mesh position={[wallThickness / 2 + 0.015, 0, 0]}>
+              <boxGeometry args={[0.03, 0.75, 1.2]} />
+              <meshStandardMaterial color="#6B4F35" roughness={0.6} />
+            </mesh>
+            <mesh position={[wallThickness / 2 + 0.02, 0, 0]}>
+              <boxGeometry args={[0.01, 0.61, 1.06]} />
+              <meshStandardMaterial color="#D1E8FA" transparent opacity={0.65} roughness={0.1} />
+            </mesh>
+            <mesh position={[wallThickness / 2 + 0.025, 0, 0]}>
+              <boxGeometry args={[0.012, 0.61, 0.04]} />
+              <meshStandardMaterial color="#5C4033" />
+            </mesh>
+            <mesh position={[wallThickness / 2 + 0.025, 0, 0]}>
+              <boxGeometry args={[0.012, 0.04, 1.06]} />
+              <meshStandardMaterial color="#5C4033" />
+            </mesh>
+          </group>
+        )}
       </group>
 
-      {/* Rótulo de identificação do setor */}
+      {/* 6. PAREDE LATERAL LESTE (X+) caso seja extremidade leste */}
+      {isEast && (
+        <group position={[width / 2 - wallThickness / 2, wallHeight / 2, 0]}>
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[wallThickness, wallHeight, depth]} />
+            <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
+          </mesh>
+          <mesh position={[-wallThickness / 2 - 0.01, -wallHeight / 2 + 0.06, 0]}>
+            <boxGeometry args={[0.02, 0.12, depth + 0.02]} />
+            <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.6} />
+          </mesh>
+          <mesh position={[0, wallHeight / 2 + 0.02, 0]}>
+            <boxGeometry args={[wallThickness + 0.02, 0.05, depth + 0.02]} />
+            <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
+          </mesh>
+          <group position={[0, 0.22, 0]}>
+            <mesh position={[-wallThickness / 2 - 0.015, 0, 0]}>
+              <boxGeometry args={[0.03, 0.75, 1.2]} />
+              <meshStandardMaterial color="#6B4F35" roughness={0.6} />
+            </mesh>
+            <mesh position={[-wallThickness / 2 - 0.02, 0, 0]}>
+              <boxGeometry args={[0.01, 0.61, 1.06]} />
+              <meshStandardMaterial color="#D1E8FA" transparent opacity={0.65} roughness={0.1} />
+            </mesh>
+          </group>
+        </group>
+      )}
+
+      {/* Rótulo 3D de identificação do setor */}
       {showLabels && (
-        <Html position={[0, 1.55, 0]} center distanceFactor={16}>
+        <Html position={[0, 1.65, 0]} center distanceFactor={16}>
           <SectorTag3D>
             {fixTextEncoding(sector.name)} ({sectorMachines.length} PCs)
           </SectorTag3D>
@@ -656,9 +972,10 @@ function ClinicalFurnitureVoxel({ sector }) {
   const isPharma = sector.code === 'FAR' || sector.code === 'FARM' || sector.id === 3;
   const isNurse = sector.code === 'ENF' || sector.code === 'ADM' || sector.id === 4 || sector.id === 6;
   const isServer = sector.code === 'TI' || sector.id === 8;
-  const halfW = Number(sector.width_3d || 6.5) / 2;
-  const halfD = Number(sector.depth_3d || 5) / 2;
-  const backZ = -halfD + 0.5; // mobiliário encostado na parede dos fundos (livre das estações)
+  const halfW = Number(sector.width_3d || 9.0) / 2;
+  const halfD = Number(sector.depth_3d || 5.0) / 2;
+  const isNorth = baseZ < 0;
+  const backZ = isNorth ? -halfD + 0.6 : halfD - 0.6;
 
   return (
     <group position={[baseX, 0, baseZ]}>
@@ -883,34 +1200,36 @@ function ClinicalFurnitureVoxel({ sector }) {
 
       {/* 3. FARMÁCIA & VACINAÇÃO: Estantes duplas repletas de caixas de remédios em tons pastéis */}
       {isPharma && (
-        <group position={[0, 0, backZ]}>
-          {/* Armário / Estante estruturada com prateleiras de madeira clara e moldura branca */}
-          <mesh position={[0, 0.95, 0]} castShadow receiveShadow>
-            <boxGeometry args={[2.5, 1.9, 0.5]} />
-            <meshStandardMaterial color="#F8FAF8" roughness={0.7} />
-          </mesh>
-          {/* 4 Prateleiras em carvalho claro */}
-          {[0.35, 0.75, 1.15, 1.55].map((y, idx) => (
-            <group key={`shelf-${idx}`}>
-              <mesh position={[0, y, 0.24]}>
-                <boxGeometry args={[2.42, 0.035, 0.08]} />
-                <meshStandardMaterial color="#C8B298" roughness={0.5} />
-              </mesh>
-              {/* Voxel caixas de remédios coloridas em tons pastéis organizadas */}
-              {[-0.95, -0.65, -0.35, -0.05, 0.25, 0.55, 0.85].map((x, cIdx) => {
-                const colors = ['#93C5FD', '#A7F3D0', '#FDE68A', '#FBCFE8', '#E5E7EB', '#6EE7B7', '#BAE6FD'];
-                const boxColor = colors[(idx * 3 + cIdx) % colors.length];
-                return (
-                  <mesh key={`box-${cIdx}`} position={[x, y + 0.08, 0.22]} castShadow>
-                    <boxGeometry args={[0.18, 0.12, 0.08]} />
-                    <meshStandardMaterial color={boxColor} roughness={0.7} />
-                  </mesh>
-                );
-              })}
-            </group>
-          ))}
+        <group>
+          {/* Armário / Estante estruturada posicionada contra a parede oeste */}
+          <group position={[-halfW + 0.6, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <mesh position={[0, 0.95, 0]} castShadow receiveShadow>
+              <boxGeometry args={[2.5, 1.9, 0.5]} />
+              <meshStandardMaterial color="#F8FAF8" roughness={0.7} />
+            </mesh>
+            {/* 4 Prateleiras em carvalho claro */}
+            {[0.35, 0.75, 1.15, 1.55].map((y, idx) => (
+              <group key={`shelf-${idx}`}>
+                <mesh position={[0, y, 0.24]}>
+                  <boxGeometry args={[2.42, 0.035, 0.08]} />
+                  <meshStandardMaterial color="#C8B298" roughness={0.5} />
+                </mesh>
+                {/* Voxel caixas de remédios coloridas em tons pastéis organizadas */}
+                {[-0.95, -0.65, -0.35, -0.05, 0.25, 0.55, 0.85].map((x, cIdx) => {
+                  const colors = ['#93C5FD', '#A7F3D0', '#FDE68A', '#FBCFE8', '#E5E7EB', '#6EE7B7', '#BAE6FD'];
+                  const boxColor = colors[(idx * 3 + cIdx) % colors.length];
+                  return (
+                    <mesh key={`box-${cIdx}`} position={[x, y + 0.08, 0.22]} castShadow>
+                      <boxGeometry args={[0.18, 0.12, 0.08]} />
+                      <meshStandardMaterial color={boxColor} roughness={0.7} />
+                    </mesh>
+                  );
+                })}
+              </group>
+            ))}
+          </group>
           {/* Balcão de dispensação com vidro protetor */}
-          <group position={[halfW - 0.5, 0, halfD - 0.3]} rotation={[0, -Math.PI / 2, 0]}>
+          <group position={[1.5, 0, halfD - 0.7]}>
             <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
               <boxGeometry args={[1.8, 1.0, 0.5]} />
               <meshStandardMaterial color="#FFFFFF" roughness={0.6} />
@@ -998,15 +1317,15 @@ function computeMachineLayout(machines, sectors) {
     const ordered = [...list].sort((a, b) => Number(a.id) - Number(b.id));
     const bx = Number(sector.bounds_x || 0);
     const bz = Number(sector.bounds_z || 0);
-    const w = Number(sector.width_3d || 6.5);
+    const w = Number(sector.width_3d || 9.0);
     const cols = ordered.length <= 4 ? 2 : 3;
-    const spacing = Math.min(2.2, (w - 1.6) / cols);
+    const spacing = Math.min(2.4, (w - 2.0) / cols);
     ordered.forEach((m, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
       result.set(m.id, {
         x: bx + (col - (cols - 1) / 2) * spacing,
-        z: bz - 0.5 + row * 1.9,
+        z: bz - 0.5 + row * 1.85,
       });
     });
   });
@@ -1321,7 +1640,7 @@ export function DigitalTwin3D({
     <StageContainer>
       <Canvas
         shadows
-        camera={{ position: [-11.5, 11.0, 11.5], fov: 36 }}
+        camera={{ position: [-13.0, 12.0, 13.0], fov: 36 }}
       >
         <color attach="background" args={['#EAECE8']} />
 

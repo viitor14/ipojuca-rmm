@@ -151,6 +151,31 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 - `production_artifacts/Security_Plan.md`
 - `production_artifacts/QA_Report.md`
 
+---
+
+## Ciclo #16 — Reformulação Arquitetônica da Maquete 3D: Unidade Contígua com Corredor Interno, Paredes com Portas e Eliminação de Grama Interna (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente:** Frontend React + Three.js / R3F / Drei + Backend Node.js (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-45** | Edificação Integrada e Contígua | ✅ APROVADO | A maquete agora renderiza um edifício clínico unificado sob uma laje estrutural contínua (`18.4m x 12.4m`). Os espaços vazios de até 2.5m de grama entre as salas foram completamente eliminados. A grama e vegetação residem exclusivamente no jardim externo do diorama. |
+| **CA-46** | Corredor 100% Desobstruído | ✅ APROVADO | O corredor central interno de circulação (`Z = -1.0m` a `+1.0m`, largura `2.0m`) é perfeitamente linear e contínuo da entrada oeste (`X = -9.0m`) ao final do prédio. Nenhuma parede de setor sobrepõe ou invade a faixa de circulação ("setor em cima da rua" eliminado). |
+| **CA-47** | Vãos de Portas com Acesso Realista | ✅ APROVADO | Todas as salas possuem aberturas centrais de `1.20m` de largura com batente em madeira nobre (`#5C4033`), verga superior, soleira no piso e tabuletas indicativas com o nome do setor, conectando o corredor ao interior dos ambientes de forma orgânica. |
+| **CA-48** | Mobiliário de Circulação e Riqueza Visual | ✅ APROVADO | O corredor conta com duas longarinas hospitalares de 3 lugares para espera de pacientes, bebedouro de água mineral com galão translúcido, extintor de incêndio na parede, passadeira azul-ardósia e fachada oeste com deck de acesso e rampa de acessibilidade. |
+| **CA-49** | Performance e Telemetria Intactas | ✅ APROVADO | Renderização procedural leve sem dependência de modelos externos pesados; 60 FPS estáveis; todas as estações de trabalho continuam distribuídas harmoniosamente sobre os pisos e integradas ao WebSocket e telemetria da VPS em tempo real. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso (`dist/assets/index-BTRMmvZ7.js`). Zero erros de build ou linter. |
+
+**Arquivos Modificados:**
+- `backend/src/database/repository.js`
+- `infrastructure/mysql/01_schema_and_seed.sql`
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/dist/` (build de produção atualizado)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/QA_Report.md`
+
 
 ---
 
@@ -249,4 +274,29 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 - `production_artifacts/Technical_Specification.md`
 - `production_artifacts/System_Architecture.md`
 - `production_artifacts/Security_Plan.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
+## Ciclo #16 — Reformulação Arquitetônica da Maquete 3D: Unidade Contígua com Corredor Interno, Paredes com Portas e Eliminação de Grama Interna (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente:** Frontend React + Three.js / R3F / Drei + Backend Node.js (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-45** | Edificação Integrada e Contígua | ✅ APROVADO | A maquete agora renderiza um edifício clínico unificado sob uma laje estrutural contínua (`18.4m x 12.4m`). Os espaços vazios de até 2.5m de grama entre as salas foram completamente eliminados. A grama e vegetação residem exclusivamente no jardim externo do diorama. |
+| **CA-46** | Corredor 100% Desobstruído | ✅ APROVADO | O corredor central interno de circulação (`Z = -1.0m` a `+1.0m`, largura `2.0m`) é perfeitamente linear e contínuo da entrada oeste (`X = -9.0m`) ao final do prédio. Nenhuma parede de setor sobrepõe ou invade a faixa de circulação ("setor em cima da rua" eliminado). |
+| **CA-47** | Vãos de Portas com Acesso Realista | ✅ APROVADO | Todas as salas possuem aberturas centrais de `1.20m` de largura com batente em madeira nobre (`#5C4033`), verga superior, soleira no piso e tabuletas indicativas com o nome do setor, conectando o corredor ao interior dos ambientes de forma orgânica. |
+| **CA-48** | Mobiliário de Circulação e Riqueza Visual | ✅ APROVADO | O corredor conta com duas longarinas hospitalares de 3 lugares para espera de pacientes, bebedouro de água mineral com galão translúcido, extintor de incêndio na parede, passadeira azul-ardósia e fachada oeste com deck de acesso e rampa de acessibilidade. |
+| **CA-49** | Performance e Telemetria Intactas | ✅ APROVADO | Renderização procedural leve sem dependência de modelos externos pesados; 60 FPS estáveis; todas as estações de trabalho continuam distribuídas harmoniosamente sobre os pisos e integradas ao WebSocket e telemetria da VPS em tempo real. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso (`dist/assets/index-BTRMmvZ7.js`). Zero erros de build ou linter. |
+
+**Arquivos Modificados:**
+- `backend/src/database/repository.js`
+- `infrastructure/mysql/01_schema_and_seed.sql`
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/dist/` (build de produção atualizado)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`

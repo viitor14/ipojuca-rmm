@@ -296,3 +296,30 @@ Para evitar vazamentos de telemetria entre unidades de saúde municipais no dash
    - Máquinas sem setor correspondente na unidade ativa são ignoradas na alocação de grade em vez de receberem coordenadas `(0, 0)`.
 3. **Foco e Seleção Coerentes:**
    - `focusMachine` só é ativado se o computador selecionado pertencer efetivamente à unidade ativa renderizada.
+
+---
+
+## 10. Evolução Arquitetural — Ciclo #16 (Edificação Contígua Unificada & Corredor Hospitalar Habblaude)
+
+### 10.1. Laje Estrutural Única e Eliminação de Grama Interna
+1. **`BuildingFoundationSlab` Contínua (`18.4m x 12.4m`):**
+   - Criação de uma fundação de alvenaria e concreto arquitetônico contígua cobrindo todas as salas e o corredor central de circulação.
+   - O gramado verde vivo, as cercas vivas e os decks de acesso passam a residir estritamente no perímetro externo (`|X| >= 9.2m` ou `|Z| >= 6.2m`), eliminando vãos de terra/grama dentro do hospital.
+
+### 10.2. Corredor Interno Central de Circulação
+1. **Passadeira Central e Soleiras em Madeira:**
+   - O corredor central de circulação ocupa linearmente a faixa `Z = -1.0m` a `Z = +1.0m` com largura de `2.0m` e comprimento total de `18.0m`.
+   - Revestimento em porcelanato claro polido com passadeira central azul-ardósia e bordas de contenção em `#354E5F`.
+   - Soleiras de madeira nobre (`#7F5539`) embutidas nas transições com cada uma das quatro salas.
+2. **Mobiliário de Corredor e Humanização:**
+   - Longarinas de 3 assentos em aço escovado e estofamento hospitalar nas paredes laterais do corredor.
+   - Extintor de incêndio e bebedouro de água mineral com galão translúcido.
+
+### 10.3. Paredes Divisórias com Vãos de Portas e Fachada Cutaway
+1. **Vãos de Passagem de 1.20m com Batentes:**
+   - As paredes voltadas para o corredor deixam de ser barreiras cegas e recebem aberturas centrais de `1.20m` de largura com batente em madeira nobre e viga superior de sustentação.
+   - Tabuletas de identificação dos setores fixadas acima de cada vão de porta.
+2. **Fachada Posterior com Janelas de Vidro Translúcido:**
+   - Paredes traseiras norte contam com duas janelas emolduradas em madeira com cruzeta e vidro azul-gelo translúcido, criando conexão visual com o jardim externo.
+3. **Fachada Frontal em Perfil Baixo Cutaway:**
+   - Paredes frontais sul possuem perfil baixo (`0.36m`), garantindo que a câmera isométrica tenha visão 100% desobstruída dos computadores e mobiliários das salas da frente.

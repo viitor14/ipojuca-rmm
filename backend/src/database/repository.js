@@ -42,15 +42,15 @@ class RmmRepository {
     ];
 
     this.sectors = [
-      { id: 1, unit_id: 1, code: 'REC', name: 'Recepção e Triagem', bounds_x: -5.5, bounds_z: -3.2, width_3d: 7.5, depth_3d: 5.0 },
-      { id: 2, unit_id: 1, code: 'CONS-01', name: 'Consultório Médico 01', bounds_x: 4.0, bounds_z: -3.2, width_3d: 6.5, depth_3d: 5.0 },
-      { id: 3, unit_id: 1, code: 'FARM', name: 'Farmácia e Vacinação', bounds_x: -5.5, bounds_z: 3.2, width_3d: 7.5, depth_3d: 5.0 },
-      { id: 4, unit_id: 1, code: 'ADM', name: 'Coordenação / Enfermagem', bounds_x: 4.0, bounds_z: 3.2, width_3d: 6.5, depth_3d: 5.0 },
-      { id: 5, unit_id: 2, code: 'REC-POLI', name: 'Recepção Central Policlínica', bounds_x: -4.8, bounds_z: -2.5, width_3d: 8.0, depth_3d: 5.5 },
-      { id: 6, unit_id: 2, code: 'LAB-POLI', name: 'Laboratório e Exames', bounds_x: 4.5, bounds_z: -2.5, width_3d: 7.0, depth_3d: 5.5 },
-      { id: 7, unit_id: 2, code: 'REG-POLI', name: 'Regulação Médica', bounds_x: 0.0, bounds_z: 3.5, width_3d: 10.0, depth_3d: 4.5 },
-      { id: 8, unit_id: 3, code: 'ACOLH', name: 'Acolhimento e Prontuário CAPS', bounds_x: -3.5, bounds_z: 0.0, width_3d: 7.0, depth_3d: 6.0 },
-      { id: 9, unit_id: 3, code: 'PSI-01', name: 'Consultório Multiprofissional', bounds_x: 4.0, bounds_z: 0.0, width_3d: 6.5, depth_3d: 6.0 },
+      { id: 1, unit_id: 1, code: 'REC', name: 'Recepção e Triagem', bounds_x: -4.5, bounds_z: -3.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 2, unit_id: 1, code: 'CONS-01', name: 'Consultório Médico 01', bounds_x: 4.5, bounds_z: -3.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 3, unit_id: 1, code: 'FARM', name: 'Farmácia e Vacinação', bounds_x: -4.5, bounds_z: 3.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 4, unit_id: 1, code: 'ADM', name: 'Coordenação / Enfermagem', bounds_x: 4.5, bounds_z: 3.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 5, unit_id: 2, code: 'REC-POLI', name: 'Recepção Central Policlínica', bounds_x: -4.5, bounds_z: -3.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 6, unit_id: 2, code: 'LAB-POLI', name: 'Laboratório e Exames', bounds_x: 4.5, bounds_z: -3.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 7, unit_id: 2, code: 'REG-POLI', name: 'Regulação Médica', bounds_x: 0.0, bounds_z: 3.5, width_3d: 18.0, depth_3d: 5.0 },
+      { id: 8, unit_id: 3, code: 'ACOLH', name: 'Acolhimento e Prontuário CAPS', bounds_x: -4.5, bounds_z: 0.0, width_3d: 9.0, depth_3d: 10.0 },
+      { id: 9, unit_id: 3, code: 'PSI-01', name: 'Consultório Multiprofissional', bounds_x: 4.5, bounds_z: 0.0, width_3d: 9.0, depth_3d: 10.0 },
     ];
 
     // Zero máquinas virtuais/simuladas: apenas computadores reais registrados pelo Agente Windows
@@ -144,8 +144,8 @@ class RmmRepository {
     }
     for (const sec of this.sectors) {
       await this.pool.execute(
-        `UPDATE sectors SET name = ? WHERE id = ?`,
-        [sec.name, sec.id]
+        `UPDATE sectors SET name = ?, bounds_x = ?, bounds_z = ?, width_3d = ?, depth_3d = ? WHERE id = ?`,
+        [sec.name, sec.bounds_x, sec.bounds_z, sec.width_3d, sec.depth_3d, sec.id]
       );
     }
 

@@ -732,7 +732,81 @@ Aprovado pelo usuário. Implementação de pisos, paredes acolhedoras, rodapés 
 
 ---
 
-## 25. Gate de Aprovação — FASE 1 (Ciclo #15)
+## 25. Gate de Aprovação — FASE 1 (Ciclo #15) — [CONCLUÍDO E APROVADO]
 
-O pipeline do Ciclo #15 encontra-se **pausado no Gate de Aprovação da Fase 1**.
-Responda com **`Approved`** para que `@lead`, `@engineer` e `@frontend` apliquem a correção em `frontend/src/App.jsx` e `frontend/src/components/DigitalTwin3D.jsx`!
+Aprovado pelo usuário. Correção de isolamento estrito por `unit_id` no WebSocket e barreira defensiva no Digital Twin 3D implementados com sucesso no commit `d10d112`.
+
+---
+
+# CICLO #16 — REFORMULAÇÃO ARQUITETÔNICA DA MAQUETE 3D: UNIDADE CONTÍGUA COM CORREDOR INTERNO, PAREDES INTEGRADAS COM PORTAS E ELIMINAÇÃO DE GRAMA INTERNA
+
+## 26. Diagnóstico Arquitetônico e Especificação da Solução (`@lead` + `@designer` + `@frontend` + `@pm`)
+
+### 26.1. Diagnóstico da Causa Raiz da Impressão de "Rua com Casas Isoladas"
+1. **Dispersão Espacial dos Setores com Grama Interna:**
+   - Atualmente, o diorama renderiza uma placa uniforme de grama verde (`22.6m x 17.2m`) por baixo de toda a cena.
+   - Cada setor possuía dimensões isoladas com espaços vazios de até 2.5 metros entre as salas (`X = -1.75` até `X = +0.75`), revelando grama verde dentro da edificação entre as salas.
+   - Em uma unidade de saúde real (e na referência Habblaude), a edificação é **um único bloco arquitetônico contíguo**. Toda a área interna é coberta por laje e piso hospitalar. A grama e o jardim pertencem exclusivamente ao exterior (perímetro da unidade).
+2. **"Setor em Cima da Rua" (Sobreposição do Corredor):**
+   - O corredor central de circulação foi desenhado de forma isolada na faixa `Z = -0.9` a `Z = +0.9`.
+   - Os setores frontais (Farmácia e Coordenação) estavam configurados em `bounds_z = +3.2` com profundidade `depth_3d = 5.0m`, estendendo-se de `Z = +0.7` até `Z = +5.7`.
+   - A parede traseira desses setores foi gerada em `Z = +0.7`, invadindo a faixa do corredor e bloqueando a passagem como uma barreira cega ("o setor está em cima da rua").
+   - Além disso, a ausência de vãos de portas (portais de passagem) fazia com que os cômodos parecessem caixas fechadas sem ligação orgânica com a circulação.
+
+---
+
+### 26.2. Arquitetura da Edificação Unificada (Padrão Habblaude)
+
+1. **Laje Estrutural Contígua (`BuildingFoundationSlab`):**
+   - A unidade de saúde passa a ter uma fundação sólida contínua (ex: `18.0m x 12.0m`), elevando o piso interno a `+0.04m` em relação ao solo externo.
+   - O gramado verde vivo, as cercas vivas e os decks de entrada ficam restritos ao perímetro externo da edificação (`|X| >= 9.0m` ou `|Z| >= 6.0m`).
+   - Nenhuma área verde é visível no interior da clínica.
+2. **Corredor Interno de Circulação Perfeito e Desobstruído:**
+   - Faixa de circulação central interna linear de `2.0m` de largura (de `Z = -1.0m` a `Z = +1.0m`), conectando a recepção da entrada principal oeste (`X = -9.0m`) até o final da unidade (`X = +9.0m`).
+   - Piso em porcelanato polido claro com passadeira central azul-ardósia e bordas de acabamento, perfeitamente embutida na laje.
+3. **Planta Baixa Perfeitamente Encaixada (Grid Modular Contíguo):**
+   - **Ala Norte (Fundos):**
+     - **Recepção e Triagem (REC):** de `X = -9.0` a `X = 0.0` e `Z = -6.0` a `Z = -1.0` (Largura: `9.0m`, Profundidade: `5.0m`). Piso em madeira parquet carvalho e tapete azul royal.
+     - **Consultório Médico 01 (CONS-01):** de `X = 0.0` a `X = +9.0` e `Z = -6.0` a `Z = -1.0` (Largura: `9.0m`, Profundidade: `5.0m`). Piso em porcelanato menta suave e maca clínica.
+     - Ambas as salas compartilham a parede divisória central interna em `X = 0.0`.
+   - **Ala Sul (Frente / Visão Cutaway):**
+     - **Farmácia e Vacinação (FARM):** de `X = -9.0` a `X = 0.0` e `Z = +1.0` a `Z = +6.0` (Largura: `9.0m`, Profundidade: `5.0m`). Piso xadrez menta/marfim e prateleiras de medicamentos.
+     - **Coordenação e Enfermagem (ADM):** de `X = 0.0` a `X = +9.0` e `Z = +1.0` a `Z = +6.0` (Largura: `9.0m`, Profundidade: `5.0m`). Piso em madeira parquet e tapete verde musgo.
+     - Ambas as salas compartilham a parede divisória central interna em `X = 0.0`.
+4. **Paredes com Portais de Passagem (Vãos de Portas):**
+   - As paredes que separam as salas do corredor contam com **vãos de porta de 1.10m** com batente e soleira em madeira nobre, permitindo transitar visualmente do corredor para dentro de cada setor.
+   - Nenhuma parede bloqueia o corredor.
+5. **Mobiliário de Corredor e Enriquecimento Visual:**
+   - Longarinas/bancos de espera hospitalares em metal e couro dispostos ao longo das paredes do corredor.
+   - Bebedouro de galão azul na recepção/circulação.
+   - Placas de sinalização hospitalar em relevo sobre os vãos de cada porta.
+   - Fachada com deck de madeira e rampa de acessibilidade na entrada principal.
+
+---
+
+### 26.3. Requisitos Funcionais do Ciclo #16 (`@pm`)
+
+- **RF-47 (Edificação Unificada e Eliminação de Grama Interna):** Implementar laje arquitetônica contígua para a unidade de saúde, confinando a grama e o jardim exclusivamente ao exterior da edificação.
+- **RF-48 (Planta Baixa Contígua sem Invasão de Corredor):** Alinhar os setores em malha ortogonal contígua, com paredes compartilhadas e alinhamento milimétrico ao corredor interno (`Z = ±1.0m`), eliminando o bug de setor sobreposto à circulação.
+- **RF-49 (Paredes Divisórias com Vãos de Portas e Batentes):** Renderizar aberturas de portas com batentes e soleiras conectando as salas ao corredor interno.
+- **RF-50 (Detalhamento Arquitetônico Hospitalar Estilo Habblaude):** Incluir bancos de espera no corredor, sinalização das portas, piso unificado com transições suaves e fachada de entrada com deck.
+- **RF-51 (Preservação de Telemetria e Desempenho 60 FPS):** Manter a distribuição automática de estações de trabalho nos setores, sincronização em tempo real de telemetria e taxa estável de 60 FPS sem assets pesados.
+
+---
+
+### 26.4. Critérios de Aceitação do Ciclo #16 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-45** | Edificação Integrada e Contígua | O operador visualiza a maquete 3D da unidade | Observa a estrutura do edifício | Identifica um prédio de unidade de saúde único e contíguo, com laje de piso contínua; não há grama ou vãos vazios entre as salas. |
+| **CA-46** | Corredor Desobstruído sem Invasão de Salas | O operador observa o corredor central | Analisa o alinhamento das paredes | O corredor interno é 100% linear e desobstruído; nenhuma parede de setor sobrepõe ou bloqueia a circulação. |
+| **CA-47** | Vãos de Portas e Acesso aos Cômodos | O operador inspeciona a transição corredor-sala | Examina as entradas de cada ambiente | Identifica aberturas de portas com batentes em madeira e soleiras de transição, conectando o corredor ao interior das salas. |
+| **CA-48** | Detalhes Hospitalares no Corredor | O operador navega pelo diorama | Observa os detalhes da circulação | Visualiza bancos de espera para pacientes, bebedouro e tabuletas de identificação dos setores nas portas. |
+| **CA-49** | Performance e Telemetria Intactas | O operador interage com computadores e gira a cena | Analisa FPS e dados reais | A aplicação renderiza fluidamente a 60 FPS e todos os computadores reais continuam conectados à telemetria da VPS. |
+
+---
+
+## 27. Gate de Aprovação — FASE 1 (Ciclo #16)
+
+O pipeline do Ciclo #16 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` iniciem a implementação da edificação contígua, corredor interno com portas e eliminação de grama interna no código-fonte!

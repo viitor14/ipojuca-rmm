@@ -161,12 +161,12 @@ INSERT IGNORE INTO health_units (id, code, name, unit_type, address) VALUES
   (3, 'CAPS-IPO', 'CAPS Porto de Galinhas / Ipojuca', 'CAPS', 'Porto de Galinhas, Ipojuca - PE');
 
 INSERT IGNORE INTO sectors (id, unit_id, code, name, bounds_x, bounds_z, width_3d, depth_3d) VALUES
-  (1, 1, 'REC', 'Recepção e Triagem', -5.5, -3.2, 7.5, 5.0),
-  (2, 1, 'CONS-01', 'Consultório Médico 01', 4.0, -3.2, 6.5, 5.0),
-  (3, 1, 'FARM', 'Farmácia e Vacinação', -5.5, 3.2, 7.5, 5.0),
-  (4, 1, 'ADM', 'Coordenação / Enfermagem', 4.0, 3.2, 6.5, 5.0),
-  (5, 2, 'REC-POLI', 'Recepção Central Policlínica', -4.8, -2.5, 8.0, 5.5),
-  (6, 2, 'LAB-POLI', 'Laboratório e Exames', 4.5, -2.5, 7.0, 5.5),
-  (7, 2, 'REG-POLI', 'Regulação Médica', 0.0, 3.5, 10.0, 4.5),
-  (8, 3, 'ACOLH', 'Acolhimento e Prontuário CAPS', -3.5, 0.0, 7.0, 6.0),
-  (9, 3, 'PSI-01', 'Consultório Multiprofissional', 4.0, 0.0, 6.5, 6.0);
+  (1, 1, 'REC', 'Recepção e Triagem', -4.5, -3.5, 9.0, 5.0),
+  (2, 1, 'CONS-01', 'Consultório Médico 01', 4.5, -3.5, 9.0, 5.0),
+  (3, 1, 'FARM', 'Farmácia e Vacinação', -4.5, 3.5, 9.0, 5.0),
+  (4, 1, 'ADM', 'Coordenação / Enfermagem', 4.5, 3.5, 9.0, 5.0),
+  (5, 2, 'REC-POLI', 'Recepção Central Policlínica', -4.5, -3.5, 9.0, 5.0),
+  (6, 2, 'LAB-POLI', 'Laboratório e Exames', 4.5, -3.5, 9.0, 5.0),
+  (7, 2, 'REG-POLI', 'Regulação Médica', 0.0, 3.5, 18.0, 5.0),
+  (8, 3, 'ACOLH', 'Acolhimento e Prontuário CAPS', -4.5, 0.0, 9.0, 10.0),
+  (9, 3, 'PSI-01', 'Consultório Multiprofissional', 4.5, 0.0, 9.0, 10.0);
