@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { useGLTF, Html } from '@react-three/drei';
 import styled from 'styled-components';
@@ -163,6 +163,23 @@ function createDesktopScreenTexture(isOffline) {
   return texture;
 }
 
+// Cache estático de texturas de tela para evitar memory leak de CanvasTexture no WebGL
+let _desktopTextureOnline = null;
+let _desktopTextureOffline = null;
+
+function getCachedDesktopTexture(isOffline) {
+  if (isOffline) {
+    if (!_desktopTextureOffline) {
+      _desktopTextureOffline = createDesktopScreenTexture(true);
+    }
+    return _desktopTextureOffline;
+  }
+  if (!_desktopTextureOnline) {
+    _desktopTextureOnline = createDesktopScreenTexture(false);
+  }
+  return _desktopTextureOnline;
+}
+
 /**
  * MODELO PROFISSIONAL GLB DO BLENDER — ESTAÇÃO DE TRABALHO RMM
  * Sub-nós dinâmicos: ScreenDisplay (tela com OS realista), StatusLed (LED discreto), ActivityLed
@@ -180,9 +197,9 @@ export function WorkstationModel({
   const statusColor = theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
   const isOffline = machine.health_status === 'OFFLINE';
 
-  // Textura realista de área de trabalho de computador (não monocromática!)
+  // Textura realista de área de trabalho obtida do cache singleton
   const screenTexture = useMemo(
-    () => createDesktopScreenTexture(isOffline),
+    () => getCachedDesktopTexture(isOffline),
     [isOffline]
   );
 
@@ -201,8 +218,8 @@ export function WorkstationModel({
     return clone;
   }, [scene]);
 
-  // Atualização atômica de propriedades PBR sem destruir/reconstruir malha
-  useMemo(() => {
+  // Atualização atômica de propriedades PBR em useEffect (efeito colateral puro)
+  useEffect(() => {
     modelInstance.traverse((child) => {
       // 1. Tela: Renderiza o desktop do SO com emissão suave e realista (nunca sólido verde/vermelho!)
       if (child.name === 'ScreenDisplay' && child.material) {

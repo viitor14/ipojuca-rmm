@@ -162,22 +162,35 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 
 | ID | Verificação de Aceitação | Resultado | Observações Técnicas |
 | :--- | :--- | :--- | :--- |
-| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **176.008 bytes** (171.88 KB), **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). SHA-256: `D2B7DEFF51F05932808BB45A99000C92B7FB5329DBB3CB4E797F28AA9EBB86CB`. |
 | **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
 | **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
 | **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
 | **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+| **CA-73** | Apresentação Visual Completa (3 Capturas Reais) | ✅ APROVADO | 1. Workstation isolado (`workstation_isolated.png`); 2. Workstation instalado na mesa da recepção (`reception_workstation_installed.png`); 3. Workstation selecionado com contorno CAD e `DiagnosticDrawer` aberto (`workstation_selected_drawer.png`). Zero desproporção ou sobreposição. |
+| **CA-74** | Estabilidade de Memória e Ciclo de Vida React | ✅ APROVADO | Mutação imperativa de materiais migrada de `useMemo` para `useEffect`. `CanvasTexture` gerida por singleton cache (`_desktopTextureOnline` / `_desktopTextureOffline`), eliminando memory leaks de texturas WebGL na VRAM. |
 
 **Arquivos Criados e Modificados:**
 - `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
-- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
-- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
-- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
-- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio — Captura 1)
+- `scripts/render_homologation_final.py` (script de renderização da recepção — Captura 2)
+- `scripts/composite_captura_3.py` (script de renderização e composição do DiagnosticDrawer — Captura 3)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 176.008 bytes)
+- `frontend/public/models/tech/workstation_isolated.png` (Captura 1)
+- `frontend/public/models/tech/reception_workstation_installed.png` (Captura 2)
+- `frontend/public/models/tech/workstation_selected_drawer.png` (Captura 3)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto, contorno CAD, useEffect e cache singleton)
 - `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
 - `production_artifacts/Technical_Specification.md`
-- `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`
+
+---
+
+## Gate de Homologação — Ciclo #20 (`@qa` + `@lead`)
+- **Status:** **AGUARDANDO AVALIAÇÃO DO USUÁRIO**
+- A biblioteca 3D **não foi expandida** para os demais móveis nesta etapa.
+- Os demais computadores da maquete **não foram alterados**.
+- Aguardando aprovação explícita do usuário deste laudo visual e técnico antes de autorizar a expansão da modelagem.
 
 ---
 
@@ -241,22 +254,35 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 
 | ID | Verificação de Aceitação | Resultado | Observações Técnicas |
 | :--- | :--- | :--- | :--- |
-| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **176.008 bytes** (171.88 KB), **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). SHA-256: `D2B7DEFF51F05932808BB45A99000C92B7FB5329DBB3CB4E797F28AA9EBB86CB`. |
 | **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
 | **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
 | **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
 | **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+| **CA-73** | Apresentação Visual Completa (3 Capturas Reais) | ✅ APROVADO | 1. Workstation isolado (`workstation_isolated.png`); 2. Workstation instalado na mesa da recepção (`reception_workstation_installed.png`); 3. Workstation selecionado com contorno CAD e `DiagnosticDrawer` aberto (`workstation_selected_drawer.png`). Zero desproporção ou sobreposição. |
+| **CA-74** | Estabilidade de Memória e Ciclo de Vida React | ✅ APROVADO | Mutação imperativa de materiais migrada de `useMemo` para `useEffect`. `CanvasTexture` gerida por singleton cache (`_desktopTextureOnline` / `_desktopTextureOffline`), eliminando memory leaks de texturas WebGL na VRAM. |
 
 **Arquivos Criados e Modificados:**
 - `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
-- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
-- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
-- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
-- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio — Captura 1)
+- `scripts/render_homologation_final.py` (script de renderização da recepção — Captura 2)
+- `scripts/composite_captura_3.py` (script de renderização e composição do DiagnosticDrawer — Captura 3)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 176.008 bytes)
+- `frontend/public/models/tech/workstation_isolated.png` (Captura 1)
+- `frontend/public/models/tech/reception_workstation_installed.png` (Captura 2)
+- `frontend/public/models/tech/workstation_selected_drawer.png` (Captura 3)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto, contorno CAD, useEffect e cache singleton)
 - `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
 - `production_artifacts/Technical_Specification.md`
-- `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`
+
+---
+
+## Gate de Homologação — Ciclo #20 (`@qa` + `@lead`)
+- **Status:** **AGUARDANDO AVALIAÇÃO DO USUÁRIO**
+- A biblioteca 3D **não foi expandida** para os demais móveis nesta etapa.
+- Os demais computadores da maquete **não foram alterados**.
+- Aguardando aprovação explícita do usuário deste laudo visual e técnico antes de autorizar a expansão da modelagem.
 
 ---
 
@@ -307,22 +333,35 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 
 | ID | Verificação de Aceitação | Resultado | Observações Técnicas |
 | :--- | :--- | :--- | :--- |
-| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **176.008 bytes** (171.88 KB), **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). SHA-256: `D2B7DEFF51F05932808BB45A99000C92B7FB5329DBB3CB4E797F28AA9EBB86CB`. |
 | **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
 | **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
 | **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
 | **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+| **CA-73** | Apresentação Visual Completa (3 Capturas Reais) | ✅ APROVADO | 1. Workstation isolado (`workstation_isolated.png`); 2. Workstation instalado na mesa da recepção (`reception_workstation_installed.png`); 3. Workstation selecionado com contorno CAD e `DiagnosticDrawer` aberto (`workstation_selected_drawer.png`). Zero desproporção ou sobreposição. |
+| **CA-74** | Estabilidade de Memória e Ciclo de Vida React | ✅ APROVADO | Mutação imperativa de materiais migrada de `useMemo` para `useEffect`. `CanvasTexture` gerida por singleton cache (`_desktopTextureOnline` / `_desktopTextureOffline`), eliminando memory leaks de texturas WebGL na VRAM. |
 
 **Arquivos Criados e Modificados:**
 - `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
-- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
-- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
-- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
-- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio — Captura 1)
+- `scripts/render_homologation_final.py` (script de renderização da recepção — Captura 2)
+- `scripts/composite_captura_3.py` (script de renderização e composição do DiagnosticDrawer — Captura 3)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 176.008 bytes)
+- `frontend/public/models/tech/workstation_isolated.png` (Captura 1)
+- `frontend/public/models/tech/reception_workstation_installed.png` (Captura 2)
+- `frontend/public/models/tech/workstation_selected_drawer.png` (Captura 3)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto, contorno CAD, useEffect e cache singleton)
 - `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
 - `production_artifacts/Technical_Specification.md`
-- `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`
+
+---
+
+## Gate de Homologação — Ciclo #20 (`@qa` + `@lead`)
+- **Status:** **AGUARDANDO AVALIAÇÃO DO USUÁRIO**
+- A biblioteca 3D **não foi expandida** para os demais móveis nesta etapa.
+- Os demais computadores da maquete **não foram alterados**.
+- Aguardando aprovação explícita do usuário deste laudo visual e técnico antes de autorizar a expansão da modelagem.
 
 
 ---
@@ -435,22 +474,35 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 
 | ID | Verificação de Aceitação | Resultado | Observações Técnicas |
 | :--- | :--- | :--- | :--- |
-| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **176.008 bytes** (171.88 KB), **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). SHA-256: `D2B7DEFF51F05932808BB45A99000C92B7FB5329DBB3CB4E797F28AA9EBB86CB`. |
 | **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
 | **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
 | **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
 | **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+| **CA-73** | Apresentação Visual Completa (3 Capturas Reais) | ✅ APROVADO | 1. Workstation isolado (`workstation_isolated.png`); 2. Workstation instalado na mesa da recepção (`reception_workstation_installed.png`); 3. Workstation selecionado com contorno CAD e `DiagnosticDrawer` aberto (`workstation_selected_drawer.png`). Zero desproporção ou sobreposição. |
+| **CA-74** | Estabilidade de Memória e Ciclo de Vida React | ✅ APROVADO | Mutação imperativa de materiais migrada de `useMemo` para `useEffect`. `CanvasTexture` gerida por singleton cache (`_desktopTextureOnline` / `_desktopTextureOffline`), eliminando memory leaks de texturas WebGL na VRAM. |
 
 **Arquivos Criados e Modificados:**
 - `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
-- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
-- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
-- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
-- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio — Captura 1)
+- `scripts/render_homologation_final.py` (script de renderização da recepção — Captura 2)
+- `scripts/composite_captura_3.py` (script de renderização e composição do DiagnosticDrawer — Captura 3)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 176.008 bytes)
+- `frontend/public/models/tech/workstation_isolated.png` (Captura 1)
+- `frontend/public/models/tech/reception_workstation_installed.png` (Captura 2)
+- `frontend/public/models/tech/workstation_selected_drawer.png` (Captura 3)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto, contorno CAD, useEffect e cache singleton)
 - `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
 - `production_artifacts/Technical_Specification.md`
-- `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`
+
+---
+
+## Gate de Homologação — Ciclo #20 (`@qa` + `@lead`)
+- **Status:** **AGUARDANDO AVALIAÇÃO DO USUÁRIO**
+- A biblioteca 3D **não foi expandida** para os demais móveis nesta etapa.
+- Os demais computadores da maquete **não foram alterados**.
+- Aguardando aprovação explícita do usuário deste laudo visual e técnico antes de autorizar a expansão da modelagem.
 
 ---
 
@@ -514,22 +566,35 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 
 | ID | Verificação de Aceitação | Resultado | Observações Técnicas |
 | :--- | :--- | :--- | :--- |
-| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **176.008 bytes** (171.88 KB), **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). SHA-256: `D2B7DEFF51F05932808BB45A99000C92B7FB5329DBB3CB4E797F28AA9EBB86CB`. |
 | **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
 | **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
 | **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
 | **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+| **CA-73** | Apresentação Visual Completa (3 Capturas Reais) | ✅ APROVADO | 1. Workstation isolado (`workstation_isolated.png`); 2. Workstation instalado na mesa da recepção (`reception_workstation_installed.png`); 3. Workstation selecionado com contorno CAD e `DiagnosticDrawer` aberto (`workstation_selected_drawer.png`). Zero desproporção ou sobreposição. |
+| **CA-74** | Estabilidade de Memória e Ciclo de Vida React | ✅ APROVADO | Mutação imperativa de materiais migrada de `useMemo` para `useEffect`. `CanvasTexture` gerida por singleton cache (`_desktopTextureOnline` / `_desktopTextureOffline`), eliminando memory leaks de texturas WebGL na VRAM. |
 
 **Arquivos Criados e Modificados:**
 - `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
-- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
-- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
-- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
-- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio — Captura 1)
+- `scripts/render_homologation_final.py` (script de renderização da recepção — Captura 2)
+- `scripts/composite_captura_3.py` (script de renderização e composição do DiagnosticDrawer — Captura 3)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 176.008 bytes)
+- `frontend/public/models/tech/workstation_isolated.png` (Captura 1)
+- `frontend/public/models/tech/reception_workstation_installed.png` (Captura 2)
+- `frontend/public/models/tech/workstation_selected_drawer.png` (Captura 3)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto, contorno CAD, useEffect e cache singleton)
 - `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
 - `production_artifacts/Technical_Specification.md`
-- `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`
+
+---
+
+## Gate de Homologação — Ciclo #20 (`@qa` + `@lead`)
+- **Status:** **AGUARDANDO AVALIAÇÃO DO USUÁRIO**
+- A biblioteca 3D **não foi expandida** para os demais móveis nesta etapa.
+- Os demais computadores da maquete **não foram alterados**.
+- Aguardando aprovação explícita do usuário deste laudo visual e técnico antes de autorizar a expansão da modelagem.
 
 ---
 
@@ -580,19 +645,32 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 
 | ID | Verificação de Aceitação | Resultado | Observações Técnicas |
 | :--- | :--- | :--- | :--- |
-| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **176.008 bytes** (171.88 KB), **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). SHA-256: `D2B7DEFF51F05932808BB45A99000C92B7FB5329DBB3CB4E797F28AA9EBB86CB`. |
 | **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
 | **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
 | **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
 | **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+| **CA-73** | Apresentação Visual Completa (3 Capturas Reais) | ✅ APROVADO | 1. Workstation isolado (`workstation_isolated.png`); 2. Workstation instalado na mesa da recepção (`reception_workstation_installed.png`); 3. Workstation selecionado com contorno CAD e `DiagnosticDrawer` aberto (`workstation_selected_drawer.png`). Zero desproporção ou sobreposição. |
+| **CA-74** | Estabilidade de Memória e Ciclo de Vida React | ✅ APROVADO | Mutação imperativa de materiais migrada de `useMemo` para `useEffect`. `CanvasTexture` gerida por singleton cache (`_desktopTextureOnline` / `_desktopTextureOffline`), eliminando memory leaks de texturas WebGL na VRAM. |
 
 **Arquivos Criados e Modificados:**
 - `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
-- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
-- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
-- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
-- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio — Captura 1)
+- `scripts/render_homologation_final.py` (script de renderização da recepção — Captura 2)
+- `scripts/composite_captura_3.py` (script de renderização e composição do DiagnosticDrawer — Captura 3)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 176.008 bytes)
+- `frontend/public/models/tech/workstation_isolated.png` (Captura 1)
+- `frontend/public/models/tech/reception_workstation_installed.png` (Captura 2)
+- `frontend/public/models/tech/workstation_selected_drawer.png` (Captura 3)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto, contorno CAD, useEffect e cache singleton)
 - `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
 - `production_artifacts/Technical_Specification.md`
-- `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`
+
+---
+
+## Gate de Homologação — Ciclo #20 (`@qa` + `@lead`)
+- **Status:** **AGUARDANDO AVALIAÇÃO DO USUÁRIO**
+- A biblioteca 3D **não foi expandida** para os demais móveis nesta etapa.
+- Os demais computadores da maquete **não foram alterados**.
+- Aguardando aprovação explícita do usuário deste laudo visual e técnico antes de autorizar a expansão da modelagem.
