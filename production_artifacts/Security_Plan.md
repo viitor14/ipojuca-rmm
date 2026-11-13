@@ -114,3 +114,17 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
   4. **Proteção de VRAM e Prevenção de DoS no Navegador:** Orçamento poligonal controlado de 800 a 4.500 tris por asset, impedindo esgotamento de memória de vídeo nos postos de saúde.
 - **Parecer `@security`:** **APROVADO PELO `@security`**. Pipeline seguro e em conformidade estrita com os requisitos de integridade do RMM Ipojuca.
 
+---
+
+## 10. Parecer de Segurança — Ciclo #22 (Calibração de Shaders e Sanitização de Parâmetros WebGL)
+
+**Responsável:** `@security`  
+**Skills Consultadas:** `.agents/skills/security/threat_modeling.md`, `.agents/skills/security/endpoint_security.md`, `.agents/skills/security/security_audit.md`
+
+- **Risco Avaliado:** Modificação dos parâmetros de shaders de sombra (`shadow-bias`, `shadow-normalBias`) e introdução de layout dinâmico no WebGL causando estouro de precisão numérica de ponto flutuante (*float precision overflow*), travamento de GPU (*GPU hang*) ou vazamento de memória em placas integradas antigas nos terminais das UBSs.
+- **Controles Implementados:**
+  1. **Valores Numéricos Estáveis:** O `shadow-bias` foi definido como `-0.00004` e `shadow-normalBias` como `0.025`, situados bem dentro dos limites suportados por shaders WebGL 2.0 padrão (precisão `mediump`/`highp`), sem geração de NaNs ou infinitos.
+  2. **Imutabilidade de Geometrias:** As malhas dos tapetes e móveis continuam sendo instâncias estáticas com geometrias reutilizadas via pool Drei/R3F, sem recriação contínua no loop de animação (`useFrame`), prevenindo vazamento de handles WebGL.
+  3. **Preservação de RBAC e Isolamento de Contexto:** A reorganização espacial não altera o consumo de dados de telemetria nem expõe identificadores adicionais do host.
+- **Parecer `@security`:** **APROVADO**. Mudança puramente visual e matemática nos parâmetros de renderização, sem introdução de riscos cibernéticos ou operacionais.
+

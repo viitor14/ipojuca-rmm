@@ -269,16 +269,16 @@ def build_storage_cabinet():
     # 1. Carcaça Principal (0.90m x 0.45m x 1.82m)
     add_beveled_box("CabinetChassis", (0.90, 0.45, 1.80), (0.0, 0.0, 0.94), mat_cabinet, bevel_width=0.008, segments=3)
     
-    # 2. Portas Verticais Duplas Chanfradas no lado frontal (-Y)
+    # 2. Portas Verticais Duplas Chanfradas
     door_w = 0.435
     door_h = 1.74
     for side, x in [("L", -0.222), ("R", 0.222)]:
-        add_beveled_box(f"Door_{side}", (door_w, 0.02, door_h), (x, -0.235, 0.94), mat_cabinet, bevel_width=0.005)
+        add_beveled_box(f"Door_{side}", (door_w, 0.02, door_h), (x, 0.235, 0.94), mat_cabinet, bevel_width=0.005)
         # Puxadores elegantes verticais
-        add_beveled_box(f"Handle_{side}", (0.02, 0.025, 0.32), (x + (-0.12 if side == 'L' else 0.12) * -1, -0.255, 0.94), mat_metal, bevel_width=0.002)
+        add_beveled_box(f"Handle_{side}", (0.02, 0.025, 0.32), (x + (-0.12 if side == 'L' else 0.12) * -1, 0.255, 0.94), mat_metal, bevel_width=0.002)
         
     # Fechadura central cromada
-    add_beveled_cylinder("LockCylinder", 0.012, 0.025, (0.03, -0.245, 0.94), mat_metal, vertices=16)
+    add_beveled_cylinder("LockCylinder", 0.012, 0.025, (0.03, 0.245, 0.94), mat_metal, vertices=16)
     
     # 3. Sapatas Cilíndricas com Base de Borracha
     for x in [-0.40, 0.40]:
@@ -295,27 +295,28 @@ def build_thermal_printer():
     
     mat_chassis = make_pbr_material("Mat_PrinterChassis", (0.13, 0.15, 0.18, 1.0), roughness=0.45, metallic=0.1)
     mat_paper = make_pbr_material("Mat_PaperReceipt", (0.96, 0.97, 0.98, 1.0), roughness=0.85)
-    mat_led = make_pbr_material("StatusLed_Printer", (0.06, 0.72, 0.40, 1.0), roughness=0.1, emission_color=(0.06, 0.85, 0.45, 1.0), emission_strength=3.0)
+    mat_led = make_pbr_material("StatusLed_Printer", (0.06, 0.72, 0.40, 1.0), roughness=0.1, emission_color=(0.06, 0.85, 0.45, 1.0), emission_strength=2.5)
     mat_metal = make_pbr_material("Mat_CutterMetal", (0.75, 0.78, 0.82, 1.0), roughness=0.25, metallic=0.85)
     mat_button = make_pbr_material("Mat_FeedButton", (0.22, 0.25, 0.30, 1.0), roughness=0.4)
     
-    # 1. Chassi da Impressora (0.20m x 0.16m x 0.10m)
+    # 1. Chassi da Impressora (0.20m x 0.16m x 0.13m)
     add_beveled_box("PrinterBase", (0.20, 0.16, 0.10), (0.0, 0.0, 0.05), mat_chassis, bevel_width=0.005, segments=3)
     
-    # 2. Tampa Superior
-    add_beveled_box("PrinterLid", (0.19, 0.14, 0.035), (0.0, 0.01, 0.11), mat_chassis, bevel_width=0.004)
+    # 2. Tampa Superior Inclinada
+    lid = add_beveled_box("PrinterLid", (0.19, 0.14, 0.035), (0.0, -0.01, 0.11), mat_chassis, bevel_width=0.004)
     
-    # 3. Fenda de Saída e Serrilha de Corte (lado frontal -Y)
-    add_beveled_box("PaperSlot", (0.11, 0.012, 0.005), (0.0, -0.03, 0.128), mat_metal, bevel_width=0.001)
+    # 3. Fenda de Saída e Serrilha de Corte
+    add_beveled_box("PaperSlot", (0.11, 0.012, 0.005), (0.0, 0.03, 0.128), mat_metal, bevel_width=0.001)
     
     # 4. Cupom / Prontuário Térmico Saindo da Fenda
-    add_beveled_box("PaperReceipt", (0.09, 0.035, 0.002), (0.0, -0.045, 0.138), mat_paper, bevel_width=0.0005)
+    add_beveled_box("PaperReceipt", (0.09, 0.035, 0.002), (0.0, 0.045, 0.138), mat_paper, bevel_width=0.0005)
     
-    # 5. Painel Frontal: Botão Feed e Status LED (no lado frontal -Y)
-    add_beveled_cylinder("FeedButton", 0.008, 0.004, (0.06, -0.075, 0.06), mat_button, vertices=16)
+    # 5. Painel de Controle Frontal: Botão Feed e Status LED
+    # Botão Feed
+    add_beveled_cylinder("FeedButton", 0.008, 0.004, (0.07, 0.06, 0.11), mat_button, vertices=16)
     
     # Micro-LED indicador do Spooler de Impressão (sub-nó explícito para R3F)
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.005, location=(0.06, -0.075, 0.08))
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.004, location=(0.07, 0.04, 0.112))
     led_obj = bpy.context.active_object
     led_obj.name = "StatusLed_Printer"
     for poly in led_obj.data.polygons:
@@ -339,57 +340,40 @@ def build_waiting_bench():
     mat_shell = make_pbr_material("Mat_SlateShell", (0.28, 0.40, 0.48, 1.0), roughness=0.55, metallic=0.05)
     mat_feet = make_pbr_material("Mat_RubberTips", (0.12, 0.14, 0.16, 1.0), roughness=0.7)
     
-    # 1. Viga Estrutural Contínua em Tubo de Aço (Comprimento 1.76m, raio 3.5cm a Z = 0.38m)
-    bpy.ops.mesh.primitive_cylinder_add(
-        radius=0.035, depth=1.76, vertices=24,
-        location=(0.0, 0.0, 0.38),
-        rotation=(0, math.radians(90), 0)
-    )
+    # 1. Viga Estrutural Contínua em Tubo de Aço (Comprimento 1.80m)
+    add_beveled_cylinder("MainBeam", 0.035, 1.76, (0.0, 0.0, 0.38), mat_steel, vertices=24)
     beam = bpy.context.active_object
-    beam.name = "MainBeam"
-    bev = beam.modifiers.new(name="Bevel", type='BEVEL')
-    bev.width = 0.003
-    bev.segments = 2
-    bev.limit_method = 'ANGLE'
-    bev.angle_limit = math.radians(45)
-    for poly in beam.data.polygons:
-        poly.use_smooth = True
-    beam.data.materials.append(mat_steel)
+    beam.rotation_euler.y = math.radians(90)
+    bpy.ops.object.transform_apply(rotation=True)
     
     # 2. Pernas Estruturais em Y Invertido (Esquerda e Direita)
     for side, x in [("L", -0.72), ("R", 0.72)]:
         # Coluna vertical
-        add_beveled_cylinder(f"LegVertical_{side}", 0.032, 0.36, (x, 0.0, 0.19), mat_steel, vertices=20)
-        # Barra de apoio no piso (transversal ao longo de Y)
-        bpy.ops.mesh.primitive_cylinder_add(
-            radius=0.025, depth=0.54, vertices=20,
-            location=(x, 0.0, 0.025),
-            rotation=(math.radians(90), 0, 0)
-        )
+        add_beveled_cylinder(f"LegVertical_{side}", 0.032, 0.38, (x, 0.0, 0.20), mat_steel, vertices=20)
+        # Barra de apoio no piso (transversal)
+        bpy.ops.mesh.primitive_cylinder_add(radius=0.025, depth=0.54, vertices=20, location=(x, 0.0, 0.025))
         foot_bar = bpy.context.active_object
         foot_bar.name = f"FootBar_{side}"
-        bev_f = foot_bar.modifiers.new(name="Bevel", type='BEVEL')
-        bev_f.width = 0.003
-        bev_f.segments = 2
-        for poly in foot_bar.data.polygons:
-            poly.use_smooth = True
+        foot_bar.rotation_euler.x = math.radians(90)
+        bpy.ops.object.transform_apply(rotation=True)
         foot_bar.data.materials.append(mat_steel)
         
         # Ponteiras de borracha anti-derrapantes
         for fy in [-0.26, 0.26]:
             add_beveled_cylinder(f"Tip_{side}_{fy}", 0.028, 0.03, (x, fy, 0.025), mat_feet, vertices=16)
             
-    # 3. Três Assentos Anatômicos Individuais (Voltados para a frente -Y)
+    # 3. Três Assentos Anatômicos Individuais
     seat_positions = [-0.56, 0.0, 0.56]
     for i, sx in enumerate(seat_positions):
         # Suporte metálico que une a viga ao assento
         add_beveled_box(f"SeatBracket_{i}", (0.06, 0.16, 0.08), (sx, 0.0, 0.42), mat_steel, bevel_width=0.004)
         
-        # Assento individual anatômico (almofada em Z = 0.46m, projetada para frente -Y)
-        add_beveled_box(f"SeatPan_{i}", (0.48, 0.42, 0.045), (sx, -0.06, 0.46), mat_shell, bevel_width=0.014, segments=4)
+        # Assento individual
+        add_beveled_box(f"SeatPan_{i}", (0.48, 0.42, 0.045), (sx, 0.05, 0.46), mat_shell, bevel_width=0.014, segments=4)
         
-        # Encosto individual anatômico (em Z = 0.65m, Y = 0.14m)
-        add_beveled_box(f"BackPan_{i}", (0.46, 0.045, 0.38), (sx, 0.14, 0.65), mat_shell, bevel_width=0.014, segments=4)
+        # Encosto individual anatômico
+        back_pan = add_beveled_box(f"BackPan_{i}", (0.46, 0.045, 0.38), (sx, -0.16, 0.65), mat_shell, bevel_width=0.014, segments=4)
+        back_pan.rotation_euler.x = math.radians(-10)
         
     export_glb(os.path.join(output_furniture, "waiting_bench.glb"))
 
@@ -405,3 +389,4 @@ if __name__ == "__main__":
     build_thermal_printer()
     build_waiting_bench()
     print("\n--- TODOS OS 6 MODELOS FORAM GERADOS E EXPORTADOS COM SUCESSO! ---")
+

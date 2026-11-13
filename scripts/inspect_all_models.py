@@ -10,3 +10,4 @@ for f in sorted(glob.glob("frontend/public/models/**/*.glb", recursive=True)):
     total_verts = sum(len(o.data.vertices) for o in mesh_objs)
     mat_count = len(bpy.data.materials)
     print(f"MODEL_METRIC | {os.path.basename(f)} | Tris: {total_tris} | Verts: {total_verts} | Meshes: {len(mesh_objs)} | Mats: {mat_count}")
+

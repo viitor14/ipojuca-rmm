@@ -194,3 +194,20 @@ Em continuidade direta à homologação do `workstation_pc.glb`, a biblioteca de
 3. **Escala e Pivô Padronizados:**
    - Ponto de pivô `(0, 0, 0)` centralizado na base do piso (`Z = 0` no Blender, mapeando para o plano de apoio).
    - Orientação frontal apontando para `+Y` no Blender (mapeando para `+Z` no glTF / Three.js).
+
+---
+
+## 9. Design Espacial, Iluminação e Zoneamento Ergonômico da Recepção — Ciclo #22
+
+**Responsável:** `@designer`  
+**Skills Consultadas:** `.agents/skills/designer/design_system.md`, `.agents/skills/designer/ux_dashboard.md`
+
+### 1. Diretrizes de Composição Estética da Recepção (Estilo Habblaude)
+- **Atmosfera Acolhedora e Desobstruída:** A recepção de uma unidade de saúde pública moderna deve transmitir serenidade, clareza e acolhimento. As mesas não devem parecer amontoadas nem invadir a área de espera.
+- **Zona de Espera Nobre:** A longarina hospitalar em azul ardósia (`waiting_bench.glb`) ganha destaque visual rente à parede oeste, com campo de visão livre para o tapete e a circulação.
+- **Tapete Central Limpo:** O tapete azul royal (`#1D4ED8`) com borda suave (`#60A5FA`) atua como âncora visual da sala, sem pernas de mesa ou caixas sobrepostas.
+- **Balcão de Recepção como Ponto Focal:** O balcão em L com vidro temperado translúcido é o primeiro elemento visível a quem adentra pelo acesso, integrando a estação piloto com tela discreta de monitoramento e impressora de senhas.
+
+### 2. Parâmetros de Iluminação e Sombras Suaves (Soft Studio Lighting)
+- **Direcional Principal:** Intensidade 1.15, `shadow-bias={-0.00004}`, `shadow-normalBias={0.025}`, `shadow-radius={2.5}`. Penumbra de contato suave e gradual sob as sapatas dos móveis e rodízios das cadeiras.
+- **Luz de Preenchimento:** Luz fria difusa secundária em ângulo oposto, preenchendo as cavidades verticais e eliminando faixas escuras.

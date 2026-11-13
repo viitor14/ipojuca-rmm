@@ -330,17 +330,17 @@ function IsometricBoard() {
           <boxGeometry args={[18.0, 0.02, 2.0]} />
           <meshStandardMaterial color="#F3EFEB" roughness={0.4} />
         </mesh>
-        {/* Passadeira central cinza-azulada com bordas */}
-        <mesh receiveShadow position={[0, 0.022, 0]}>
-          <boxGeometry args={[17.8, 0.005, 1.1]} />
-          <meshStandardMaterial color="#557385" roughness={0.6} />
+        {/* Passadeira central cinza-azulada com bordas (Sem Z-fighting) */}
+        <mesh receiveShadow position={[0, 0.023, 0]}>
+          <boxGeometry args={[17.8, 0.004, 1.1]} />
+          <meshStandardMaterial color="#557385" roughness={0.65} />
         </mesh>
-        <mesh position={[0, 0.025, -0.53]}>
-          <boxGeometry args={[17.8, 0.004, 0.04]} />
+        <mesh position={[0, 0.026, -0.53]}>
+          <boxGeometry args={[17.8, 0.003, 0.04]} />
           <meshStandardMaterial color="#304757" />
         </mesh>
-        <mesh position={[0, 0.025, 0.53]}>
-          <boxGeometry args={[17.8, 0.004, 0.04]} />
+        <mesh position={[0, 0.026, 0.53]}>
+          <boxGeometry args={[17.8, 0.003, 0.04]} />
           <meshStandardMaterial color="#304757" />
         </mesh>
 
@@ -442,8 +442,8 @@ const SECTOR_THEMES = {
     hasRug: true,
     rugColor: '#1D4ED8',
     rugBorderColor: '#60A5FA',
-    rugSize: [3.4, 2.2],
-    rugPos: [-0.6, 0.025, 0.4],
+    rugSize: [3.2, 2.0],
+    rugPos: [0.5, 0.0, -0.2],
     hasClock: true,
     hasArt: true,
     hasPanel: true,
@@ -457,7 +457,7 @@ const SECTOR_THEMES = {
     rugColor: '#84A98C',
     rugBorderColor: '#DAD7CD',
     rugSize: [2.6, 1.8],
-    rugPos: [0.6, 0.025, 0.6],
+    rugPos: [0.6, 0.0, 0.6],
     hasClock: true,
     hasArt: true,
     hasPanel: false,
@@ -483,8 +483,8 @@ const SECTOR_THEMES = {
     hasRug: true,
     rugColor: '#386641',
     rugBorderColor: '#E9D8A6',
-    rugSize: [3.2, 2.4],
-    rugPos: [0.4, 0.025, 0.4],
+    rugSize: [3.0, 2.2],
+    rugPos: [0.4, 0.0, 0.4],
     hasClock: true,
     hasNoticeBoard: true,
     hasArt: true,
@@ -574,16 +574,18 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
         )}
       </mesh>
 
-      {/* 2. Tapete decorativo característico do Habblaude */}
+      {/* 2. Tapete decorativo característico do Habblaude (Sem Z-Fighting nem Shadow Acne) */}
       {themeConfig.hasRug && (
         <group position={themeConfig.rugPos}>
-          <mesh receiveShadow position={[0, 0.026, 0]}>
-            <boxGeometry args={[themeConfig.rugSize[0], 0.012, themeConfig.rugSize[1]]} />
-            <meshStandardMaterial color={themeConfig.rugColor} roughness={0.8} />
+          {/* Borda decorativa externa do tapete */}
+          <mesh receiveShadow position={[0, 0.029, 0]}>
+            <boxGeometry args={[themeConfig.rugSize[0] + 0.12, 0.004, themeConfig.rugSize[1] + 0.12]} />
+            <meshStandardMaterial color={themeConfig.rugBorderColor} roughness={0.85} />
           </mesh>
-          <mesh receiveShadow position={[0, 0.028, 0]}>
-            <boxGeometry args={[themeConfig.rugSize[0] + 0.08, 0.008, themeConfig.rugSize[1] + 0.08]} />
-            <meshStandardMaterial color={themeConfig.rugBorderColor} roughness={0.8} />
+          {/* Corpo aveludado interno do tapete */}
+          <mesh receiveShadow position={[0, 0.032, 0]}>
+            <boxGeometry args={[themeConfig.rugSize[0], 0.004, themeConfig.rugSize[1]]} />
+            <meshStandardMaterial color={themeConfig.rugColor} roughness={0.9} />
           </mesh>
         </group>
       )}
@@ -931,14 +933,14 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
 function ReceptionPilotFurniture({ halfW, halfD, backZ }) {
   return (
     <group>
-      {/* 1. BALCÃO DE ATENDIMENTO EM L (reception_counter.glb) */}
-      <ReceptionCounterModel position={[-1.3, 0, backZ + 0.2]} />
+      {/* 1. BALCÃO DE ATENDIMENTO EM L (reception_counter.glb) - Ponto focal na entrada */}
+      <ReceptionCounterModel position={[-2.2, 0, 0.8]} />
 
       {/* 2. IMPRESSORA TÉRMICA DE PRONTUÁRIO NO BALCÃO (thermal_printer.glb) */}
-      <ThermalPrinterModel position={[-2.1, 1.08, backZ + 0.2]} isActive={true} />
+      <ThermalPrinterModel position={[-1.4, 1.08, 0.8]} isActive={true} />
 
-      {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (storage_cabinet.glb) */}
-      <StorageCabinetModel position={[-halfW + 0.8, 0, backZ + 0.35]} rotation={[0, Math.PI, 0]} />
+      {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (storage_cabinet.glb) - Rente à alvenaria norte */}
+      <StorageCabinetModel position={[-3.6, 0, backZ + 0.3]} rotation={[0, Math.PI, 0]} />
 
       {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (WaterDispenserHabblaude) */}
       <group position={[halfW - 0.75, 0, backZ + 0.15]}>
@@ -1010,8 +1012,8 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ }) {
         </mesh>
       </group>
 
-      {/* 6. LONGARINA DE ESPERA PARA PACIENTES (waiting_bench.glb) */}
-      <WaitingBenchModel position={[-halfW + 0.65, 0, 0.2]} rotation={[0, Math.PI / 2, 0]} />
+      {/* 6. LONGARINA DE ESPERA PARA PACIENTES (waiting_bench.glb) - Parede oeste, frente livre */}
+      <WaitingBenchModel position={[-halfW + 0.55, 0, -0.3]} rotation={[0, Math.PI / 2, 0]} />
     </group>
   );
 }
@@ -1224,17 +1226,22 @@ function computeMachineLayout(machines, sectors) {
     const isReception = sector.code === 'REC' || Number(sector.id) === 1;
 
     if (isReception) {
-      // Layout especializado da Recepção: desobstrui o tapete central
+      // Layout ergonômico e desobstruído da Recepção (Ciclo #22)
       const receptionSlots = [
-        { x: bx - 1.15, z: bz - 0.75 }, // Posto 1: Estação Principal (Piloto machine.id = 9)
-        { x: bx + 1.85, z: bz - 0.75 }, // Posto 2: Atendimento Secundário
-        { x: bx - 2.50, z: bz + 0.85 }, // Posto 3: Triagem Lateral
-        { x: bx + 2.50, z: bz + 0.85 }, // Posto 4: Pós-consulta / Regulação
+        // Posto 1: Atendimento Principal (Piloto machine.id = 9) integrado à bancada do balcão em L
+        { x: bx - 1.85, z: bz + 0.95, rotY: 0, hideDesk: true },
+        // Posto 2: Atendimento Secundário / Apoio (Mesa executiva independente)
+        { x: bx + 2.20, z: bz + 0.85, rotY: 0 },
+        // Posto 3: Triagem Clínica (Quadrante norte, voltado para a circulação)
+        { x: bx - 1.20, z: bz - 1.25, rotY: Math.PI },
+        // Posto 4: Regulação / Pós-Consulta (Quadrante nordeste, voltado para a circulação)
+        { x: bx + 2.20, z: bz - 1.25, rotY: Math.PI },
       ];
       ordered.forEach((m, i) => {
         const slot = receptionSlots[i] || {
-          x: bx + (i % 2 === 0 ? -2.2 : 2.2),
+          x: bx + (i % 2 === 0 ? -2.0 : 2.0),
           z: bz + (Math.floor(i / 2) * 1.5),
+          rotY: 0,
         };
         result.set(m.id, slot);
       });
@@ -1249,6 +1256,7 @@ function computeMachineLayout(machines, sectors) {
         result.set(m.id, {
           x: bx + (col - (cols - 1) / 2) * spacing,
           z: bz - 0.5 + row * 1.85,
+          rotY: 0,
         });
       });
     }
@@ -1262,14 +1270,13 @@ function computeMachineLayout(machines, sectors) {
 function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos }) {
   const posX = layoutPos ? layoutPos.x : Number(machine.pos_x || 0);
   const posZ = layoutPos ? layoutPos.z : Number(machine.pos_z || 0);
-
-  // Diretrizes 5 e 7: machine.id = 9 é a estação-piloto (hostname DESKTOP-32HK6KT complementar)
-  const isPilotMachine = Number(machine.id) === 9 || machine.hostname === 'DESKTOP-32HK6KT';
+  const rotY = layoutPos?.rotY || 0;
+  const hideDesk = Boolean(layoutPos?.hideDesk);
 
   return (
-    <group position={[posX, 0, posZ]}>
-      {/* 1. MESA DE TRABALHO EXECUTIVA (office_desk.glb) */}
-      <DeskModel position={[0, 0, 0]} />
+    <group position={[posX, 0, posZ]} rotation={[0, rotY, 0]}>
+      {/* 1. MESA DE TRABALHO EXECUTIVA (office_desk.glb) - Omitida quando integrada à bancada do balcão */}
+      {!hideDesk && <DeskModel position={[0, 0, 0]} />}
 
       {/* 2. CADEIRA DE ESCRITÓRIO ERGONÔMICA (ergonomic_chair.glb) */}
       <ChairModel position={[-0.08, 0, 0.54]} />
@@ -1365,9 +1372,9 @@ export function DigitalTwin3D({
           shadow-camera-right={12}
           shadow-camera-top={12}
           shadow-camera-bottom={-12}
-          shadow-bias={-0.0004}
-          shadow-normalBias={0.03}
-          shadow-radius={3.8}
+          shadow-bias={-0.00004}
+          shadow-normalBias={0.025}
+          shadow-radius={2.5}
         />
 
         {/* 4. Luz secundária de preenchimento (Fill Light) para eliminar faixas escuras */}

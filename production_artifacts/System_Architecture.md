@@ -421,3 +421,28 @@ Para evitar vazamentos de telemetria entre unidades de saúde municipais no dash
 - **Clonagem Segura (`scene.clone(true)`):** Assegura que instâncias do mesmo modelo possam receber materiais ou transformações isoladas sem colisão na árvore do Three.js.
 - **Transição `useMemo` -> `useEffect`:** Mutações imperativas de propriedades do grafo de cena continuam padronizadas dentro de `useEffect`, garantindo total conformidade com o ciclo de vida do React 18.
 - **Cache Singleton de Texturas:** Texturas compartilhadas são armazenadas em singletons estáticos, garantindo zero vazamento de memória na VRAM durante re-renderizações ou atualizações do WebSocket.
+
+---
+
+## 14. Arquitetura Espacial e Calibração de Renderização 3D — Ciclo #22
+
+**Responsável:** `@lead`  
+**Skills Consultadas:** `.agents/skills/lead/system_architecture.md`, `.agents/skills/lead/technical_orchestration.md`
+
+### 1. Calibração da Pipeline de Sombras do Three.js / R3F
+- **Problema Diagnosticado:** Listras horizontais (*shadow acne*) sobre geometrias planas causadas por `shadow-bias={-0.0004}` excessivamente negativo, projetando a profundidade do frustum ortográfico (2048x2048 sobre 24m) à frente dos vértices.
+- **Solução Arquitetural:**
+  - Ajuste do `shadow-bias` para `-0.00004` (redução de 10x na distorção de profundidade).
+  - Elevação do `shadow-normalBias` para `0.025` (deslocamento baseado na normal geométrica, imune a ângulos rasos).
+  - `shadow-radius` redefinido para `2.5` com filtro PCFSoftShadowMap, suavizando a penumbra de contato sem artefatos periódicos.
+
+### 2. Estratificação de Camadas Geométricas do Piso (Zero Z-Fighting)
+- **Laje Estrutural:** $y = -0.05$ (espessura 0.14m).
+- **Piso Modular:** $y = 0.015$ (espessura 0.025m, cota superior em $y = +0.0275$).
+- **Borda Externa do Tapete:** $y = 0.029$ (espessura 0.004m, cota superior em $y = +0.031$).
+- **Corpo Aveludado do Tapete:** $y = 0.032$ (espessura 0.004m, cota superior em $y = +0.034$).
+- **Resultado:** Separação vertical garantida de 3mm ($0.003$ unidades de mundo) entre cada elemento, eliminando completamente a disputa de precisão no Z-Buffer.
+
+### 3. Modelo de Dados de Layout Dinâmico (`computeMachineLayout`)
+- **Propriedade `rotY`:** Cada slot de máquina passa a receber rotação em radianos, orientando atendentes para o centro da sala e eliminando cadeiras de costas para o público.
+- **Propriedade `hideDesk`:** Quando um posto de trabalho está acoplado ao `ReceptionCounterModel` (Posto Piloto machine 9), a renderização da mesa avulsa `office_desk.glb` é suprimida em tempo de renderização, integrando o monitor e o teclado diretamente sobre a bancada interna de carvalho do balcão.

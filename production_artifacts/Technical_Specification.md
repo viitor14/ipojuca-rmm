@@ -1334,8 +1334,109 @@ Todos os componentes implementarão:
 
 ## 38. Gate de Aprovação — FASE 1 (Ciclo #21)
 
-O pipeline do Ciclo #21 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+- **Status:** **HOMOLOGADO E APROVADO PELO USUÁRIO** (Concluído com commit `6dd793b`).
 
-Apresentamos a especificação funcional e arquitetural para o desenvolvimento dos **6 modelos de mobiliário profissional** via Blender 4.2 LTS e a conclusão da **Recepção como primeiro ambiente completo**.
+---
 
-Responda com **`Approved`** para que as equipes `@lead`, `@designer`, `@engineer` e `@frontend` iniciem a modelagem no Blender, a exportação dos GLBs e a integração na sala-piloto!
+## 39. Ciclo #22 — Reorganização Espacial da Recepção e Correção dos Bugs de Sombra/Z-Fighting nos Tapetes
+
+**Ciclo:** #22  
+**Fase:** FASE 1 — Análise e Especificação  
+**Responsável:** `@pm` (Product Manager)  
+**Skills Consultadas:** `.agents/skills/pm/product_requirements.md`, `.agents/skills/pm/acceptance_criteria.md`
+
+### 1. Diagnóstico das Evidências Visuais Enviadas pelo Usuário
+
+A análise das capturas de tela reais enviadas pelo usuário revelou dois problemas críticos que impactam a qualidade estética e a usabilidade do Gêmeo Digital:
+
+#### Evidência 1: Bug Visual dos Tapetes (Shadow Acne, Moiré e Z-Fighting)
+- **Manifestação:** Faixas e listras horizontais pretas/escuras ("efeito zebra") que se propagam transversalmente sobre a superfície dos tapetes, tanto no consultório clínico (Captura 1, tapete verde/bege) quanto na recepção (Captura 2, tapete azul).
+- **Causa Raiz Técnica:**
+  1. **Shadow Bias Descalibrado:** Em `DigitalTwin3D.jsx` (linha 1368), a luz direcional possui `shadow-bias={-0.0004}`. Por ser um valor negativo acentuado, a profundidade do mapa de sombras (2048x2048 sobre uma área de 24 metros) é projetada à frente da geometria física, causando oscilação periódica de teste de profundidade (*shadow acne*) em superfícies horizontais planas vistas sob ângulo raso.
+  2. **Co-penetração Geométrica e Z-Fighting:** A malha do tapete e sua borda foram definidas com espessuras concorrentes (`y=0.026` com altura 0.012 e `y=0.028` com altura 0.008), resultando em topos idênticos em `y=0.032` quase colados ao piso (`y=0.0275`), gerando disputa de precisão no Z-buffer e sombras de auto-oclusão espúrias.
+
+#### Evidência 2: Desorganização e Colisões na Recepção ("Toda Bagunçada")
+- **Manifestação (Captura 2):**
+  1. **Colisão Crítica do Balcão:** O `reception_counter.glb` está posicionado na borda inferior da sala, colidindo diretamente com o Posto 3 (mesa e cadeira de atendimento). O atendente fica "prensado" dentro da estrutura do balcão.
+  2. **Armário Avulso no Meio do Caminho:** O `storage_cabinet.glb` foi posicionado no meio da área útil de passagem, flutuando entre as mesas 3 e 4, sobrepondo o tapete e obstruindo o fluxo da recepção.
+  3. **Longarina Soterrada:** A `waiting_bench.glb` está prensada no canto inferior direito, escondida atrás do armário e da mesa 4, tornando-se visualmente invisível e funcionalmente inacessível para pacientes.
+  4. **Conflito de Orientação das Mesas:** As mesas 1 e 2 no fundo estão viradas para o sul, enquanto as mesas 3 e 4 na frente também estão viradas para o sul, fazendo com que as cadeiras das mesas da frente fiquem de costas para o público e enfiadas no balcão e no armário.
+  5. **Tapete Ocupado Indevidamente:** O tapete azul central, que deveria ser um elemento elegante de recepção e espera, está invadido por pernas de mesas e rodízios de cadeiras de forma desordenada.
+
+---
+
+### 2. Proposta Arquitetônica e Zoneamento Ergonômico da Recepção
+
+Para transformar a Recepção em um ambiente equilibrado, profissional e fiel a uma clínica humanizada de alto padrão (estilo *Habblaude*), o espaço será dividido em **4 zonas funcionais harmônicas**:
+
+```
++-------------------------------------------------------------------------+
+| [Norte / Parede de Fundo com Janelas]                                   |
+|                                                                         |
+|  [Armário Prontuários]     [Posto 3: Triagem]     [Posto 4: Regulação]  |
+|  (Embutido na parede)     (Mesa Executiva GLB)   (Mesa Executiva GLB)   |
+|                                                                         |
+|-------------------------------------------------------------------------|
+| [Zona Central de Circulação e Espera]                                   |
+|                                                                         |
+|  [Longarina 3 Lugares]         [TAPETE AZUL LIMPO]         [Planta]     |
+|  (Apoiada na parede Oeste,      (Área livre sem           (Canto Leste) |
+|   voltada para a sala)           mesas em cima)                         |
+|                                                                         |
+|-------------------------------------------------------------------------|
+| [Sul / Acesso e Atendimento]                                            |
+|                                                                         |
+|  [Acesso Deck]    [BALCÃO EM L COM VIDRO]         [Posto 2: Atendimento]|
+|  (Porta Entrada)  (Voltado para o público,         (Mesa de apoio)      |
+|                    Posto 1 Piloto na bancada)                           |
++-------------------------------------------------------------------------+
+```
+
+1. **Zona de Guichê e Entrada (Sul / Sudoeste):**
+   - O balcão `reception_counter.glb` será posicionado de frente para o paciente que entra pelo deck.
+   - O **Posto 1 (Estação Piloto `machine.id = 9` / `DESKTOP-32HK6KT`)** ficará integrado ao posto de atendimento principal com a impressora térmica de senhas/fichas no balcão.
+2. **Zona de Espera Humanizada (Oeste / Centro):**
+   - A longarina `waiting_bench.glb` será alinhada junto à parede oeste, com seus 3 assentos confortavelmente voltados para o centro da recepção, com vão livre frontal superior a 1,5m.
+   - O tapete decorativo azul permanecerá como área nobre desobstruída.
+3. **Zona de Triagem e Administração (Norte):**
+   - As mesas de atendimento secundário e triagem ficarão organizadas no quadrante norte, perfeitamente alinhadas, com corredores ergonômicos e cadeiras posicionadas corretamente.
+4. **Zona de Arquivo Médico:**
+   - O `storage_cabinet.glb` será recuado e encostado na alvenaria, com portas voltadas para a área de serviço, eliminando qualquer interferência no fluxo do paciente.
+
+---
+
+### 3. Requisitos Funcionais
+
+- **RF-79 (Eliminação do Bug de Sombras nos Tapetes):** Calibrar a luz direcional e o mapa de sombras do Three.js (`shadow-bias` suave em `-0.00004` e `shadow-normalBias` em `0.02`), eliminando completamente as faixas horizontais de moiré e *shadow acne*.
+- **RF-80 (Geometria Limpa dos Tapetes):** Reformular a estrutura das malhas de tapetes nos temas (`SECTOR_THEMES` e passadeira do diorama): altura única elevada (`y = 0.030`), borda integrada sem caixas co-planares sobrepostas, eliminando o Z-fighting.
+- **RF-81 (Zoneamento da Recepção):** Reorganizar os elementos espaciais da Recepção de modo que não haja sobreposição de *bounding boxes* entre móveis, estações de trabalho e circulação de pessoas.
+- **RF-82 (Posicionamento do Balcão de Recepção):** Alinhar o balcão em L com visão direta para a entrada, posicionando a estação piloto com contorno CAD e tela funcional no posto de atendimento.
+- **RF-83 (Desobstrução da Longarina de Espera):** Posicionar a longarina de 3 lugares na área de espera sem qualquer armário ou mesa na sua frente, garantindo total visibilidade e estética acolhedora.
+- **RF-84 (Preservação de Dados e Funcionalidades):** Manter 100% da reatividade via Socket.io, telemetria em tempo real, seleção de máquina com contorno CAD e acionamento do `DiagnosticDrawer`.
+
+---
+
+### 4. Critérios de Aceitação
+
+| ID | Critério de Aceitação | Cenário de Teste | Ação do Operador | Resultado Esperado |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-83** | **Eliminação de Sombras Listradas nos Tapetes** | Inspeção visual dos tapetes da Recepção, Consultório e ADM | Navegar e orbitar a câmera 3D sobre os setores com tapete | **Zero faixas pretas horizontais / zebra stripes**. Superfície do tapete uniforme, lisa e com sombras de contato limpas. |
+| **CA-84** | **Fim do Z-Fighting no Piso** | Verificação de proximidade de câmera em zoom máximo | Aproximar a câmera dos tapetes e da passadeira central | Nenhuma cintilação ou disputa de pixels (*Z-fighting*) entre piso, laje e tapetes. |
+| **CA-85** | **Zero Colisões na Recepção** | Inspeção de malhas e bounding boxes na sala-piloto | Visualizar a recepção em visão isométrica e superior (top-down) | Nenhuma mesa, cadeira, balcão, armário ou longarina sobreposto ou colidindo entre si. |
+| **CA-86** | **Balcão de Recepção Acessível** | Verificação do guichê de atendimento | Observar a entrada e o balcão em L | Balcão com visor de vidro translúcido voltado para a entrada, com atendente e impressora térmica integrados. |
+| **CA-87** | **Longarina de Espera Confortável e Visível** | Verificação da área de espera de pacientes | Observar a parede oeste e a circulação | Longarina com 3 assentos livres, sem armário na frente, com vista desimpedida para a sala. |
+| **CA-88** | **Armário de Prontuários Encostado na Parede** | Inspeção da parede norte | Verificar a posição do armário de arquivos | Armário posicionado rente à alvenaria, liberando o vão central de passagem. |
+| **CA-89** | **Tapete Azul Central Limpo** | Verificação estética do piso | Observar a área central da recepção | Tapete azul centralizado e valorizado, sem invasão caótica de mesas e cadeiras. |
+| **CA-90** | **Telemetria, Drawer e 60 FPS Preservados** | Homologação funcional da estação piloto | Clicar no computador `DESKTOP-32HK6KT` | Contorno CAD aceso, drawer aberto com métricas em tempo real e renderização mantida a 60 FPS com build aprovado. |
+
+---
+
+## 40. Gate de Aprovação — FASE 1 (Ciclo #22)
+
+O pipeline do **Ciclo #22** encontra-se **pausado no Gate de Aprovação da Fase 1**.
+
+Apresentamos a especificação detalhada para a **resolução definitiva dos bugs de sombra/Z-fighting nos tapetes** e a **reorganização ergonômica e arquitetônica completa da Recepção**.
+
+> [!IMPORTANT]
+> Nenhuma linha de código será modificada antes da aprovação explícita.
+> Por favor, responda com **`Approved`** para autorizarmos as equipes `@lead`, `@frontend` e `@engineer` a aplicarem as correções e gerarem os novos renders de validação!

@@ -101,3 +101,4 @@ if __name__ == "__main__":
     for item in MODELS:
         render_preview(*item)
     print("\n--- TODAS AS PREVIEWS FORAM RENDERIZADAS COM SUCESSO! ---")
+

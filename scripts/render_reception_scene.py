@@ -63,15 +63,15 @@ floor = bpy.context.active_object
 floor.scale = (room_w, room_d, 0.1)
 floor.data.materials.append(mat_floor)
 
-# Tapete central azul hospitalar
-bpy.ops.mesh.primitive_cube_add(size=1, location=(0.3, -0.1, 0.004))
+# Tapete central azul hospitalar (Sem colisões com mesas)
+bpy.ops.mesh.primitive_cube_add(size=1, location=(0.5, -0.2, 0.004))
 rug_b = bpy.context.active_object
-rug_b.scale = (3.4, 4.2, 0.008)
+rug_b.scale = (3.4, 2.2, 0.006)
 rug_b.data.materials.append(mat_rug_border)
 
-bpy.ops.mesh.primitive_cube_add(size=1, location=(0.3, -0.1, 0.006))
+bpy.ops.mesh.primitive_cube_add(size=1, location=(0.5, -0.2, 0.008))
 rug = bpy.context.active_object
-rug.scale = (3.2, 4.0, 0.008)
+rug.scale = (3.2, 2.0, 0.006)
 rug.data.materials.append(mat_rug)
 
 # Parede Norte (Fundo)
@@ -150,59 +150,63 @@ def import_glb(filepath, location, rotation_z=0, rotation_y=0):
     return root, new_objs
 
 # 1. BALCÃO DE RECEPÇÃO EM L (reception_counter.glb)
-# Posicionado na lateral esquerda de entrada, com visor de vidro temperado
-counter_pos = Vector((-2.55, -1.1, 0))
+# Ponto focal na entrada sul, com visor voltado para a circulação interna (+Y)
+counter_pos = Vector((-1.8, -1.8, 0))
 import_glb(counter_glb, counter_pos, rotation_z=0)
 
 # Impressora térmica de atendimento no balcão
-import_glb(printer_glb, counter_pos + Vector((-0.2, 0.15, 1.10)), rotation_z=math.radians(-90))
+import_glb(printer_glb, counter_pos + Vector((-0.6, 0.15, 1.10)), rotation_z=math.radians(-90))
 
 # 2. ARMÁRIO DE PRONTUÁRIOS E ARQUIVOS (storage_cabinet.glb)
-# Posicionado contra a parede norte (fundo), com portas chanfradas voltadas para a sala (+Y)
-import_glb(cabinet_glb, Vector((-1.6, room_d/2 - 0.28, 0)), rotation_z=math.pi)
+# Rente à alvenaria da parede norte, liberando 100% da área útil
+import_glb(cabinet_glb, Vector((-2.8, room_d/2 - 0.35, 0)), rotation_z=math.pi)
 
 # 3. LONGARINA DE ESPERA (waiting_bench.glb)
-# Posicionada contra a parede oeste, com 3 assentos voltados para a circulação (+X)
-import_glb(bench_glb, Vector((-room_w/2 + 0.65, 0.45, 0)), rotation_z=math.radians(90))
+# Alinhada na parede oeste, com 3 assentos voltados para o tapete e para o centro (+X)
+import_glb(bench_glb, Vector((-room_w/2 + 0.55, 0.2, 0)), rotation_z=math.radians(90))
 
-# 4. QUATRO ESTAÇÕES DE TRABALHO COMPLETAS (office_desk + ergonomic_chair + workstation_pc)
-desk_slots = [
-    Vector((-0.95, -0.75, 0)),  # Posto 1: Piloto (DESKTOP-32HK6KT / machine 9)
-    Vector((1.95, -0.75, 0)),   # Posto 2: Atendimento
-    Vector((-0.95, 1.45, 0)),   # Posto 3: Triagem
-    Vector((1.95, 1.45, 0)),    # Posto 4: Regulação
+# 4. QUATRO ESTAÇÕES DE TRABALHO ERGONÔMICAS E NÃO COLIDENTES
+# Posto 1 (Piloto machine 9): Integrado à bancada interna do balcão (sem mesa duplicada!)
+posto1_pos = counter_pos + Vector((0.35, -0.15, 0.74))
+ws_root1, ws_objs1 = import_glb(workstation_glb, posto1_pos, rotation_z=0)
+import_glb(chair_glb, counter_pos + Vector((0.35, -0.68, 0)), rotation_z=math.pi)
+
+# Configura LED de status do posto 1 para verde
+for o in ws_objs1:
+    if o.name.startswith("StatusLed") and o.data and o.data.materials:
+        mat_led = bpy.data.materials.new("Led_Pilot")
+        mat_led.use_nodes = True
+        bsdf = mat_led.node_tree.nodes.get("Principled BSDF")
+        if bsdf:
+            bsdf.inputs["Base Color"].default_value = (0.06, 0.73, 0.51, 1.0)
+            if "Emission Color" in bsdf.inputs:
+                bsdf.inputs["Emission Color"].default_value = (0.06, 0.73, 0.51, 1.0)
+                bsdf.inputs["Emission Strength"].default_value = 3.5
+        o.data.materials[0] = mat_led
+
+# Postos 2, 3 e 4: Mesas executivas independentes distribuídas harmonicamente
+standalone_desks = [
+    (Vector((2.0, -1.8, 0)), 0, -0.55),              # Posto 2: Atendimento Secundário (Sul)
+    (Vector((-1.0, 1.4, 0)), math.pi, 0.55),         # Posto 3: Triagem Clínica (Norte)
+    (Vector((2.0, 1.4, 0)), math.pi, 0.55),          # Posto 4: Regulação / Pós-Consulta (Nordeste)
 ]
 
-facing_rot = math.radians(-128) # Ligeiramente angulado para visualização isométrica
-chair_offset = Vector((-math.sin(facing_rot), math.cos(facing_rot), 0)) * -0.52
-
-for i, slot in enumerate(desk_slots):
-    # Mesa executiva de escritório
-    import_glb(desk_glb, slot, rotation_z=facing_rot)
-    
-    # Cadeira ergonômica
-    import_glb(chair_glb, slot + chair_offset, rotation_z=facing_rot + math.pi)
-    
-    # Estação de trabalho PC completa (workstation_pc.glb)
-    ws_root, ws_objs = import_glb(workstation_glb, slot + Vector((0, 0, 0.76)), rotation_z=facing_rot)
-    
-    # Configuração de LED de status nos computadores
+for idx, (slot, rot_z, chair_y) in enumerate(standalone_desks, start=2):
+    import_glb(desk_glb, slot, rotation_z=rot_z)
+    import_glb(chair_glb, slot + Vector((0, chair_y, 0)), rotation_z=rot_z + math.pi)
+    ws_root, ws_objs = import_glb(workstation_glb, slot + Vector((0, 0, 0.76)), rotation_z=rot_z)
     for o in ws_objs:
         if o.name.startswith("StatusLed") and o.data and o.data.materials:
-            color = (0.06, 0.73, 0.51, 1.0) if i != 2 else (0.95, 0.65, 0.12, 1.0) # Posto 3 com status Warning para teste
-            mat_led = bpy.data.materials.new(f"Led_Slot_{i}")
+            color = (0.06, 0.73, 0.51, 1.0) if idx != 3 else (0.95, 0.65, 0.12, 1.0)
+            mat_led = bpy.data.materials.new(f"Led_Slot_{idx}")
             mat_led.use_nodes = True
             bsdf = mat_led.node_tree.nodes.get("Principled BSDF")
             if bsdf:
                 bsdf.inputs["Base Color"].default_value = color
                 if "Emission Color" in bsdf.inputs:
                     bsdf.inputs["Emission Color"].default_value = color
-                    bsdf.inputs["Emission Strength"].default_value = 3.5
+                    bsdf.inputs["Emission Strength"].default_value = 3.0
             o.data.materials[0] = mat_led
-            
-    # Impressora acoplada na estação 1 (spooler ativo)
-    if i == 0:
-        import_glb(printer_glb, slot + Vector((-0.45, 0, 0.76)), rotation_z=facing_rot)
 
 # 5. Elementos Arquitetônicos Complementares
 # Bebedouro de coluna no canto norte-leste
@@ -297,3 +301,4 @@ print(f"Rendered: {out_topdown}")
 
 shutil.copy2(out_topdown, os.path.join(brain_dir, "reception_topdown_comparison.png"))
 print("Done! Both renders exported and copied to brain artifacts.")
+
