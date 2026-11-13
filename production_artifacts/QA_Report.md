@@ -176,6 +176,32 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 - `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`
 
+---
+
+## Ciclo #17 — Missão de Refinamento Artístico: Sala-Piloto da Recepção (Padrão Habblaude Premium) (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente:** Frontend React + Three.js / R3F / Drei (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-50** | Sala-Piloto da Recepção com Padrão Habblaude | ✅ APROVADO | A Recepção foi desenvolvida com volumetria, espessura e acabamento de miniatura física de estúdio. O balcão em L conta com tampo chanfrado em carvalho natural, painel frontal com ripas em marfim, rodapé metálico e divisória de acrílico translúcido com fixadores cromados. A sala conta com armário vertical de duas portas com puxadores em aço escovado, longarina de 3 lugares azul hospitalar, bebedouro de coluna com galão translúcido e planta de interior em vaso cerâmico. |
+| **CA-51** | Estação de Computador Completa e Reconhecível | ✅ APROVADO | A mesa executiva conta com tampo encorpado de carvalho chanfrado, gaveteiro integrado com 3 gavetas e puxadores metálicos finos, além de pernas em aço grafite. A cadeira ergonômica possui assento e encosto acolchoados com suporte lombar, braços em T, pistão a gás e base aranha de 5 pontas. O computador é representado com monitor widescreen slim de bordas finas com tela emissiva de status e micro-LED funcional, mini torre com grelha e botão power, teclado em relevo e mousepad com mouse óptico. |
+| **CA-52** | Iluminação Suave sem Faixas Diagonais ou Artefatos | ✅ APROVADO | A cena foi reformulada com iluminação de estúdio difusa (`#FFFDF9`), luz de hemisfério suave (`#FFFDF7` / `#DCE3DA`) e luz direcional calibrada com `shadow-radius = 3.8`, `shadow-bias = -0.0004` e `shadow-normalBias = 0.03`. As paredes baixas cutaway não projetam sombras duras sobre os cômados e as faixas diagonais pretas foram 100% extintas. |
+| **CA-53** | Edificação Preenche Harmoniosamente a Viewport | ✅ APROVADO | O substrato do diorama foi reduzido de `24.0m x 18.0m` para `20.6m x 14.6m`, com margens de gramado tratadas como base discreta. A edificação agora preenche mais de 80% da tela em modo ISO padrão (`fov = 34`, câmera `[-11.2, 10.0, 11.2]`), com a recepção em destaque visual nítido. |
+| **CA-54** | Interatividade e Telemetria Funcionais | ✅ APROVADO | O avatar 3D do computador da recepção permanece vinculado ao equipamento real (`DESKTOP-32HK6KT`). Ao clicar no computador, a seleção discreta no piso é ativada, a câmera aproxima suavemente a estação e o Drawer de Diagnósticos abre exibindo dados em tempo real (CPU, RAM, Disco, Temperatura, Processador e Spooler). |
+| **CA-55** | Escopo Restrito à Sala-Piloto | ✅ APROVADO | A reformulação artística detalhada foi isolada com rigor à Sala-Piloto (Recepção), mantendo as demais salas estáveis e neutras para validação e aprovação do usuário antes de qualquer intervenção nos demais setores. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso (`dist/assets/index-FGLBaybW.js` em 11.61s). Zero erros de linter ou compilação. |
+
+**Arquivos Modificados:**
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/dist/` (build de produção atualizado)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/Design_Specification.md`
+- `production_artifacts/Security_Plan.md`
+- `production_artifacts/QA_Report.md`
+
 
 ---
 
@@ -299,4 +325,30 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 - `frontend/dist/` (build de produção atualizado)
 - `production_artifacts/Technical_Specification.md`
 - `production_artifacts/System_Architecture.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
+## Ciclo #17 — Missão de Refinamento Artístico: Sala-Piloto da Recepção (Padrão Habblaude Premium) (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente:** Frontend React + Three.js / R3F / Drei (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-50** | Sala-Piloto da Recepção com Padrão Habblaude | ✅ APROVADO | A Recepção foi desenvolvida com volumetria, espessura e acabamento de miniatura física de estúdio. O balcão em L conta com tampo chanfrado em carvalho natural, painel frontal com ripas em marfim, rodapé metálico e divisória de acrílico translúcido com fixadores cromados. A sala conta com armário vertical de duas portas com puxadores em aço escovado, longarina de 3 lugares azul hospitalar, bebedouro de coluna com galão translúcido e planta de interior em vaso cerâmico. |
+| **CA-51** | Estação de Computador Completa e Reconhecível | ✅ APROVADO | A mesa executiva conta com tampo encorpado de carvalho chanfrado, gaveteiro integrado com 3 gavetas e puxadores metálicos finos, além de pernas em aço grafite. A cadeira ergonômica possui assento e encosto acolchoados com suporte lombar, braços em T, pistão a gás e base aranha de 5 pontas. O computador é representado com monitor widescreen slim de bordas finas com tela emissiva de status e micro-LED funcional, mini torre com grelha e botão power, teclado em relevo e mousepad com mouse óptico. |
+| **CA-52** | Iluminação Suave sem Faixas Diagonais ou Artefatos | ✅ APROVADO | A cena foi reformulada com iluminação de estúdio difusa (`#FFFDF9`), luz de hemisfério suave (`#FFFDF7` / `#DCE3DA`) e luz direcional calibrada com `shadow-radius = 3.8`, `shadow-bias = -0.0004` e `shadow-normalBias = 0.03`. As paredes baixas cutaway não projetam sombras duras sobre os cômados e as faixas diagonais pretas foram 100% extintas. |
+| **CA-53** | Edificação Preenche Harmoniosamente a Viewport | ✅ APROVADO | O substrato do diorama foi reduzido de `24.0m x 18.0m` para `20.6m x 14.6m`, com margens de gramado tratadas como base discreta. A edificação agora preenche mais de 80% da tela em modo ISO padrão (`fov = 34`, câmera `[-11.2, 10.0, 11.2]`), com a recepção em destaque visual nítido. |
+| **CA-54** | Interatividade e Telemetria Funcionais | ✅ APROVADO | O avatar 3D do computador da recepção permanece vinculado ao equipamento real (`DESKTOP-32HK6KT`). Ao clicar no computador, a seleção discreta no piso é ativada, a câmera aproxima suavemente a estação e o Drawer de Diagnósticos abre exibindo dados em tempo real (CPU, RAM, Disco, Temperatura, Processador e Spooler). |
+| **CA-55** | Escopo Restrito à Sala-Piloto | ✅ APROVADO | A reformulação artística detalhada foi isolada com rigor à Sala-Piloto (Recepção), mantendo as demais salas estáveis e neutras para validação e aprovação do usuário antes de qualquer intervenção nos demais setores. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso (`dist/assets/index-FGLBaybW.js` em 11.61s). Zero erros de linter ou compilação. |
+
+**Arquivos Modificados:**
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/dist/` (build de produção atualizado)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/Design_Specification.md`
+- `production_artifacts/Security_Plan.md`
 - `production_artifacts/QA_Report.md`

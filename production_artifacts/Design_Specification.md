@@ -97,3 +97,48 @@ Substituição definitiva da estética futurista por um design editorial requint
   - Mini gabinetes e telas slim proporcionais sobre as mesas reais.
   - Indicadores luminosos sutis apenas no bezel do monitor, sem iluminar a cena inteira.
   - Efeito suave de destaque na mesa e tooltip discreto ao pairar o mouse (*hover*).
+
+---
+
+## 6. Especificação de Design Artístico — Ciclo #17: Sala-Piloto da Recepção (Padrão Habblaude Premium)
+
+### 6.1. Diretriz Visual da Sala-Piloto
+A Sala-Piloto (Recepção & Triagem) estabelece um novo padrão artístico para o Gêmeo Digital:
+- **Transição de Blocos Procedurais para Miniaturas Modeladas:** Cada peça é dotada de proporção, espessura, chanfros, texturas limpas e materiais diferenciados (madeira carvalho, tecido acolchoado, metal escovado, vidro acrílico translúcido, cerâmica esmaltada).
+- **Harmonia de Cores e Iluminação de Estúdio:** O ambiente combina paredes em tom linho suave `#F5EBE0`, rodapés de madeira nobre `#5C4033`, piso em parquet de carvalho claro `#C89D66` de baixo ruído e tapete de entrada azul royal `#1D4ED8` com borda celeste `#60A5FA`.
+- **Iluminação Suave sem Faixas Diagonais:** Eliminação de sombras duras com `shadow-radius = 3.5`, `shadow-bias = -0.0005` e luz de preenchimento a 120° da luz solar.
+
+### 6.2. Especificação dos Modelos da Sala-Piloto
+1. **Balcão de Recepção (`ReceptionDeskHabblaude`):**
+   - Geometria em L estilizada com tampo chanfrado em madeira carvalho natural (`#C8B298`).
+   - Painel frontal com acabamento de ripas verticais em marfim suave (`#FAF9F6`), rodapé metálico recuado (`#8D6E63`).
+   - Divisória superior de atendimento em vidro acrílico translúcido (`#E0F2FE`, opacidade 0.35).
+   - Interior equipado com gaveteiro de fichas, nicho para impressora térmica e torre do PC.
+2. **Mesa Executiva (`OfficeDeskHabblaude`):**
+   - Tampo encorpado de carvalho claro (`1.34m x 0.82m x 0.08m`).
+   - Gaveteiro lateral integrado com 3 gavetas em acabamento branco acetinado (`#FAF9F6`) e puxadores horizontais metálicos escovados (`#94A3B8`).
+   - Pés metálicos em tubo de aço grafite escuro (`#4A4F55`) com travessa inferior de reforço.
+3. **Cadeira Ergonômica (`ErgonomicChairHabblaude`):**
+   - Assento acolchoado em tecido grafite (`#374151`) com curvatura anatômica frontal.
+   - Encosto alto anatômico com suporte lombar integrado (`#374151`).
+   - Apoios de braço em T em poliuretano preto fosco (`#1F2937`).
+   - Haste do pistão pneumático cromada (`#9CA3AF`) e base aranha de 5 raios com mini-rodízios de nylon (`#111827`).
+4. **Miniatura de Estação de Informática (`ComputerStationHabblaude`):**
+   - **Monitor Widescreen:** Bezel ultrafino preto fosco (`#1F242B`), base metálica inclinada, tela fosca com emissividade semântica suave de status (`#2D6A4F` online, `#D97706` atenção, `#DC2626` crítico, `#2D3748` offline) e micro-LED de telemetria no canto inferior direito do bezel.
+   - **Gabinete Torre:** Chassi metálico cinza-chumbo (`#1F2937`), grade frontal de arrefecimento (`#111827`), botão power circular (`#9CA3AF`), portas USB e micro-LED de atividade pulsante do agente.
+   - **Teclado Slim & Mouse:** Teclado baixo com linhas de relevo de teclas, mousepad retangular escuro (`#1E293B`) e mouse óptico ergonômico esculpido (`#334155`).
+5. **Impressora de Prontuário (`ThermalPrinterHabblaude`):**
+   - Gabinete compacto hospitalar em cinza claro (`#F9FAFB`), bandeja de saída com folha de prontuário branca projetada e micro-LED verde indicador de spooler ativo.
+6. **Armário de Arquivo (`StorageCabinetHabblaude`):**
+   - Armário vertical de duas portas em marfim acetinado com puxadores verticais metálicos.
+7. **Longarina de Espera (`WaitingLoungeHabblaude`):**
+   - Barra estrutural em tubo de aço (`#64748B`) com pés anti-derrapantes e 3 assentos anatômicos acolchoados em azul royal hospitalar (`#1E3A8A`).
+8. **Bebedouro de Água Mineral (`WaterDispenserHabblaude`):**
+   - Gabinete de aço esmaltado branco, pingadeira cinza, torneiras azul e vermelha e galão de 20L translúcido com água azul cristalina (`#60A5FA`, opacidade 0.78) e tampa azul escura (`#1D4ED8`).
+9. **Planta de Interior (`IndoorPlantHabblaude`):**
+   - Vaso cônico em cerâmica esmaltada fosca (`#DFD7CB`), terra vegetal escura (`#3D2817`) e folhagem volumétrica estilizada de monstera/samambaia com variação de tons de verde (`#2D6A4F`, `#40916C`, `#52B788`).
+10. **Decoração de Parede e Acabamentos:**
+    - Relógio de parede redondo com moldura em madeira nobre e ponteiros escuros.
+    - Quadro de arte contemporânea com moldura de madeira e vidro.
+    - Janelas com moldura de madeira nobre, vidros translúcidos duplos e peitoril.
+    - Portal de acesso com batente em madeira nobre e tabuleta de setor.

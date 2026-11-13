@@ -79,3 +79,14 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
 - **Controle Implementado:** Segregação estrita no listener WebSocket com verificação atômica de `unit_id` e descarte de dados fora do escopo da unidade ativa, somada à barreira defensiva no motor WebGL/Three.js (`DigitalTwin3D`).
 - **Parecer `@security`:** **APROVADO**. Segregação de dados em conformidade com o princípio de necessidade e isolamento departamental na gestão de saúde pública.
 
+---
+
+## 7. Parecer de Segurança — Ciclo #17 (Modelagem 3D, Texturas Procedurais e Proteção de Endpoint)
+
+- **Risco Avaliado:** Introdução de vulnerabilidades por deserialização de assets 3D (ex: arquivos GLTF/OBJ malformados, dependências de loaders externos inseguros) ou vazamento de dados confidenciais do endpoint no modelo tridimensional.
+- **Controle Implementado:**
+  1. A biblioteca 3D da Sala-Piloto utiliza exclusivamente primitivas geométricas e materiais nativos do Three.js e React Three Fiber em execução local no cliente.
+  2. Todas as texturas são geradas proceduralmente via HTML5 Canvas em memória (`getHabblaudeTexture`), sem requisições de rede externas ou parsing de binários arbitrários.
+  3. O avatar 3D consome apenas telemetria autorizada e sanitizada (status de saúde, CPU, RAM, Spooler). Dados sensíveis e permissões de diagnóstico permanecem resguardados pelo RBAC e pelas diretrizes da LGPD já aprovadas.
+- **Parecer `@security`:** **APROVADO**. A implementação não introduz vetores de ataque nem compromete a segurança dos endpoints monitorados.
+

@@ -323,3 +323,41 @@ Para evitar vazamentos de telemetria entre unidades de saúde municipais no dash
    - Paredes traseiras norte contam com duas janelas emolduradas em madeira com cruzeta e vidro azul-gelo translúcido, criando conexão visual com o jardim externo.
 3. **Fachada Frontal em Perfil Baixo Cutaway:**
    - Paredes frontais sul possuem perfil baixo (`0.36m`), garantindo que a câmera isométrica tenha visão 100% desobstruída dos computadores e mobiliários das salas da frente.
+
+---
+
+## 11. Evolução Arquitetural — Ciclo #17 (Sala-Piloto da Recepção Habblaude Premium & Sistema de Miniaturas 3D)
+
+### 11.1. Arquitetura da Sala-Piloto (Escopo Restrito e Modular)
+1. **Padrão de Sala-Piloto de Alta Fidelidade:**
+   - A sala de **Recepção e Triagem (REC)** é isolada como o ambiente-piloto de referência visual para a transição artística do Gêmeo Digital.
+   - As demais salas permanecem estruturalmente estáveis na malha ortogonal do Ciclo #16, assegurando que nenhuma quebra de layout ou regressão ocorra nos outros setores antes da validação do usuário.
+2. **Biblioteca de Componentes 3D Reutilizáveis:**
+   - Modularização da modelagem em subcomponentes declarativos com volumetria, espessura e acabamento de miniatura física:
+     - `ReceptionDeskHabblaude`: Balcão de atendimento em L com tampo chanfrado em carvalho, painel frontal ripado, divisória em acrílico translúcido e nichos para impressora e PC.
+     - `OfficeDeskHabblaude`: Mesa com tampo espesso chanfrado, gaveteiro integrado com 3 gavetas e puxadores metálicos escovados, estrutura tubular em aço grafite.
+     - `ErgonomicChairHabblaude`: Cadeira giratória anatômica com encosto alto, apoio lombar, braços em T, pistão a gás e aranha de 5 rodízios.
+     - `ComputerStationHabblaude`: Conjunto monitor slim com tela emissiva e micro-LED de telemetria, mini torre de computador com painel de ventilação frontal, teclado esculpido em linhas de teclas e mousepad com mouse óptico.
+     - `ThermalPrinterHabblaude`: Impressora hospitalar com fenda de saída de papel e LED sincronizado ao `spooler_running`.
+     - `StorageCabinetHabblaude`: Armário de prontuários com duas portas e puxadores verticais.
+     - `WaitingLoungeHabblaude`: Longarina de 3 lugares com estofamento azul nobre e estrutura tubular.
+     - `WaterDispenserHabblaude`: Bebedouro de coluna com galão de água mineral azul translúcido e torneiras funcionais.
+     - `IndoorPlantHabblaude`: Vaso cerâmico fosco com planta monstera/samambaia em múltiplos tons de verde.
+     - `ArchitecturalWallDecor`: Relógio analógico redondo de madeira com ponteiros, quadro de arte emoldurado e janelas com caixilhos duplos.
+
+### 11.2. Reformulação do Pipeline de Iluminação e Sombras
+1. **Luz Ambiente Suave:** Iluminação ambiente uniforme `#FFFDF9` com intensidade calibrada para leitura clara das paredes e rodapés sem cantos mortos.
+2. **Luz Direcional de Estúdio com Soft Shadows:**
+   - Resolução de sombra ampliada para `2048x2048`.
+   - `shadow-radius` configurado para `3.5` e `shadow-bias` calibrado para `-0.0005`, eliminando faixas diagonais duras e artefatos de corte de superfície (*shadow acne*).
+   - Luz secundária de preenchimento (*fill light*) suave a 120° da luz principal para evitar sombras pretas profundas no interior das salas.
+
+### 11.3. Otimização de Enquadramento e Proporção do Diorama
+1. **Redução da Base Externa:**
+   - O substrato do diorama foi reduzido de `24.0m x 18.0m` para `20.4m x 14.4m`, fazendo com que a clínica ocupe aproximadamente 80% da viewport.
+2. **Rig de Câmera com Foco na Sala-Piloto:**
+   - Ângulo isométrico otimizado com FOV reduzido para 34°, aproximando a perspectiva da recepção e facilitando a inspeção detalhada de cada elemento da maquete.
+
+### 11.4. Preservação de Dados Reais e Fluxo de Telemetria
+- O computador da recepção mantém seu vínculo com o hardware real (`DESKTOP-32HK6KT`), garantindo atualização em tempo real de CPU, RAM, Disco, Temperatura, Processador e Spooler.
+- Interatividade preservada: clique no computador abre o `DiagnosticDrawer`, destaca o avatar com halo no piso e move a câmera de forma fluida.

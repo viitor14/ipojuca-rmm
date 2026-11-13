@@ -808,5 +808,109 @@ Aprovado pelo usuário. Correção de isolamento estrito por `unit_id` no WebSoc
 
 ## 27. Gate de Aprovação — FASE 1 (Ciclo #16)
 
-O pipeline do Ciclo #16 encontra-se **pausado no Gate de Aprovação da Fase 1**.
-Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` iniciem a implementação da edificação contígua, corredor interno com portas e eliminação de grama interna no código-fonte!
+O pipeline do Ciclo #16 foi devidamente aprovado (`Approved`), implementado e integrado à branch `main` (commits `d10d112` e `c02cdee`).
+
+---
+
+## 28. Ciclo #17 — Missão de Refinamento Artístico: Sala-Piloto da Recepção (Padrão Habblaude Premium)
+
+### 28.1. Diretriz e Contexto do Ciclo #17 (`@pm` + `@lead`)
+
+A visualização do Gêmeo Digital do RMM necessita de um salto expressivo de qualidade artística e acabamento, migrando da estética de blocos procedurais simples para uma experiência isométrica premium de jogo em miniatura, tendo como referência estética central o Habblaude (https://www.habblaude.com/).
+
+> [!IMPORTANT]
+> **DIRETRIZ INEGOCIÁVEL (FASE PILOTO EXCLUSIVA):**
+> Em conformidade estrita com a solicitação do usuário, **NÃO será realizada a reconstrução simultânea de todos os setores nesta etapa**.
+> O desenvolvimento será concentrado **exclusivamente na SALA-PILOTO (RECEPÇÃO & TRIAGEM)**, que funcionará como laboratório e referência de excelência artística, arquitetônica, ergonômica e técnica para todo o Gêmeo Digital.
+> Nenhuma outra sala receberá novas intervenções até que a Sala-Piloto seja apresentada, avaliada e expressamente aprovada pelo usuário.
+
+### 28.2. Biblioteca de Modelos 3D Detalhados da Sala-Piloto (`@designer` + `@frontend`)
+
+Em substituição aos cubos genéricos, a Sala-Piloto receberá modelos de alta fidelidade visual com proporção, volumetria, espessura e linguagem estilizada Habblaude:
+
+1. **`ReceptionDeskHabblaude` (Balcão de Atendimento em L):**
+   - Tampo espesso em madeira carvalho natural com cantos biselados/chanfrados.
+   - Painel frontal estético com textura ripada em tom marfim/amadeirado e rodapé metálico recuado.
+   - Divisória de atendimento em vidro acrílico translúcido de segurança com suportes de aço escovado.
+   - Área interna do recepcionista estruturada com passa-cabos, nicho para impressora térmica de prontuário e nicho para torre de computador.
+2. **`OfficeDeskHabblaude` (Mesa de Escritório Executiva):**
+   - Tampo encorpado de madeira carvalho claro com bordas trabalhadas.
+   - Gaveteiro lateral acoplado com 3 gavetas e puxadores metálicos horizontais escovados.
+   - Estrutura de pernas de aço carbono em grafite fosco com travessa inferior de estabilidade.
+3. **`ErgonomicChairHabblaude` (Cadeira Ergonômica de Escritório):**
+   - Assento anatômico acolchoado com textura e curvatura frontal.
+   - Encosto lombar anatômico alto com suporte dorsal.
+   - Braços em T estruturados em poliuretano preto.
+   - Coluna de pistão a gás com anel metálico e base aranha de 5 raios com mini-rodízios de nylon.
+4. **`ComputerStationHabblaude` (Estação de Trabalho Completa):**
+   - **Monitor Widescreen Slim:** Painel frontal widescreen com bordas ultrafinas, tela fosca com iluminação emissiva suave baseada no status de saúde do RMM (verde normal, amarelo alerta, vermelho crítico) e micro-LED de telemetria funcional no canto da moldura.
+   - **Gabinete Torre Miniatura:** Gabinete estilizado com frentes de ventilação, botão power cilíndrico, entradas USB e LED de atividade do agente RMM.
+   - **Periféricos:** Teclado slim com relevo de linhas de teclas, mousepad retangular e mouse óptico ergonômico.
+5. **`ThermalPrinterHabblaude` (Impressora Térmica de Prontuário):**
+   - Miniatura de impressora térmica hospitalar com tampa superior, fenda de emissão, mini-filamento de papel saindo e LED verde sincronizado ao serviço de spooler de impressão.
+6. **`StorageCabinetHabblaude` (Armário de Prontuários e Arquivos):**
+   - Armário vertical de escritório com duas portas de correr/abrir, prateleiras internas e puxadores verticais metálicos.
+7. **`WaitingLoungeHabblaude` (Longarina de Espera para Pacientes):**
+   - Estrutura metálica tubular de apoio e 3 assentos anatômicos acolchoados em azul hospitalar nobre, respeitando o fluxo de circulação.
+8. **`WaterDispenserHabblaude` (Bebedouro de Coluna):**
+   - Gabinete em aço esmaltado branco, torneiras azul e vermelha, bandeja pingadeira e galão de água mineral de 20L translúcido azul com refração suave e tampa protetora.
+9. **`IndoorPlantHabblaude` (Planta Decorativa de Interior):**
+   - Vaso em cerâmica esmaltada fosca, substrato de terra escura e folhas volumétricas estilizadas (estilo monstera/samambaia) com variação de tons de verde.
+10. **`ArchitecturalWallDecor` (Elementos Arquitetônicos e de Parede):**
+    - Relógio analógico redondo de parede em madeira escura com mostrador marfim e ponteiros marcados.
+    - Quadro de arte contemporânea com moldura de madeira e vidro antirreflexo.
+    - Janelas externas com moldura de madeira, vidros translúcidos duplos e peitoril de pedra.
+    - Portal de acesso com batente e tabuleta de identificação em relevo.
+
+### 28.3. Reformulação da Iluminação e Sombras Suaves (`@frontend` + `@designer`)
+
+A iluminação atual exibe faixas diagonais duras e sombras artificiais que prejudicam a percepção de maquete. A reformulação estabelece:
+- **Luz Ambiente Difusa:** Iluminação ambiente uniforme e acolhedora (`#FFFDF9`) garantindo leitura homogênea das paredes sem cantos escuros.
+- **Luz Direcional Principal Suave:** Posicionamento de luz simulando iluminação de estúdio para maquetes físicas, com mapa de sombras em alta resolução (`2048x2048`), filtro de suavização de bordas (`shadow-radius = 3.5`), `shadow-bias` calibrado para anular artefatos de corte/acne e *frustum* ajustado perfeitamente ao diorama.
+- **Luz Secundária de Preenchimento (*Fill Light*):** Proporciona luz de rebatimento suave nas faces traseiras das paredes e mobiliário sem gerar sombras conflitantes.
+
+### 28.4. Enquadramento e Proporções da Maquete (`@frontend`)
+
+- Redução da área de gramado externo ao redor do diorama, removendo o vazio excessivo.
+- Centralização da edificação para ocupar 75% a 85% da área visível da viewport, com zoom equilibrado e ponto focal inicial na Recepção.
+- Câmera em projeção isométrica suave com transições fluidas via `CameraRig`.
+
+### 28.5. Integração com Dados Reais e Interatividade (`@engineer` + `@qa`)
+
+- O computador da Recepção permanece 100% conectado ao agente real do sistema (`DESKTOP-32HK6KT`), recebendo telemetria da VPS em tempo real via WebSocket.
+- O clique no computador:
+  - Destaca o equipamento com sutil realce no piso.
+  - Aproxima a câmera no posto de atendimento da recepção.
+  - Abre o Drawer Lateral de Diagnósticos com CPU, RAM, Disco, Temperatura, Processador e Spooler.
+  - Exibe o tooltip flutuante ao passar o mouse com hostname e IP.
+
+---
+
+### 28.6. Requisitos Funcionais do Ciclo #17 (`@pm`)
+
+- **RF-52 (Biblioteca 3D de Mobiliário e Equipamentos da Recepção):** Implementar componentes 3D ricos e reutilizáveis (balcão em L ripado, mesa executiva, cadeira ergonômica com rodízios, computador miniatura completo com gabinete/teclado/mouse, impressora de prontuário, armário de arquivos, longarina, bebedouro e vaso de planta).
+- **RF-53 (Acabamento Arquitetônico Refinado da Sala-Piloto):** Implementar piso de carvalho de alta definição sem ruído visual, rodapés nobres de madeira, rodateto, janelas com esquadrias e vidros translúcidos e portal de entrada com batente.
+- **RF-54 (Reformulação de Iluminação e Sombras de Estúdio):** Configurar iluminação difusa uniforme, eliminar faixas diagonais duras, calibrar `shadow-bias` e aplicar sombras de contato suaves (*soft contact shadows*).
+- **RF-55 (Enquadramento Isométrico e Otimização de Terreno):** Reduzir dimensões da área externa para que o diorama hospitalar preencha harmoniosamente a área útil de visualização.
+- **RF-56 (Preservação de Dados Reais e Interatividade do RMM):** Manter o vínculo ativo com os computadores da telemetria, clique de seleção, foco de câmera e abertura do painel de diagnósticos.
+- **RF-57 (Performance e Taxa Estável a 60 FPS):** Manter geometrias limpas e eficientes, garantindo 60 FPS sem engasgos ou sobrecarga de WebGL.
+
+---
+
+### 28.7. Critérios de Aceitação do Ciclo #17 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-50** | Sala-Piloto da Recepção com Padrão Habblaude | O operador acessa o Gêmeo Digital | Observa a sala de Recepção & Triagem | Visualiza um ambiente rico, detalhado e acolhedor; todos os móveis e equipamentos têm volumetria, espessura e acabamento de miniatura premium. |
+| **CA-51** | Estação de Computador Completa e Reconhecível | O operador examina o posto de trabalho da recepção | Inspeciona os periféricos | Identifica monitor slim com tela de status emissiva e micro-LED de saúde, gabinete torre com painel e botão power, teclado em relevo, mousepad com mouse e impressora de prontuário. |
+| **CA-52** | Iluminação Suave sem Faixas Diagonais ou Artefatos | O operador analisa as sombras na maquete | Gira a visualização da cena | A iluminação é homogênea e as sombras são suaves (*soft shadows*); não há faixas diagonais duras, manchas pretas ou corte de superfície (shadow acne/bias). |
+| **CA-53** | Edificação Preenche Harmoniosamente a Viewport | O operador abre a tela em modo ISO padrão | Analisa a proporção do diorama | A edificação ocupa o centro visual da tela com enquadramento otimizado; a borda de terreno externo funciona como base discreta sem desperdício de espaço. |
+| **CA-54** | Interatividade e Telemetria Funcionais | O operador clica no computador da recepção | Observa a resposta da interface | O equipamento é selecionado com realce sutil, a câmera focaliza a estação e o Drawer Lateral de Diagnósticos se abre exibindo as métricas reais (CPU, RAM, Disco, Hardware, Spooler). |
+| **CA-55** | Escopo Restrito à Sala-Piloto | O operador inspeciona os outros ambientes da clínica | Verifica o estado das demais salas | Constata que a Recepção foi a única reformulada com o novo padrão artístico nesta fase, mantendo os outros setores neutros/estáveis aguardando aprovação explícita. |
+
+---
+
+## 29. Gate de Aprovação — FASE 1 (Ciclo #17)
+
+O pipeline do Ciclo #17 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Responda com **`Approved`** para que `@lead`, `@designer`, `@frontend` e `@engineer` iniciem a implementação da Sala-Piloto da Recepção no código-fonte!
