@@ -361,3 +361,34 @@ Para evitar vazamentos de telemetria entre unidades de saúde municipais no dash
 ### 11.4. Preservação de Dados Reais e Fluxo de Telemetria
 - O computador da recepção mantém seu vínculo com o hardware real (`DESKTOP-32HK6KT`), garantindo atualização em tempo real de CPU, RAM, Disco, Temperatura, Processador e Spooler.
 - Interatividade preservada: clique no computador abre o `DiagnosticDrawer`, destaca o avatar com halo no piso e move a câmera de forma fluida.
+
+---
+
+## 12. Nova Arquitetura de Pipeline 3D — Ciclo #18: Modelos GLB Modulares e Desacoplamento de Telemetria
+
+### 12.1. Arquitetura de Carregamento Estático e Cache de Assets GLB
+1. **Estrutura de Armazenamento no Frontend:**
+   - Os modelos tridimensionais compilados residem como assets estáticos em `frontend/public/models/`:
+     - `furniture/reception_counter.glb`
+     - `furniture/office_desk.glb`
+     - `furniture/ergonomic_chair.glb`
+     - `furniture/storage_cabinet.glb`
+     - `tech/workstation_pc.glb`
+     - `tech/thermal_printer.glb`
+2. **Gerenciamento de Cache via `useGLTF` e Pré-carregamento:**
+   - Todos os componentes utilizam `useGLTF.preload(url)` durante a inicialização do módulo, garantindo que os buffers binários já estejam na memória da GPU antes da montagem visual.
+   - O Three.js reutiliza as malhas geométricas (`BufferGeometry`) entre instâncias idênticas (ex: múltiplas cadeiras ou mesas), reduzindo a alocação de VRAM.
+
+### 12.2. Desacoplamento entre Geometria GLB e Estado do RMM
+1. **Hierarquia de Sub-nós Nomeados:**
+   - O arquivo `workstation_pc.glb` possui sub-nós com nomes determinísticos:
+     - `ScreenDisplay`: malha do display do monitor.
+     - `StatusLed`: malha do micro-LED indicador de saúde.
+     - `Chassis`: malha do gabinete e carcaça do monitor.
+     - `Peripherals`: malhas do teclado e mousepad.
+2. **Injeção Dinâmica de Material Sem Reconstrução:**
+   - O componente `WorkstationModel` intercepta a instância clonada da cena GLB (`useMemo(() => scene.clone(), [scene])`) e altera dinamicamente apenas o `color` e `emissive` do material de `ScreenDisplay` e `StatusLed`.
+   - Nenhuma geometria é recarregada ou destruída quando chegam eventos do Socket.io, mantendo o consumo de CPU em níveis mínimos e taxa constante de 60 FPS.
+
+### 12.3. Camada de Interatividade
+- Eventos de ponteiro (`onClick`, `onPointerOver`, `onPointerOut`) são mapeados no nível do componente React do modelo, disparando a seleção da máquina no `App.jsx`, acionando o foco do `CameraRig` e abrindo o `DiagnosticDrawer` de forma idêntica à especificação anterior.

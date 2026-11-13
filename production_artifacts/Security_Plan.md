@@ -90,3 +90,15 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
   3. O avatar 3D consome apenas telemetria autorizada e sanitizada (status de saúde, CPU, RAM, Spooler). Dados sensíveis e permissões de diagnóstico permanecem resguardados pelo RBAC e pelas diretrizes da LGPD já aprovadas.
 - **Parecer `@security`:** **APROVADO**. A implementação não introduz vetores de ataque nem compromete a segurança dos endpoints monitorados.
 
+---
+
+## 8. Parecer de Segurança — Ciclo #18 (Pipeline de Modelos GLB e Integridade de Assets Estáticos)
+
+- **Risco Avaliado:** Execução de scripts maliciosos ou injeção de payload binário através de arquivos GLTF/GLB carregados dinamicamente no navegador (vulnerabilidades comuns em loaders 3D não sanitizados ou assets baixados de fontes públicas inseguras).
+- **Controle Implementado:**
+  1. Todos os arquivos `.glb` são compilados localmente com ferramentas oficiais controladas (`GLTFExporter` do Three.js) e empacotados como assets estáticos imutáveis em `frontend/public/models/`.
+  2. Nenhum modelo é carregado de CDNs ou URLs externas não homologadas.
+  3. A especificação glTF 2.0 padrão utilizada não contém scripts executáveis, shaders arbitrários ou extensões experimentais de código (apenas malhas, buffers de vértices e materiais PBR padrão).
+  4. O mapeamento de telemetria é unidirecional: dados da VPS alteram apenas atributos visuais (cor/emissividade) de malhas pré-carregadas no cliente, sem parsing de dados não estruturados.
+- **Parecer `@security`:** **APROVADO**. A pipeline de modelos GLB atende integralmente aos padrões de segurança e integridade estática de assets.
+

@@ -142,3 +142,33 @@ A Sala-Piloto (Recepção & Triagem) estabelece um novo padrão artístico para 
     - Quadro de arte contemporânea com moldura de madeira e vidro.
     - Janelas com moldura de madeira nobre, vidros translúcidos duplos e peitoril.
     - Portal de acesso com batente em madeira nobre e tabuleta de setor.
+
+---
+
+## 7. Especificação de Modelos 3D GLB — Ciclo #18: Biblioteca Modular da Sala-Piloto
+
+### 7.1. Especificações Geométricas e Métricas dos Arquivos GLB
+Todos os modelos são compilados com escala métrica 1:1, ponto de pivô fixado no piso (`Y = 0`) para alinhamento imediato com a laje, e orientação voltada para frente (`+Z` frontal):
+
+1. **`furniture/reception_counter.glb`:**
+   - **Dimensões:** `Largura: 2.40m | Altura: 1.08m | Profundidade: 1.80m` (formato em L).
+   - **Materiais PBR:** Carvalho nobre natural (`#C8B298`, roughness 0.45), ripado em marfim (`#FAF9F6`), rodapé bronze escuro (`#5C4033`) e divisória acrílica translúcida (`#E0F2FE`, opacity 0.35).
+2. **`furniture/office_desk.glb`:**
+   - **Dimensões:** `Largura: 1.36m | Altura: 0.74m | Profundidade: 0.82m`.
+   - **Materiais PBR:** Tampo biselado carvalho acetinado (`#C8B298`), gaveteiro branco pérola com puxadores em aço escovado (`#94A3B8`, metalness 0.8) e pernas tubulares grafite (`#374151`).
+3. **`furniture/ergonomic_chair.glb`:**
+   - **Dimensões:** `Largura: 0.54m | Altura: 0.96m | Profundidade: 0.52m`.
+   - **Materiais PBR:** Estofado anatômico grafite (`#374151`, roughness 0.75), braços pretos (`#1F2937`), coluna cromada (`#9CA3AF`, metalness 0.7) e rodízios em nylon.
+4. **`furniture/storage_cabinet.glb`:**
+   - **Dimensões:** `Largura: 1.15m | Altura: 1.48m | Profundidade: 0.46m`.
+   - **Materiais PBR:** Corpo marfim acetinado com tampo de carvalho e puxadores verticais metálicos.
+5. **`tech/workstation_pc.glb`:**
+   - **Dimensões:** `Largura: 0.90m | Altura: 0.46m | Profundidade: 0.52m`.
+   - **Sub-nós Nomeados para Telemetria:**
+     - `ScreenDisplay`: display 16:9 widescreen com material emissivo dinâmico.
+     - `StatusLed`: micro-LED cilíndrico na moldura inferior.
+     - `Chassis`: carcaça do monitor e torre miniatura com grelhas e botão power.
+     - `Peripherals`: teclado slim e mousepad com mouse óptico.
+6. **`tech/thermal_printer.glb`:**
+   - **Dimensões:** `Largura: 0.28m | Altura: 0.18m | Profundidade: 0.24m`.
+   - **Sub-nós:** Fenda com folha de papel e LED indicador `SpoolerLed`.

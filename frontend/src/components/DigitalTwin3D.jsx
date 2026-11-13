@@ -4,6 +4,12 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Html } from '@react-three/drei';
 import styled, { keyframes } from 'styled-components';
 import { theme, STATUS_LABELS, fixTextEncoding } from '../styles/theme';
+import { WorkstationModel } from './models/WorkstationModel';
+import { DeskModel } from './models/DeskModel';
+import { ChairModel } from './models/ChairModel';
+import { ReceptionCounterModel } from './models/ReceptionCounterModel';
+import { StorageCabinetModel } from './models/StorageCabinetModel';
+import { ThermalPrinterModel } from './models/ThermalPrinterModel';
 
 const StageContainer = styled.div`
   position: absolute;
@@ -924,119 +930,16 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
 function ReceptionPilotFurniture({ halfW, halfD, backZ }) {
   return (
     <group>
-      {/* 1. BALCÃO DE ATENDIMENTO EM L (ReceptionDeskHabblaude) */}
-      <group position={[-1.3, 0, backZ + 0.2]}>
-        {/* Corpo principal do balcão */}
-        <mesh position={[0, 0.52, 0]} castShadow receiveShadow>
-          <boxGeometry args={[2.3, 1.04, 0.70]} />
-          <meshStandardMaterial color="#FAF9F6" roughness={0.65} />
-        </mesh>
+      {/* 1. BALCÃO DE ATENDIMENTO EM L (reception_counter.glb) */}
+      <ReceptionCounterModel position={[-1.3, 0, backZ + 0.2]} />
 
-        {/* Rodapé metálico recuado na base do balcão */}
-        <mesh position={[0, 0.06, 0.355]}>
-          <boxGeometry args={[2.28, 0.12, 0.02]} />
-          <meshStandardMaterial color="#6B472B" roughness={0.5} />
-        </mesh>
+      {/* 2. IMPRESSORA TÉRMICA DE PRONTUÁRIO NO BALCÃO (thermal_printer.glb) */}
+      <ThermalPrinterModel position={[-2.1, 1.08, backZ + 0.2]} isActive={true} />
 
-        {/* Painel frontal com frisos estilizados em relevo */}
-        {[-0.9, -0.6, -0.3, 0.0, 0.3, 0.6, 0.9].map((fx, idx) => (
-          <mesh key={`flute-${idx}`} position={[fx, 0.55, 0.356]}>
-            <boxGeometry args={[0.04, 0.82, 0.015]} />
-            <meshStandardMaterial color="#EDE7DD" roughness={0.5} />
-          </mesh>
-        ))}
+      {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (storage_cabinet.glb) */}
+      <StorageCabinetModel position={[-halfW + 0.6, 0, backZ + 0.15]} />
 
-        {/* Tampo chanfrado espesso em carvalho nobre natural */}
-        <mesh position={[0, 1.06, 0.02]} castShadow receiveShadow>
-          <boxGeometry args={[2.42, 0.08, 0.78]} />
-          <meshStandardMaterial color="#C8B298" roughness={0.45} />
-        </mesh>
-
-        {/* Ala em L perpendicular do balcão */}
-        <group position={[1.4, 0, 0.45]}>
-          <mesh position={[0, 0.52, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.60, 1.04, 1.2]} />
-            <meshStandardMaterial color="#FAF9F6" roughness={0.65} />
-          </mesh>
-          <mesh position={[0.305, 0.06, 0]}>
-            <boxGeometry args={[0.02, 0.12, 1.18]} />
-            <meshStandardMaterial color="#6B472B" roughness={0.5} />
-          </mesh>
-          <mesh position={[0, 1.06, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.68, 0.08, 1.28]} />
-            <meshStandardMaterial color="#C8B298" roughness={0.45} />
-          </mesh>
-        </group>
-
-        {/* Divisória protetora acrílica translúcida de atendimento */}
-        <group position={[0, 1.30, 0.22]}>
-          <mesh>
-            <boxGeometry args={[2.0, 0.40, 0.02]} />
-            <meshStandardMaterial color="#E0F2FE" transparent opacity={0.35} roughness={0.1} />
-          </mesh>
-          {/* Suportes metálicos escovados da divisória */}
-          {[-0.8, -0.3, 0.3, 0.8].map((sx, idx) => (
-            <mesh key={`bracket-${idx}`} position={[sx, -0.19, 0]}>
-              <cylinderGeometry args={[0.015, 0.015, 0.08, 8]} />
-              <meshStandardMaterial color="#94A3B8" metalness={0.7} />
-            </mesh>
-          ))}
-        </group>
-
-        {/* Impressora térmica de prontuário sobre o balcão */}
-        <group position={[-0.8, 1.17, 0.0]}>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[0.26, 0.16, 0.22]} />
-            <meshStandardMaterial color="#F8FAFC" roughness={0.5} />
-          </mesh>
-          <mesh position={[0, 0.08, 0.02]}>
-            <boxGeometry args={[0.20, 0.015, 0.12]} />
-            <meshStandardMaterial color="#E2E8F0" />
-          </mesh>
-          <mesh position={[0, 0.095, 0.03]}>
-            <boxGeometry args={[0.16, 0.005, 0.08]} />
-            <meshStandardMaterial color="#FFFFFF" roughness={0.9} />
-          </mesh>
-          {/* LED verde do spooler */}
-          <mesh position={[0.08, 0.06, 0.115]}>
-            <sphereGeometry args={[0.012, 6, 6]} />
-            <meshBasicMaterial color="#2D6A4F" />
-          </mesh>
-        </group>
-      </group>
-
-      {/* 2. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (StorageCabinetHabblaude) */}
-      <group position={[-halfW + 0.6, 0, backZ + 0.15]}>
-        <mesh position={[0, 0.72, 0]} castShadow receiveShadow>
-          <boxGeometry args={[1.15, 1.44, 0.46]} />
-          <meshStandardMaterial color="#F8FAF8" roughness={0.65} />
-        </mesh>
-        {/* Tampo em madeira carvalho suave */}
-        <mesh position={[0, 1.45, 0]}>
-          <boxGeometry args={[1.20, 0.04, 0.50]} />
-          <meshStandardMaterial color="#C8B298" roughness={0.5} />
-        </mesh>
-        {/* Duas portas com friso e puxadores verticais metálicos */}
-        <mesh position={[-0.27, 0.72, 0.235]}>
-          <boxGeometry args={[0.50, 1.30, 0.015]} />
-          <meshStandardMaterial color="#F1F5F2" roughness={0.6} />
-        </mesh>
-        <mesh position={[0.27, 0.72, 0.235]}>
-          <boxGeometry args={[0.50, 1.30, 0.015]} />
-          <meshStandardMaterial color="#F1F5F2" roughness={0.6} />
-        </mesh>
-        {/* Puxadores em aço escovado */}
-        <mesh position={[-0.06, 0.72, 0.25]}>
-          <boxGeometry args={[0.015, 0.24, 0.02]} />
-          <meshStandardMaterial color="#94A3B8" metalness={0.7} />
-        </mesh>
-        <mesh position={[0.06, 0.72, 0.25]}>
-          <boxGeometry args={[0.015, 0.24, 0.02]} />
-          <meshStandardMaterial color="#94A3B8" metalness={0.7} />
-        </mesh>
-      </group>
-
-      {/* 3. BEBEDOURO DE COLUNA HOSPITALAR (WaterDispenserHabblaude) */}
+      {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (WaterDispenserHabblaude) */}
       <group position={[halfW - 0.75, 0, backZ + 0.15]}>
         <mesh position={[0, 0.48, 0]} castShadow receiveShadow>
           <boxGeometry args={[0.38, 0.96, 0.38]} />
@@ -1356,251 +1259,31 @@ function computeMachineLayout(machines, sectors) {
 }
 
 /* =========================================================================
- * ESTAÇÃO DE TRABALHO: MESA EXECUTIVA, CADEIRA ERGONÔMICA E MINIATURA RICA DE PC
+ * ESTAÇÃO DE TRABALHO: MESA, CADEIRA E COMPUTADOR EM MODELOS GLB MODULARES
  * ========================================================================= */
 function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos }) {
-  const [hovered, setHovered] = useState(false);
   const posX = layoutPos ? layoutPos.x : Number(machine.pos_x || 0);
   const posZ = layoutPos ? layoutPos.z : Number(machine.pos_z || 0);
-  const statusColor = theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
-
-  const isCritical = machine.health_status === 'CRITICAL';
-  const isWarning = machine.health_status === 'WARNING';
-  const isOffline = machine.health_status === 'OFFLINE';
-
-  const screenColor = isOffline
-    ? '#2D3748'
-    : isCritical
-      ? '#DC2626'
-      : isWarning
-        ? '#D97706'
-        : '#2D6A4F';
-
-  const screenEmissive = isOffline ? '#000000' : screenColor;
-  const screenEmissiveIntensity = isOffline ? 0 : isCritical ? 0.6 : 0.4;
 
   return (
     <group position={[posX, 0, posZ]}>
-      {/* Halo de seleção sutil sob a mesa */}
-      {isSelected && (
-        <mesh position={[0, 0.02, 0]}>
-          <planeGeometry args={[1.7, 1.5]} />
-          <meshBasicMaterial
-            color="#52796B"
-            transparent
-            opacity={0.22}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
-      )}
+      {/* 1. MESA DE TRABALHO EXECUTIVA (office_desk.glb) */}
+      <DeskModel position={[0, 0, 0]} />
 
-      {/* 1. MESA DE TRABALHO EXECUTIVA (OfficeDeskHabblaude) */}
-      <group position={[0, 0, 0]}>
-        {/* Tampo chanfrado espesso em carvalho natural acetinado */}
-        <mesh position={[0, 0.72, 0]} castShadow receiveShadow>
-          <boxGeometry args={[1.36, 0.08, 0.82]} />
-          <meshStandardMaterial color="#C8B298" roughness={0.45} />
-        </mesh>
+      {/* 2. CADEIRA DE ESCRITÓRIO ERGONÔMICA (ergonomic_chair.glb) */}
+      <ChairModel position={[-0.08, 0, 0.54]} />
 
-        {/* Gaveteiro lateral integrado à direita com 3 gavetas e puxadores metálicos */}
-        <group position={[0.42, 0.35, 0]}>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[0.38, 0.64, 0.68]} />
-            <meshStandardMaterial color="#FAF9F6" roughness={0.65} />
-          </mesh>
-          {[-0.18, 0, 0.18].map((yOffset, gIdx) => (
-            <group key={`drawer-${gIdx}`} position={[0, yOffset, 0.345]}>
-              <mesh>
-                <boxGeometry args={[0.34, 0.16, 0.015]} />
-                <meshStandardMaterial color="#F3F4F6" roughness={0.6} />
-              </mesh>
-              {/* Puxador de gaveta em aço escovado */}
-              <mesh position={[0, 0, 0.015]}>
-                <boxGeometry args={[0.1, 0.015, 0.015]} />
-                <meshStandardMaterial color="#94A3B8" metalness={0.7} />
-              </mesh>
-            </group>
-          ))}
-        </group>
-
-        {/* Pernas em tubo quadrado de aço grafite à esquerda */}
-        <mesh position={[-0.58, 0.34, -0.32]} castShadow>
-          <boxGeometry args={[0.05, 0.68, 0.05]} />
-          <meshStandardMaterial color="#374151" roughness={0.4} metalness={0.3} />
-        </mesh>
-        <mesh position={[-0.58, 0.34, 0.32]} castShadow>
-          <boxGeometry args={[0.05, 0.68, 0.05]} />
-          <meshStandardMaterial color="#374151" roughness={0.4} metalness={0.3} />
-        </mesh>
-        {/* Travessa inferior de reforço da mesa */}
-        <mesh position={[-0.58, 0.16, 0]}>
-          <boxGeometry args={[0.04, 0.04, 0.6]} />
-          <meshStandardMaterial color="#374151" metalness={0.3} />
-        </mesh>
-      </group>
-
-      {/* 2. CADEIRA DE ESCRITÓRIO ERGONÔMICA (ErgonomicChairHabblaude) */}
-      <group position={[-0.08, 0, 0.54]}>
-        {/* Assento anatômico acolchoado com borda frontal curva */}
-        <mesh position={[0, 0.44, 0]} castShadow>
-          <boxGeometry args={[0.44, 0.07, 0.42]} />
-          <meshStandardMaterial color="#374151" roughness={0.7} />
-        </mesh>
-        {/* Encosto ergonômico alto com suporte lombar */}
-        <mesh position={[0, 0.74, 0.18]} castShadow>
-          <boxGeometry args={[0.42, 0.46, 0.06]} />
-          <meshStandardMaterial color="#374151" roughness={0.7} />
-        </mesh>
-        {/* Braços da cadeira em T */}
-        <mesh position={[-0.24, 0.56, 0.06]}>
-          <boxGeometry args={[0.04, 0.18, 0.22]} />
-          <meshStandardMaterial color="#1F2937" />
-        </mesh>
-        <mesh position={[0.24, 0.56, 0.06]}>
-          <boxGeometry args={[0.04, 0.18, 0.22]} />
-          <meshStandardMaterial color="#1F2937" />
-        </mesh>
-        {/* Coluna cromada com pistão a gás */}
-        <mesh position={[0, 0.22, 0]}>
-          <cylinderGeometry args={[0.03, 0.03, 0.42, 10]} />
-          <meshStandardMaterial color="#9CA3AF" metalness={0.7} roughness={0.2} />
-        </mesh>
-        {/* Base aranha de 5 pontas com rodízios de nylon */}
-        <mesh position={[0, 0.04, 0]}>
-          <cylinderGeometry args={[0.24, 0.24, 0.03, 5]} />
-          <meshStandardMaterial color="#1F2937" />
-        </mesh>
-      </group>
-
-      {/* 3. EQUIPAMENTOS EM MINIATURA (ComputerStationHabblaude) */}
-      <group
+      {/* 3. ESTAÇÃO DE TRABALHO PC (workstation_pc.glb) */}
+      <WorkstationModel
+        machine={machine}
+        isSelected={isSelected}
+        onSelect={onSelect}
         position={[0, 0.76, 0]}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(machine);
-        }}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          setHovered(true);
-        }}
-        onPointerOut={() => setHovered(false)}
-      >
-        {/* Monitor Widescreen Slim */}
-        <group position={[-0.08, 0.23, -0.1]}>
-          {/* Base e haste de fixação */}
-          <mesh position={[0, -0.19, 0]}>
-            <boxGeometry args={[0.24, 0.02, 0.18]} />
-            <meshStandardMaterial color="#1F242B" />
-          </mesh>
-          <mesh position={[0, -0.09, -0.02]}>
-            <boxGeometry args={[0.04, 0.2, 0.03]} />
-            <meshStandardMaterial color="#374151" metalness={0.4} />
-          </mesh>
-          {/* Bezel / Moldura traseira fosca */}
-          <mesh castShadow position={[0, 0.06, 0]}>
-            <boxGeometry args={[0.56, 0.34, 0.03]} />
-            <meshStandardMaterial color="#1F242B" roughness={0.7} />
-          </mesh>
+      />
 
-          {/* Display frontal aceso no status semântico do RMM */}
-          <mesh position={[0, 0.06, 0.018]}>
-            <boxGeometry args={[0.5, 0.28, 0.005]} />
-            <meshStandardMaterial
-              color={screenColor}
-              emissive={screenEmissive}
-              emissiveIntensity={screenEmissiveIntensity}
-              roughness={0.25}
-            />
-          </mesh>
-
-          {/* Micro-LED de status no canto inferior do visor */}
-          <mesh position={[0.23, -0.07, 0.022]}>
-            <sphereGeometry args={[0.022, 8, 8]} />
-            <meshBasicMaterial color={statusColor} />
-          </mesh>
-        </group>
-
-        {/* Gabinete Compacto Torre */}
-        <group position={[0.46, 0.19, -0.08]}>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[0.17, 0.38, 0.38]} />
-            <meshStandardMaterial color="#1F2937" roughness={0.6} />
-          </mesh>
-          {/* Grelha frontal de arrefecimento */}
-          <mesh position={[0, 0.04, 0.192]}>
-            <boxGeometry args={[0.13, 0.16, 0.005]} />
-            <meshStandardMaterial color="#111827" roughness={0.9} />
-          </mesh>
-          {/* Botão Power circular */}
-          <mesh position={[0, 0.14, 0.193]}>
-            <cylinderGeometry args={[0.015, 0.015, 0.005, 8]} rotation={[Math.PI / 2, 0, 0]} />
-            <meshStandardMaterial color="#9CA3AF" metalness={0.8} />
-          </mesh>
-          {/* Micro-LED frontal de atividade da máquina */}
-          <mesh position={[0, 0.10, 0.193]}>
-            <boxGeometry args={[0.06, 0.015, 0.005]} />
-            <meshBasicMaterial color={statusColor} />
-          </mesh>
-        </group>
-
-        {/* Mousepad retangular escuro */}
-        <mesh position={[0.18, 0.005, 0.15]}>
-          <boxGeometry args={[0.18, 0.006, 0.18]} />
-          <meshStandardMaterial color="#1E293B" roughness={0.8} />
-        </mesh>
-        {/* Mouse óptico ergonômico */}
-        <mesh position={[0.18, 0.018, 0.15]} castShadow>
-          <boxGeometry args={[0.05, 0.02, 0.08]} />
-          <meshStandardMaterial color="#334155" roughness={0.4} />
-        </mesh>
-
-        {/* Teclado slim com linhas de teclas em relevo */}
-        <group position={[-0.08, 0.01, 0.15]}>
-          <mesh castShadow>
-            <boxGeometry args={[0.38, 0.016, 0.13]} />
-            <meshStandardMaterial color="#374151" />
-          </mesh>
-          <mesh position={[0, 0.01, 0]}>
-            <boxGeometry args={[0.35, 0.008, 0.10]} />
-            <meshStandardMaterial color="#4B5563" roughness={0.5} />
-          </mesh>
-        </group>
-
-        {/* Impressora hospitalar acoplada caso o spooler esteja ativo */}
-        {machine.spooler_running && (
-          <group position={[-0.48, 0.11, 0]}>
-            <mesh castShadow receiveShadow>
-              <boxGeometry args={[0.32, 0.2, 0.28]} />
-              <meshStandardMaterial color="#F9FAFB" roughness={0.5} />
-            </mesh>
-            <mesh position={[0, 0.1, 0.05]}>
-              <boxGeometry args={[0.22, 0.02, 0.14]} />
-              <meshStandardMaterial color="#E5E7EB" />
-            </mesh>
-            <mesh position={[0, 0.115, 0.06]}>
-              <boxGeometry args={[0.18, 0.006, 0.12]} />
-              <meshStandardMaterial color="#FFFFFF" roughness={0.9} />
-            </mesh>
-            <mesh position={[0.11, 0.08, 0.145]}>
-              <sphereGeometry args={[0.012, 6, 6]} />
-              <meshBasicMaterial color="#2D6A4F" />
-            </mesh>
-          </group>
-        )}
-      </group>
-
-      {/* Tooltip flutuante ao passar o mouse */}
-      {hovered && (
-        <Html position={[0, 1.6, 0]} distanceFactor={14}>
-          <DeviceTooltip $statusColor={statusColor}>
-            <div className="tt-head">
-              <span className="tt-status-dot" />
-              <span>{machine.hostname}</span>
-            </div>
-            <div className="tt-meta">{machine.ip_address}</div>
-            <div className="tt-sector">{fixTextEncoding(machine.sector_name)}</div>
-          </DeviceTooltip>
-        </Html>
+      {/* 4. IMPRESSORA ACOPLADA SE SPOOLER ATIVO (thermal_printer.glb) */}
+      {machine.spooler_running && (
+        <ThermalPrinterModel position={[-0.48, 0.76, 0]} isActive={true} />
       )}
     </group>
   );

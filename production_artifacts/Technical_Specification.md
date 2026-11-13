@@ -912,5 +912,108 @@ A iluminação atual exibe faixas diagonais duras e sombras artificiais que prej
 
 ## 29. Gate de Aprovação — FASE 1 (Ciclo #17)
 
-O pipeline do Ciclo #17 encontra-se **pausado no Gate de Aprovação da Fase 1**.
-Responda com **`Approved`** para que `@lead`, `@designer`, `@frontend` e `@engineer` iniciem a implementação da Sala-Piloto da Recepção no código-fonte!
+O pipeline do Ciclo #17 foi devidamente aprovado (`Approved`), implementado e integrado à branch `main` (commit `e532144`).
+
+---
+
+## 30. Ciclo #18 — Implementação da Nova Pipeline 3D e Biblioteca Modular GLB: Sala-Piloto da Recepção
+
+### 30.1. Contexto e Decisão Arquitetural (`@lead` + `@pm`)
+
+Após a conclusão da auditoria técnica do motor gráfico, foi confirmado que o **Three.js (`v0.169.0`) e o React Three Fiber (`v8.17.10`) com `@react-three/drei` (`v9.114.0`)** já suportam nativamente o carregamento de modelos 3D no formato binário `.glb` via o hook `useGLTF`.
+
+A decisão arquitetural aprovada estabelece:
+- **NÃO substituir o motor gráfico** (elimina o risco e o custo desnecessário de migração para Babylon.js).
+- **Abandonar progressivamente a construção manual com centenas de caixas procedurais (`boxGeometry`)**.
+- **Criar uma biblioteca própria de modelos 3D em formato GLB (`.glb`)**, com acabamento refinado, bordas suaves, proporções estilizadas e identidade visual inspirada na referência [Habblaude](https://www.habblaude.com/).
+- **Fase Piloto Exclusiva:** A evolução será aplicada inicialmente apenas na **SALA DE RECEPÇÃO & TRIAGEM**, servindo como modelo e padrão técnico para os futuros ciclos.
+
+### 30.2. Diagnóstico do Ambiente e Estratégia de Geração dos Modelos GLB (`@lead` + `@engineer`)
+
+1. **Diagnóstico Local:** O software Blender não se encontra instalado no PATH ou nos diretórios padrão deste ambiente de desenvolvimento.
+2. **Estratégia Concreta de Geração de Modelos Válidos:**
+   - Em conformidade com a exigência estrita do usuário (*"Se o ambiente de desenvolvimento não possuir Blender... apresente uma estratégia concreta para gerar os arquivos. Não crie arquivos GLB fictícios ou vazios para simular a implementação"*):
+   - Desenvolver um script automatizado de compilação 3D utilizando o **`GLTFExporter` oficial do Three.js** executado em Node.js com polyfill de buffer binário.
+   - O gerador compilará arquivos binários `.glb` reais, 100% compatíveis com a especificação glTF 2.0 do Khronos Group, com malhas poligonais completas, normais calculadas, sub-nós hierárquicos nomeados (`ScreenDisplay`, `StatusLed`, `Chassis`, `CounterBody`, `DrawerBox`), materiais PBR com rugosidade/metalicidade e dimensões métricas físicas calibradas para a escala da maquete.
+   - Nenhum modelo será vazio ou simulado: serão arquivos GLB binários genuínos que podem ser abertos em qualquer visualizador 3D padrão.
+
+### 30.3. Estrutura Modular da Biblioteca de Assets (`frontend/public/models/`)
+
+A biblioteca será organizada na seguinte estrutura de diretórios:
+
+```
+frontend/public/models/
+├── furniture/
+│   ├── reception_counter.glb   # Balcão em L com acabamento ripado e divisória acrílica
+│   ├── office_desk.glb         # Mesa executiva com gaveteiro e pernas tubulares
+│   ├── ergonomic_chair.glb     # Cadeira giratória anatômica com pistão e 5 rodízios
+│   └── storage_cabinet.glb     # Armário vertical de prontuários com 2 portas
+└── tech/
+    ├── workstation_pc.glb      # Monitor slim (nós ScreenDisplay e StatusLed), mini torre, teclado e mouse
+    └── thermal_printer.glb     # Impressora térmica hospitalar com saída de papel e LED
+```
+
+### 30.4. Arquitetura dos Componentes React Modulares (`@frontend`)
+
+Para desacoplar a renderização gráfica da lógica de monitoramento do RMM, serão criados componentes React modulares em `frontend/src/components/models/`:
+
+1. **`WorkstationModel.jsx`:**
+   - Carrega `tech/workstation_pc.glb` via `useGLTF`.
+   - Implementa pré-carregamento com `useGLTF.preload('/models/tech/workstation_pc.glb')`.
+   - Intercepta os sub-nós nomeados da malha:
+     - `ScreenDisplay`: ajusta o material emissivo conforme a saúde da máquina (`NORMAL` = verde, `WARNING` = âmbar, `CRITICAL` = vermelho, `OFFLINE` = cinza escuro).
+     - `StatusLed`: ajusta a cor básica do micro-LED no bezel.
+   - Gerencia eventos de clique (`onClick`), pairar do mouse (`onPointerOver`/`onPointerOut`) e halo de seleção no piso.
+2. **`ReceptionCounterModel.jsx`:**
+   - Carrega `furniture/reception_counter.glb` com materiais PBR configurados e sombras habilitadas (`castShadow`, `receiveShadow`).
+3. **`DeskModel.jsx`:**
+   - Carrega `furniture/office_desk.glb`.
+4. **`ChairModel.jsx`:**
+   - Carrega `furniture/ergonomic_chair.glb`.
+5. **`PrinterModel.jsx`:**
+   - Carrega `tech/thermal_printer.glb`, ativando o LED verde quando o spooler estiver ativo.
+
+### 30.5. Preservação Rigorosa da Telemetria e Interatividade (`@engineer` + `@qa`)
+
+- O componente `WorkstationModel` recebe os dados do computador por props puras:
+  ```jsx
+  <WorkstationModel
+    machine={machine}
+    isSelected={selectedMachine?.id === machine.id}
+    onSelect={onSelectMachine}
+    position={[posX, 0, posZ]}
+  />
+  ```
+- **Sem Reconstrução de Geometria:** Quando a telemetria é atualizada via WebSocket (ex: pulso de CPU/RAM a cada 3s), o R3F atualiza apenas os materiais dos nós identificados sem recarregar ou recriar o arquivo GLB, garantindo performance de 60 FPS cravados.
+- **Interatividade Completa:** O clique no modelo GLB dispara a seleção da máquina, animação de zoom da câmera via `CameraRig` e abertura do `DiagnosticDrawer` com todas as métricas reais do hardware (CPU, RAM, Disco, Temperatura, Spooler).
+
+---
+
+### 30.6. Requisitos Funcionais do Ciclo #18 (`@pm`)
+
+- **RF-58 (Geração e Disponibilização de Assets GLB Reais):** Gerar e disponibilizar os arquivos `.glb` binários válidos para a Recepção (`reception_counter.glb`, `office_desk.glb`, `ergonomic_chair.glb`, `workstation_pc.glb`, `thermal_printer.glb`) dentro da estrutura `frontend/public/models/`.
+- **RF-59 (Componentes React Desacoplados baseados em useGLTF):** Criar os componentes modulares (`WorkstationModel.jsx`, `ReceptionCounterModel.jsx`, `DeskModel.jsx`, `ChairModel.jsx`, `PrinterModel.jsx`) consumindo os arquivos GLB com cache e pré-carregamento.
+- **RF-60 (Montagem da Recepção-Piloto com Modelos GLB):** Substituir as caixas procedurais do balcão, mesa, cadeira, computador e impressora na sala de Recepção pelos componentes GLB correspondentes.
+- **RF-61 (Reação Semântica de Telemetria sem Recarregar Geometrias):** Vincular as propriedades de materiais dos nós de tela e LED do `workstation_pc.glb` ao status real do computador (`DESKTOP-32HK6KT`) em tempo real.
+- **RF-62 (Interatividade, Seleção e Diagnósticos Preservados):** Manter o fluxo de seleção pelo mouse, aproximação da câmera e abertura do painel de diagnósticos com telemetria da VPS.
+- **RF-63 (Estabilidade, Performance e Fallback):** Assegurar taxa estável de 60 FPS, compilação limpa do Vite e fallback seguro caso algum asset demore a carregar.
+
+---
+
+### 30.7. Critérios de Aceitação do Ciclo #18 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-56** | Assets GLB Reais no Repositório | O operador ou auditor inspeciona `frontend/public/models/` | Verifica os arquivos gerados | Constata a presença de arquivos `.glb` binários autênticos e válidos com malhas poligonais e materiais estruturados. |
+| **CA-57** | Recepção-Piloto Renderizada com GLBs | O operador abre o Gêmeo Digital e visualiza a Recepção | Observa os móveis e equipamentos | Identifica os modelos GLB integrados (balcão em L, mesa executiva, cadeira ergonômica, estação de PC e impressora) com acabamento superior aos cubos procedurais. |
+| **CA-58** | Telemetria Dinâmica Refletida no GLB | O operador monitora o computador da recepção | Um alerta ou batimento de telemetria altera o status da máquina | A tela e o LED do modelo GLB atualizam sua cor e emissividade dinamicamente sem recarregar a malha 3D. |
+| **CA-59** | Interatividade e Diagnósticos Funcionais | O operador clica no modelo GLB da estação de trabalho | O mouse seleciona o equipamento | A máquina é destacada, a câmera focaliza suavemente o posto de trabalho e o `DiagnosticDrawer` lateral se abre com os diagnósticos reais. |
+| **CA-60** | Isolamento Estrito da Sala-Piloto | O operador navega pelos demais setores da clínica | Examina os outros ambientes | Constata que as demais salas continuam estáveis e funcionais, sem quebras ou regressões. |
+| **CA-61** | Compilação de Produção e Performance 60 FPS | O build é executado via `npm run build` | Avalia o resultado e a execução WebGL | A compilação é bem-sucedida com código 0 e a taxa de renderização se mantém estável a 60 FPS. |
+
+---
+
+## 31. Gate de Aprovação — FASE 1 (Ciclo #18)
+
+O pipeline do Ciclo #18 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Responda com **`Approved`** para que `@lead`, `@designer`, `@frontend` e `@engineer` iniciem a geração da biblioteca de assets GLB e a implementação da Sala-Piloto baseada em GLB no código-fonte!

@@ -202,6 +202,44 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 - `production_artifacts/Security_Plan.md`
 - `production_artifacts/QA_Report.md`
 
+---
+
+## Ciclo #18 — Implementação da Nova Pipeline 3D: Migração para Biblioteca Modular GLB (Sala-Piloto da Recepção) (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente:** Frontend React + Three.js / R3F / Drei + GLTF Pipeline (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-56** | Assets GLB Reais no Repositório | ✅ APROVADO | Foram gerados e validados 6 arquivos binários `.glb` reais no padrão glTF 2.0 sob `frontend/public/models/`: `reception_counter.glb` (20.0 KB), `office_desk.glb` (14.0 KB), `ergonomic_chair.glb` (13.8 KB), `storage_cabinet.glb` (11.4 KB), `workstation_pc.glb` (33.5 KB) e `thermal_printer.glb` (12.2 KB). Todos possuem malhas completas, normais calculadas, sub-nós nomeados e cabeçalho `glTF` autêntico. |
+| **CA-57** | Recepção-Piloto Renderizada com GLBs | ✅ APROVADO | A sala de Recepção & Triagem agora consome diretamente os componentes modulares baseados em GLB (`<ReceptionCounterModel>`, `<StorageCabinetModel>`, `<ThermalPrinterModel>`, `<DeskModel>`, `<ChairModel>`, `<WorkstationModel>`). As centenas de declarações manuais de `boxGeometry` foram expurgadas, proporcionando acabamento estilizado superior. |
+| **CA-58** | Telemetria Dinâmica Refletida no GLB | ✅ APROVADO | O modelo `workstation_pc.glb` atualiza dinamicamente as cores e a emissividade dos nós `ScreenDisplay` e `StatusLed` com base na saúde da máquina (`NORMAL` verde, `WARNING` âmbar, `CRITICAL` vermelho, `OFFLINE` escuro). Nenhuma geometria 3D é reconstruída ou recarregada quando os batimentos chegam da VPS via WebSocket. |
+| **CA-59** | Interatividade e Diagnósticos Funcionais | ✅ APROVADO | Ao clicar no modelo GLB da estação de trabalho, o equipamento é destacado com halo suave, a câmera aproxima o posto de trabalho e o `DiagnosticDrawer` lateral se abre exibindo CPU, RAM, Disco, Temperatura, Processador e Spooler. O hover ativa o tooltip com hostname, IP e setor. |
+| **CA-60** | Isolamento Estrito da Sala-Piloto | ✅ APROVADO | A substituição por modelos GLB foi concentrada na Recepção e nas estações de trabalho, mantendo os demais setores e corredores 100% estáveis e íntegros. |
+| **CA-61** | Compilação de Produção e Performance 60 FPS | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (`dist/assets/index-Cr2qNkZk.js` em 11.38s). As instâncias compartilham buffers de geometria via `useGLTF.preload`, mantendo 60 FPS estáveis sem gargalos de GPU. |
+
+**Arquivos Criados e Modificados:**
+- `scripts/build_models_glb.mjs` (pipeline gerador de assets GLB nativos)
+- `frontend/public/models/furniture/reception_counter.glb`
+- `frontend/public/models/furniture/office_desk.glb`
+- `frontend/public/models/furniture/ergonomic_chair.glb`
+- `frontend/public/models/furniture/storage_cabinet.glb`
+- `frontend/public/models/tech/workstation_pc.glb`
+- `frontend/public/models/tech/thermal_printer.glb`
+- `frontend/src/components/models/WorkstationModel.jsx`
+- `frontend/src/components/models/DeskModel.jsx`
+- `frontend/src/components/models/ChairModel.jsx`
+- `frontend/src/components/models/ReceptionCounterModel.jsx`
+- `frontend/src/components/models/StorageCabinetModel.jsx`
+- `frontend/src/components/models/ThermalPrinterModel.jsx`
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/dist/` (build de produção atualizado)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/Design_Specification.md`
+- `production_artifacts/Security_Plan.md`
+- `production_artifacts/QA_Report.md`
+
 
 ---
 
@@ -345,6 +383,44 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 | **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso (`dist/assets/index-FGLBaybW.js` em 11.61s). Zero erros de linter ou compilação. |
 
 **Arquivos Modificados:**
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/dist/` (build de produção atualizado)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/Design_Specification.md`
+- `production_artifacts/Security_Plan.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
+## Ciclo #18 — Implementação da Nova Pipeline 3D: Migração para Biblioteca Modular GLB (Sala-Piloto da Recepção) (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente:** Frontend React + Three.js / R3F / Drei + GLTF Pipeline (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-56** | Assets GLB Reais no Repositório | ✅ APROVADO | Foram gerados e validados 6 arquivos binários `.glb` reais no padrão glTF 2.0 sob `frontend/public/models/`: `reception_counter.glb` (20.0 KB), `office_desk.glb` (14.0 KB), `ergonomic_chair.glb` (13.8 KB), `storage_cabinet.glb` (11.4 KB), `workstation_pc.glb` (33.5 KB) e `thermal_printer.glb` (12.2 KB). Todos possuem malhas completas, normais calculadas, sub-nós nomeados e cabeçalho `glTF` autêntico. |
+| **CA-57** | Recepção-Piloto Renderizada com GLBs | ✅ APROVADO | A sala de Recepção & Triagem agora consome diretamente os componentes modulares baseados em GLB (`<ReceptionCounterModel>`, `<StorageCabinetModel>`, `<ThermalPrinterModel>`, `<DeskModel>`, `<ChairModel>`, `<WorkstationModel>`). As centenas de declarações manuais de `boxGeometry` foram expurgadas, proporcionando acabamento estilizado superior. |
+| **CA-58** | Telemetria Dinâmica Refletida no GLB | ✅ APROVADO | O modelo `workstation_pc.glb` atualiza dinamicamente as cores e a emissividade dos nós `ScreenDisplay` e `StatusLed` com base na saúde da máquina (`NORMAL` verde, `WARNING` âmbar, `CRITICAL` vermelho, `OFFLINE` escuro). Nenhuma geometria 3D é reconstruída ou recarregada quando os batimentos chegam da VPS via WebSocket. |
+| **CA-59** | Interatividade e Diagnósticos Funcionais | ✅ APROVADO | Ao clicar no modelo GLB da estação de trabalho, o equipamento é destacado com halo suave, a câmera aproxima o posto de trabalho e o `DiagnosticDrawer` lateral se abre exibindo CPU, RAM, Disco, Temperatura, Processador e Spooler. O hover ativa o tooltip com hostname, IP e setor. |
+| **CA-60** | Isolamento Estrito da Sala-Piloto | ✅ APROVADO | A substituição por modelos GLB foi concentrada na Recepção e nas estações de trabalho, mantendo os demais setores e corredores 100% estáveis e íntegros. |
+| **CA-61** | Compilação de Produção e Performance 60 FPS | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (`dist/assets/index-Cr2qNkZk.js` em 11.38s). As instâncias compartilham buffers de geometria via `useGLTF.preload`, mantendo 60 FPS estáveis sem gargalos de GPU. |
+
+**Arquivos Criados e Modificados:**
+- `scripts/build_models_glb.mjs` (pipeline gerador de assets GLB nativos)
+- `frontend/public/models/furniture/reception_counter.glb`
+- `frontend/public/models/furniture/office_desk.glb`
+- `frontend/public/models/furniture/ergonomic_chair.glb`
+- `frontend/public/models/furniture/storage_cabinet.glb`
+- `frontend/public/models/tech/workstation_pc.glb`
+- `frontend/public/models/tech/thermal_printer.glb`
+- `frontend/src/components/models/WorkstationModel.jsx`
+- `frontend/src/components/models/DeskModel.jsx`
+- `frontend/src/components/models/ChairModel.jsx`
+- `frontend/src/components/models/ReceptionCounterModel.jsx`
+- `frontend/src/components/models/StorageCabinetModel.jsx`
+- `frontend/src/components/models/ThermalPrinterModel.jsx`
 - `frontend/src/components/DigitalTwin3D.jsx`
 - `frontend/dist/` (build de produção atualizado)
 - `production_artifacts/Technical_Specification.md`
