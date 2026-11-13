@@ -671,7 +671,68 @@ Na referência oficial do Habblaude (imagem enviada):
 
 ---
 
-## 23. Gate de Aprovação — FASE 1 (Ciclo #14)
+## 23. Gate de Aprovação — FASE 1 (Ciclo #14) — [CONCLUÍDO E APROVADO]
 
-O pipeline do Ciclo #14 encontra-se **pausado no Gate de Aprovação da Fase 1**.
-Responda com **`Approved`** para que `@lead`, `@designer` e `@frontend` iniciem a implementação da nova paleta de paredes, pisos texturizados, tapetes e entorno de gramado/deck no código-fonte!
+Aprovado pelo usuário. Implementação de pisos, paredes acolhedoras, rodapés de madeira e entorno diorama concluída com sucesso no commit `0078384`.
+
+---
+
+# CICLO #15 — CORREÇÃO DE ISOLAMENTO DE UNIDADES NO WEBSOCKET & ELIMINAÇÃO DE MÁQUINAS FANTASMAS (FLICKER)
+
+## 24. Diagnóstico e Arquitetura da Solução (`@lead` + `@engineer` + `@frontend` + `@security`)
+
+### 24.1. Diagnóstico da Causa Raiz do Bug
+1. **Vazamento Cross-Unit no Listener de Socket.io (`frontend/src/App.jsx`):**
+   - O evento `machine:updated` é emitido pelo backend (`socketHub.broadcastToDashboard`) a cada heartbeat recebido de qualquer agente de qualquer unidade de saúde municipal.
+   - O callback `onMachineUpdated` no frontend avaliava:
+     ```javascript
+     setMachines((prev) => {
+       const exists = prev.some((m) => m.id === updatedMachine.id);
+       if (exists) return prev.map(...);
+       return [...prev, updatedMachine]; // <-- VAZAMENTO: adicionava qualquer máquina de outra unidade!
+     });
+     ```
+   - Além disso, o drawer executava:
+     ```javascript
+     setDiagnostics((prev) => !prev || prev.machine?.id === updatedMachine.id ? { ...prev, machine: updatedMachine } : prev);
+     ```
+     Quando a unidade ativa não possuía computadores, `prev` era `null`, logo `!prev` resultava em `true`, forçando a abertura do drawer com dados de uma máquina estranha à unidade.
+2. **Ciclo de Flicker Contínuo (Aparece e Some):**
+   - A cada 12 segundos (ou na troca de unidades), `loadAllData` consultava a API REST (`GET /api/v1/machines?unitId=2`), retornando `[]`. O estado `machines` era redefinido para vazio (a máquina sumia).
+   - Segundos depois, um novo heartbeat da máquina nativa de outra unidade chegava via WebSocket, re-inserindo a máquina no array local (a máquina reaparecia).
+3. **Stale Closure no React Hook:**
+   - O socket era aberto no `useEffect` indexado por `[selectedProfileIdx]`, mantendo na closure o valor inicial de `selectedUnitId`. Sem sincronização via `useRef`, qualquer leitura de unidade ativa no socket listener ficava desatualizada.
+4. **Ausência de Filtro de Pertencimento no Digital Twin 3D (`DigitalTwin3D.jsx`):**
+   - O componente 3D iterava sobre `machines.map(...)`. Ao receber uma máquina de outra unidade, caía no fallback de coordenadas `(pos_x, pos_z)`, renderizando a estação de trabalho dentro de salas da unidade errada.
+
+---
+
+### 24.2. Requisitos Funcionais do Ciclo #15 (`@pm`)
+
+- **RF-44 (Isolamento Estrito por `unit_id` no Realtime Hub):**
+  - O listener `onMachineUpdated` deve consultar `selectedUnitIdRef.current` dinamicamente.
+  - Apenas máquinas cujo `Number(updatedMachine.unit_id) === Number(selectedUnitIdRef.current)` podem ser inseridas ou mantidas no estado `machines`.
+  - Se a máquina pertencer a outra unidade, ela deve ser explicitamente removida do array local se já estiver presente.
+  - O estado `diagnostics` só deve ser atualizado se pertencer à máquina já aberta E à unidade ativa; caso pertença a outra unidade, deve ser limpo (`null`).
+- **RF-45 (Barreira Defensiva no Digital Twin 3D):**
+  - O componente `DigitalTwin3D` deve filtrar `unitMachines` validando se o `sector_id` da máquina pertence aos setores da unidade ativa (`activeUnit.sectors`) ou se seu `unit_id` confere com `activeUnit.id`.
+  - Máquinas fora da unidade ativa jamais devem ser renderizadas na cena 3D nem alocadas em grade.
+- **RF-46 (Limpeza Imediata na Transição de Unidades):**
+  - Ao clicar nas abas de unidades (`setSelectedUnitId`), resetar imediatamente `diagnostics` para `null` e `selectedMachineId` para `null`, evitando retenção visual antes da resolução da API.
+
+---
+
+### 24.3. Critérios de Aceitação do Ciclo #15 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-42** | Unidade Vazia sem Máquinas Fantasmas | O operador seleciona uma unidade sem computadores (ex: Policlínica Municipal - 0 PCs) | Agentes de outras unidades (ex: USF N. Sra. do Ó) enviam heartbeats periódicos via WebSocket | A maquete 3D permanece limpa sem nenhuma estação de trabalho; a contagem permanece estritamente "0 PCs"; o drawer de diagnósticos não abre sozinho; nenhum computador fica piscando ou surgindo na tela. |
+| **CA-43** | Atualização em Tempo Real Preservada para a Unidade Correta | O operador seleciona uma unidade com computadores cadastrados (ex: USF N. Sra. do Ó - 4 PCs) | Um agente da própria unidade envia telemetria e métricas atualizadas | A estação de trabalho correspondente reflete as métricas de CPU, RAM e status instantaneamente via WebSocket sem necessidade de recarregar a página. |
+| **CA-44** | Defesa em Camadas no Digital Twin 3D | Uma máquina com ID de setor desconhecido ou divergente é injetada no fluxo | O componente `DigitalTwin3D` processa o layout | O filtro defensivo descarta a máquina órfã, prevenindo crashes no cálculo de layout e impedindo coordenadas espaciais duplicadas ou sobrepostas. |
+
+---
+
+## 25. Gate de Aprovação — FASE 1 (Ciclo #15)
+
+O pipeline do Ciclo #15 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Responda com **`Approved`** para que `@lead`, `@engineer` e `@frontend` apliquem a correção em `frontend/src/App.jsx` e `frontend/src/components/DigitalTwin3D.jsx`!

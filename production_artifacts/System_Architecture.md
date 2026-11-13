@@ -273,3 +273,26 @@ A maquete 3D é refatorada em componentes modulares estruturados hierarquicament
    - Tooltip HTML flutuante sutil ao pairar o mouse (*hover*) com nome da máquina, IP e setor.
    - Sincronização de clique com foco de câmera e abertura do painel de diagnóstico lateral.
 5. **`IsometricCameraRig`**: Controlador de câmera com suporte a transições suaves (*lerp*) para os modos `ISO` (visão 45° clássica de maquete), `TOP` (CAD topo ortogonal), `FOCUS` (zoom na mesa da estação selecionada) e `ORBIT` (rotação de inspeção contínua).
+
+---
+
+## 9. Evolução Arquitetural — Ciclo #15 (Isolamento de Unidades no WebSocket & Filtro Defensivo 3D)
+
+### 9.1. Segregação Reativa no Hub de WebSocket (`App.jsx`)
+Para evitar vazamentos de telemetria entre unidades de saúde municipais no dashboard:
+1. **Sincronização Atômica via `useRef`:**
+   - Criação de `selectedUnitIdRef` e `selectedMachineIdRef` atualizados por efeitos síncronos, prevenindo *stale closures* em callbacks assíncronos do WebSocket instanciados no hook de login.
+2. **Filtragem Estrita no Evento `machine:updated`:**
+   - Validação imediata: `Number(updatedMachine.unit_id) === Number(selectedUnitIdRef.current)`.
+   - Máquinas pertencentes à unidade ativa têm seu estado atualizado ou adicionado.
+   - Máquinas de outras unidades que porventura existissem no array são expurgadas via `filter`.
+   - O painel de diagnósticos (`setDiagnostics`) não abre arbitrariamente quando vazio (`!prev`) e fecha automaticamente caso o equipamento monitorado seja transferido de unidade.
+
+### 9.2. Filtro Defensivo no Digital Twin 3D (`DigitalTwin3D.jsx`)
+1. **Coleção Derivada `unitMachines`:**
+   - Mapeamento dinâmico dos IDs dos setores válidos da unidade ativa (`validSectorIds = new Set(sectors.map(s => Number(s.id)))`).
+   - Filtragem estrita dos computadores: apenas máquinas associadas a esses setores ou explicitamente ao `activeUnit.id` são alimentadas no motor de renderização.
+2. **Distribuição Espacial Segura (`computeMachineLayout`):**
+   - Máquinas sem setor correspondente na unidade ativa são ignoradas na alocação de grade em vez de receberem coordenadas `(0, 0)`.
+3. **Foco e Seleção Coerentes:**
+   - `focusMachine` só é ativado se o computador selecionado pertencer efetivamente à unidade ativa renderizada.

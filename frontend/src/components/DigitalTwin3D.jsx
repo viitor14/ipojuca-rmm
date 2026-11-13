@@ -994,13 +994,8 @@ function computeMachineLayout(machines, sectors) {
   });
   bySector.forEach((list, sectorId) => {
     const sector = sectors.find((sec) => Number(sec.id) === sectorId);
+    if (!sector) return;
     const ordered = [...list].sort((a, b) => Number(a.id) - Number(b.id));
-    if (!sector) {
-      ordered.forEach((m) =>
-        result.set(m.id, { x: Number(m.pos_x || 0), z: Number(m.pos_z || 0) })
-      );
-      return;
-    }
     const bx = Number(sector.bounds_x || 0);
     const bz = Number(sector.bounds_z || 0);
     const w = Number(sector.width_3d || 6.5);
@@ -1292,11 +1287,29 @@ export function DigitalTwin3D({
 }) {
   const sectors = activeUnit?.sectors || [];
   const controlsRef = useRef();
-  const machineLayout = useMemo(
-    () => computeMachineLayout(machines, sectors),
-    [machines, sectors]
+
+  const validSectorIds = useMemo(
+    () => new Set(sectors.map((s) => Number(s.id))),
+    [sectors]
   );
-  const focusMachine = selectedMachine
+
+  const unitMachines = useMemo(() => {
+    return (machines || []).filter((m) => {
+      const matchSector = m.sector_id && validSectorIds.has(Number(m.sector_id));
+      const matchUnit = activeUnit?.id && Number(m.unit_id) === Number(activeUnit.id);
+      return matchSector || matchUnit;
+    });
+  }, [machines, validSectorIds, activeUnit?.id]);
+
+  const machineLayout = useMemo(
+    () => computeMachineLayout(unitMachines, sectors),
+    [unitMachines, sectors]
+  );
+
+  const isSelectedValid =
+    selectedMachine && unitMachines.some((m) => m.id === selectedMachine.id);
+
+  const focusMachine = isSelectedValid
     ? {
         ...selectedMachine,
         pos_x: machineLayout.get(selectedMachine.id)?.x ?? selectedMachine.pos_x,
@@ -1342,7 +1355,7 @@ export function DigitalTwin3D({
 
         {/* Salas e Setores da Unidade com Paredes Cutaway */}
         {sectors.map((sector) => {
-          const sectorMachines = machines.filter(
+          const sectorMachines = unitMachines.filter(
             (m) => Number(m.sector_id) === Number(sector.id)
           );
           return (
@@ -1360,7 +1373,7 @@ export function DigitalTwin3D({
         })}
 
         {/* Computadores Reais com Miniaturas sobre as Mesas */}
-        {machines.map((machine) => (
+        {unitMachines.map((machine) => (
           <ComputerAvatarVoxel
             key={`machine-${machine.id}`}
             machine={machine}

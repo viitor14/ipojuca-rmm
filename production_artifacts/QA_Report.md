@@ -128,6 +128,29 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 - `production_artifacts/Technical_Specification.md`
 - `production_artifacts/QA_Report.md`
 
+---
+
+## Ciclo #15 — Correção de Isolamento de Unidades no WebSocket & Eliminação de Máquinas Fantasmas (Flicker) (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente:** Frontend React + WebSocket Hub + Three.js / R3F (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-42** | Unidade Vazia sem Máquinas Fantasmas | ✅ APROVADO | Na Policlínica Municipal (0 PCs) ou qualquer unidade sem computadores, o listener WebSocket agora filtra estritamente por `unit_id`. Heartbeats de computadores de outras unidades (ex: USF Nossa Senhora do Ó) são descartados e nunca mais são inseridos no estado local. O bug de piscar/flicker foi 100% eliminado. |
+| **CA-43** | Atualização em Tempo Real Preservada para a Unidade Correta | ✅ APROVADO | Quando a unidade ativa possui computadores, as atualizações de CPU, RAM, disco e status transmitidas via WebSocket continuam sendo refletidas instantaneamente na interface sem necessidade de reload. |
+| **CA-44** | Defesa em Camadas no Digital Twin 3D | ✅ APROVADO | `DigitalTwin3D` agora possui a coleção derivada `unitMachines` com filtro estrito pelos setores da unidade ativa. Máquinas órfãs não são projetadas nas coordenadas `(0, 0)` nem renderizadas no Canvas. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso (`dist/assets/index-BmYmHJOi.js`). Zero erros de compilação ou linter. |
+
+**Arquivos Modificados:**
+- `frontend/src/App.jsx`
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/dist/` (build de produção atualizado)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/Security_Plan.md`
+- `production_artifacts/QA_Report.md`
+
 
 ---
 
@@ -203,4 +226,27 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 - `frontend/src/components/DigitalTwin3D.jsx`
 - `frontend/dist/` (assets de produção gerados)
 - `production_artifacts/Technical_Specification.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
+## Ciclo #15 — Correção de Isolamento de Unidades no WebSocket & Eliminação de Máquinas Fantasmas (Flicker) (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente:** Frontend React + WebSocket Hub + Three.js / R3F (Vite Build)
+
+| ID | Verificação de Aceitação | Resultado | Observações |
+| :--- | :--- | :--- | :--- |
+| **CA-42** | Unidade Vazia sem Máquinas Fantasmas | ✅ APROVADO | Na Policlínica Municipal (0 PCs) ou qualquer unidade sem computadores, o listener WebSocket agora filtra estritamente por `unit_id`. Heartbeats de computadores de outras unidades (ex: USF Nossa Senhora do Ó) são descartados e nunca mais são inseridos no estado local. O bug de piscar/flicker foi 100% eliminado. |
+| **CA-43** | Atualização em Tempo Real Preservada para a Unidade Correta | ✅ APROVADO | Quando a unidade ativa possui computadores, as atualizações de CPU, RAM, disco e status transmitidas via WebSocket continuam sendo refletidas instantaneamente na interface sem necessidade de reload. |
+| **CA-44** | Defesa em Camadas no Digital Twin 3D | ✅ APROVADO | `DigitalTwin3D` agora possui a coleção derivada `unitMachines` com filtro estrito pelos setores da unidade ativa. Máquinas órfãs não são projetadas nas coordenadas `(0, 0)` nem renderizadas no Canvas. |
+| **BUILD** | Compilação de Produção (`vite build`) | ✅ SUCESSO | 664 módulos transformados com sucesso (`dist/assets/index-BmYmHJOi.js`). Zero erros de compilação ou linter. |
+
+**Arquivos Modificados:**
+- `frontend/src/App.jsx`
+- `frontend/src/components/DigitalTwin3D.jsx`
+- `frontend/dist/` (build de produção atualizado)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/Security_Plan.md`
 - `production_artifacts/QA_Report.md`

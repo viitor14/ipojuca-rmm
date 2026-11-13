@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import styled, { ThemeProvider, keyframes } from 'styled-components';
 import { theme, STATUS_LABELS, fixTextEncoding } from './styles/theme';
 import { GlobalStyles } from './styles/GlobalStyles';
@@ -495,6 +495,17 @@ export default function App() {
     }
   });
 
+  const selectedUnitIdRef = useRef(selectedUnitId);
+  const selectedMachineIdRef = useRef(selectedMachineId);
+
+  useEffect(() => {
+    selectedUnitIdRef.current = selectedUnitId;
+  }, [selectedUnitId]);
+
+  useEffect(() => {
+    selectedMachineIdRef.current = selectedMachineId;
+  }, [selectedMachineId]);
+
   useEffect(() => {
     try {
       window.localStorage.setItem('rmm.dockCollapsed', dockCollapsed ? '1' : '0');
@@ -563,20 +574,36 @@ export default function App() {
           onConnect: () => setSocketConnected(true),
           onDisconnect: () => setSocketConnected(false),
           onMachineUpdated: (updatedMachine) => {
+            const currentUnitId = Number(selectedUnitIdRef.current);
+            const machineUnitId = Number(updatedMachine.unit_id);
+            const isForCurrentUnit = currentUnitId > 0 && machineUnitId === currentUnitId;
+
             setMachines((prev) => {
               const exists = prev.some((m) => m.id === updatedMachine.id);
-              if (exists) {
-                return prev.map((m) =>
-                  m.id === updatedMachine.id ? updatedMachine : m
-                );
+              if (isForCurrentUnit) {
+                if (exists) {
+                  return prev.map((m) =>
+                    m.id === updatedMachine.id ? updatedMachine : m
+                  );
+                }
+                return [...prev, updatedMachine];
               }
-              return [...prev, updatedMachine];
+              // Se a máquina não pertence a esta unidade, remove se estiver presente
+              return exists ? prev.filter((m) => m.id !== updatedMachine.id) : prev;
             });
-            setDiagnostics((prev) =>
-              !prev || prev.machine?.id === updatedMachine.id
-                ? { ...(prev || {}), machine: updatedMachine }
-                : prev
-            );
+
+            setDiagnostics((prev) => {
+              if (!prev || !prev.machine) return prev;
+              if (prev.machine.id === updatedMachine.id) {
+                if (!isForCurrentUnit) {
+                  // Máquina aberta foi transferida ou não pertence à unidade ativa: fechar drawer
+                  return null;
+                }
+                return { ...prev, machine: updatedMachine };
+              }
+              return prev;
+            });
+
             rmmApi.getUnits(res.token).then((uRes) => setUnits(uRes.units || [])).catch(() => {});
           },
           onMachineDeleted: ({ id }) => {
@@ -588,10 +615,10 @@ export default function App() {
             setAlerts((prev) => [newAlert, ...prev.slice(0, 19)]);
           },
           onTaskUpdated: (updatedTask) => {
-            const targetMachineId = updatedTask?.machine_id || selectedMachineId;
+            const currentSelectedMachineId = selectedMachineIdRef.current;
             if (updatedTask && updatedTask.machine_id) {
               setDiagnostics((prev) => {
-                if (!prev || prev.machine?.id !== Number(updatedTask.machine_id)) {
+                if (!prev || Number(prev.machine?.id) !== Number(updatedTask.machine_id)) {
                   return prev;
                 }
                 const prevTasks = prev.tasks || [];
@@ -602,10 +629,17 @@ export default function App() {
                 return { ...prev, tasks: nextTasks };
               });
             }
-            if (targetMachineId) {
+            if (
+              updatedTask?.machine_id &&
+              Number(updatedTask.machine_id) === Number(currentSelectedMachineId)
+            ) {
               rmmApi
-                .getMachineDiagnostics(res.token, targetMachineId)
-                .then(setDiagnostics)
+                .getMachineDiagnostics(res.token, updatedTask.machine_id)
+                .then((diagRes) => {
+                  if (Number(selectedMachineIdRef.current) === Number(updatedTask.machine_id)) {
+                    setDiagnostics(diagRes);
+                  }
+                })
                 .catch(() => {});
             }
           },
@@ -633,7 +667,7 @@ export default function App() {
   const activeUnit =
     units.find((u) => u.id === Number(selectedUnitId)) || units[0];
   const selectedMachine =
-    machines.find((m) => m.id === Number(selectedMachineId)) || machines[0];
+    machines.find((m) => m.id === Number(selectedMachineId)) || machines[0] || null;
   const selectedSector = useMemo(
     () => (activeUnit?.sectors || []).find((s) => s.id === Number(selectedSectorId)) || null,
     [activeUnit, selectedSectorId]
@@ -749,6 +783,7 @@ export default function App() {
                   setSelectedUnitId(u.id);
                   setSelectedMachineId(null);
                   setSelectedSectorId(null);
+                  setDiagnostics(null);
                   setCameraMode('ISO');
                 }}
               >

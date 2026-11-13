@@ -71,3 +71,11 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
 - **Status:** **APROVADO PELO `@security`**.
 - Todos os riscos críticos identificados no plano original (especialmente RCE por PowerShell livre e ocultação de executável) foram mitigados por controles arquiteturais determinísticos antes do início da codificação.
 
+---
+
+## 6. Auditoria de Segregação de Dados entre Unidades de Saúde (Ciclo #15)
+
+- **Risco Mitigado:** Vazamento inadvertido de dados operacionais, inventário de hardware e endereços IP de estações de trabalho de uma unidade de saúde para outra através de canais de WebSocket compartilhados.
+- **Controle Implementado:** Segregação estrita no listener WebSocket com verificação atômica de `unit_id` e descarte de dados fora do escopo da unidade ativa, somada à barreira defensiva no motor WebGL/Three.js (`DigitalTwin3D`).
+- **Parecer `@security`:** **APROVADO**. Segregação de dados em conformidade com o princípio de necessidade e isolamento departamental na gestão de saúde pública.
+
