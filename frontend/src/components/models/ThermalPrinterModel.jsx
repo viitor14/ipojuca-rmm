@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useGLTF } from '@react-three/drei';
 
 export function ThermalPrinterModel({
@@ -22,10 +22,22 @@ export function ThermalPrinterModel({
     return clone;
   }, [scene]);
 
-  useMemo(() => {
+  useEffect(() => {
     modelInstance.traverse((child) => {
-      if (child.name === 'SpoolerLed' && child.material) {
-        child.material.color.set(isActive ? '#2D6A4F' : '#DC2626');
+      if ((child.name === 'StatusLed_Printer' || child.name === 'SpoolerLed') && child.material) {
+        if (isActive) {
+          child.material.color.set('#10B981');
+          if (child.material.emissive) {
+            child.material.emissive.set('#10B981');
+            child.material.emissiveIntensity = 2.5;
+          }
+        } else {
+          child.material.color.set('#EF4444');
+          if (child.material.emissive) {
+            child.material.emissive.set('#EF4444');
+            child.material.emissiveIntensity = 1.0;
+          }
+        }
         child.material.needsUpdate = true;
       }
     });

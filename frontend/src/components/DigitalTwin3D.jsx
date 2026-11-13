@@ -10,6 +10,7 @@ import { ChairModel } from './models/ChairModel';
 import { ReceptionCounterModel } from './models/ReceptionCounterModel';
 import { StorageCabinetModel } from './models/StorageCabinetModel';
 import { ThermalPrinterModel } from './models/ThermalPrinterModel';
+import { WaitingBenchModel } from './models/WaitingBenchModel';
 
 const StageContainer = styled.div`
   position: absolute;
@@ -937,7 +938,7 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ }) {
       <ThermalPrinterModel position={[-2.1, 1.08, backZ + 0.2]} isActive={true} />
 
       {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (storage_cabinet.glb) */}
-      <StorageCabinetModel position={[-halfW + 0.6, 0, backZ + 0.15]} />
+      <StorageCabinetModel position={[-halfW + 0.8, 0, backZ + 0.35]} rotation={[0, Math.PI, 0]} />
 
       {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (WaterDispenserHabblaude) */}
       <group position={[halfW - 0.75, 0, backZ + 0.15]}>
@@ -982,7 +983,7 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ }) {
         </mesh>
       </group>
 
-      {/* 4. PLANTA DECORATIVA EM VASO DE CERÂMICA (IndoorPlantHabblaude) */}
+      {/* 5. PLANTA DECORATIVA EM VASO DE CERÂMICA (IndoorPlantHabblaude) */}
       <group position={[halfW - 0.55, 0, halfD - 0.6]}>
         {/* Vaso cerâmico fosco esmaltado */}
         <mesh position={[0, 0.28, 0]} castShadow receiveShadow>
@@ -1009,36 +1010,8 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ }) {
         </mesh>
       </group>
 
-      {/* 5. LONGARINA DE ESPERA PARA PACIENTES (WaitingLoungeHabblaude) */}
-      <group position={[-halfW + 0.65, 0, 0.2]} rotation={[0, Math.PI / 2, 0]}>
-        {/* Barra estrutural em tubo de aço escovado */}
-        <mesh position={[0, 0.2, 0]}>
-          <boxGeometry args={[1.7, 0.04, 0.06]} />
-          <meshStandardMaterial color="#64748B" metalness={0.5} roughness={0.3} />
-        </mesh>
-        {/* Pés metálicos com sapatas de borracha */}
-        <mesh position={[-0.75, 0.1, 0]}>
-          <boxGeometry args={[0.04, 0.2, 0.36]} />
-          <meshStandardMaterial color="#475569" metalness={0.6} />
-        </mesh>
-        <mesh position={[0.75, 0.1, 0]}>
-          <boxGeometry args={[0.04, 0.2, 0.36]} />
-          <meshStandardMaterial color="#475569" metalness={0.6} />
-        </mesh>
-        {/* 3 Assentos acolchoados em azul royal hospitalar */}
-        {[-0.55, 0, 0.55].map((xOffset, idx) => (
-          <group key={`pilot-seat-${idx}`} position={[xOffset, 0, 0]}>
-            <mesh position={[0, 0.26, 0.02]} castShadow>
-              <boxGeometry args={[0.42, 0.06, 0.38]} />
-              <meshStandardMaterial color="#1E3A8A" roughness={0.6} />
-            </mesh>
-            <mesh position={[0, 0.48, -0.16]} castShadow>
-              <boxGeometry args={[0.42, 0.36, 0.05]} />
-              <meshStandardMaterial color="#1E3A8A" roughness={0.6} />
-            </mesh>
-          </group>
-        ))}
-      </group>
+      {/* 6. LONGARINA DE ESPERA PARA PACIENTES (waiting_bench.glb) */}
+      <WaitingBenchModel position={[-halfW + 0.65, 0, 0.2]} rotation={[0, Math.PI / 2, 0]} />
     </group>
   );
 }
@@ -1301,23 +1274,13 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos }) {
       {/* 2. CADEIRA DE ESCRITÓRIO ERGONÔMICA (ergonomic_chair.glb) */}
       <ChairModel position={[-0.08, 0, 0.54]} />
 
-      {/* 3. ESTAÇÃO DE TRABALHO PC: Se for a máquina 9, utiliza o novo modelo GLB profissional do Blender */}
-      {isPilotMachine ? (
-        <WorkstationModel
-          machine={machine}
-          isSelected={isSelected}
-          onSelect={onSelect}
-          position={[0, 0.76, 0]}
-        />
-      ) : (
-        /* Fallback: mantido para as demais máquinas até validação da sala-piloto */
-        <FallbackWorkstationModel
-          machine={machine}
-          isSelected={isSelected}
-          onSelect={onSelect}
-          position={[0, 0.76, 0]}
-        />
-      )}
+      {/* 3. ESTAÇÃO DE TRABALHO PC: Modelo GLB profissional workstation_pc.glb */}
+      <WorkstationModel
+        machine={machine}
+        isSelected={isSelected}
+        onSelect={onSelect}
+        position={[0, 0.76, 0]}
+      />
 
       {/* 4. IMPRESSORA ACOPLADA SE SPOOLER ATIVO (thermal_printer.glb) */}
       {machine.spooler_running && (

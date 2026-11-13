@@ -392,3 +392,32 @@ Para evitar vazamentos de telemetria entre unidades de saúde municipais no dash
 
 ### 12.3. Camada de Interatividade
 - Eventos de ponteiro (`onClick`, `onPointerOver`, `onPointerOut`) são mapeados no nível do componente React do modelo, disparando a seleção da máquina no `App.jsx`, acionando o foco do `CameraRig` e abrindo o `DiagnosticDrawer` de forma idêntica à especificação anterior.
+
+---
+
+## 13. Arquitetura Modular da Biblioteca de Mobiliário 3D — Ciclo #21
+
+### 13.1. Pipeline de Modelagem Automatizada no Blender 4.2 LTS (`bpy`)
+1. **Script de Geração Unificado:**
+   - Script automatizado `scripts/build_furniture_models_blender.py` invocando a API nativa de modelagem do Blender 4.2 LTS.
+   - Aplicação consistente de modificadores `Bevel` (largura de 0.006m a 0.012m com 3 a 4 segmentos) em todas as bordas vivas.
+   - Aplicação de `Principled BSDF` com parâmetros normalizados de PBR (Madeira laminada carvalho claro, Aço carbono cinza escuro, Policarbonato, Vidro/Acrílico translúcido com `transmission`).
+2. **Topologia e Otimização para Tempo Real:**
+   - Poligonalidade controlada: de 800 a 4.500 triângulos por asset.
+   - Exportação no padrão binário GLB v2.0 (`.glb`) com inclusão de normais suaves (*Shade Smooth* + *Auto Smooth* a 40°).
+
+### 13.2. Catálogo de Modelos e Mapeamento de Componentes
+
+| Modelo 3D (GLB) | Destino do Arquivo | Componente React R3F | Responsabilidade Arquitetural |
+| :--- | :--- | :--- | :--- |
+| `office_desk.glb` | `frontend/public/models/furniture/` | `DeskModel.jsx` | Mesa executiva com tampo laminado, estrutura tubular de aço e gaveteiro com puxadores metálicos. |
+| `ergonomic_chair.glb` | `frontend/public/models/furniture/` | `ChairModel.jsx` | Cadeira ergonômica com base estrela 5 pontas, rodízios, pistão e estofamento anatômico. |
+| `reception_counter.glb` | `frontend/public/models/furniture/` | `ReceptionCounterModel.jsx` | Balcão modular em L com painel frontal ripado, rodapé nobre, tampo boleado e visor em vidro. |
+| `storage_cabinet.glb` | `frontend/public/models/furniture/` | `StorageCabinetModel.jsx` | Armário de prontuários com 2 portas verticais, puxadores cromados e fechadura central. |
+| `thermal_printer.glb` | `frontend/public/models/tech/` | `ThermalPrinterModel.jsx` | Impressora compacta de atendimento com fita e LED verde, acoplada condicionalmente se spooler ativo. |
+| `waiting_bench.glb` | `frontend/public/models/furniture/` | `WaitingBenchModel.jsx` | Longarina hospitalar de espera com 3 conchas anatômicas individuais e pernas em Y invertido. |
+
+### 13.3. Ciclo de Vida, Isolamento de Materiais e Prevenção de Memory Leaks
+- **Clonagem Segura (`scene.clone(true)`):** Assegura que instâncias do mesmo modelo possam receber materiais ou transformações isoladas sem colisão na árvore do Three.js.
+- **Transição `useMemo` -> `useEffect`:** Mutações imperativas de propriedades do grafo de cena continuam padronizadas dentro de `useEffect`, garantindo total conformidade com o ciclo de vida do React 18.
+- **Cache Singleton de Texturas:** Texturas compartilhadas são armazenadas em singletons estáticos, garantindo zero vazamento de memória na VRAM durante re-renderizações ou atualizações do WebSocket.

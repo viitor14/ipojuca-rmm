@@ -1220,9 +1220,122 @@ O componente `WorkstationModel.jsx` foi auditado e validado nos 4 estados operac
 
 ## 36. Gate de Homologação — Conclusão do Ciclo #20 (`@lead`)
 
-A homologação visual e técnica do primeiro asset 3D profissional (`workstation_pc.glb`) está **concluída e documentada**.
+*Ciclo #20 homologado e concluído com sucesso em 13/11/2026.*
 
-Conforme o **Critério de Aprovação da Seção 5**:
-- A biblioteca 3D **NÃO foi expandida** para os demais móveis nesta etapa.
-- Os demais computadores da maquete **permanecem intactos** utilizando o modelo de salvaguarda.
-- O pipeline encontra-se pausado aguardando a **aprovação explícita do usuário** antes de iniciar a modelagem dos próximos móveis ou ambientes.
+---
+
+## 37. Ciclo #21: Criação da Biblioteca Profissional de Mobiliário 3D do RMM
+## Expansão Modular de Ativos GLB via Blender 4.2 LTS e Conclusão da Sala-Piloto (Recepção)
+
+### 37.1. Objetivo do Ciclo #21 (`@pm` + `@lead`)
+A partir da homologação bem-sucedida do primeiro computador GLB (`workstation_pc.glb`), o Ciclo #21 tem como objetivo estabelecer uma **biblioteca própria, modular e profissional de mobiliário 3D** para o Gêmeo Digital do RMM Ipojuca.
+
+Seguindo estritamente as diretrizes da missão:
+1. **Referência Artística Estrita:** Todos os novos modelos deverão adotar a mesma identidade artística, proporção isométrica, escala métrica, chanfros consistentes (*Bevel*) e materiais PBR Principled BSDF estabelecidos pelo `workstation_pc.glb`, inspirados na estética Habblaude de diorama premium em miniatura.
+2. **Exclusão de Assets Externos Aleatórios:** Não serão importados modelos desconexos de bibliotecas externas genéricas. A modelagem será 100% autêntica, desenvolvida via scripts automatizados na API Python (`bpy`) do Blender 4.2.16 LTS.
+3. **Foco e Prioridade na Sala-Piloto (Recepção):** A recepção da USF Nossa Senhora do Ó será o primeiro ambiente 100% concluído da maquete 3D. **Não serão construídas novas salas antes da conclusão e aprovação da recepção.**
+4. **Preservação Funcional:** Nenhuma alteração afetará a telemetria em tempo real (Socket.io), os heartbeats, as rotinas do agente Windows, a seleção com contorno vetorial CAD ou o painel `DiagnosticDrawer`.
+
+---
+
+### 37.2. Catálogo e Especificação Técnica dos 6 Modelos GLB (`@designer` + `@engineer`)
+
+Os modelos serão exportados no formato binário padronizado GLB v2.0 nos diretórios `frontend/public/models/furniture/` e `frontend/public/models/tech/`:
+
+```
+frontend/public/models/
+├── furniture/
+│   ├── office_desk.glb          # 1. Mesa executiva com gaveteiro e passa-cabos
+│   ├── ergonomic_chair.glb      # 2. Cadeira ergonômica com pistão e rodízios
+│   ├── reception_counter.glb    # 3. Balcão de atendimento em L com vidro
+│   ├── storage_cabinet.glb      # 4. Armário de prontuários com fechadura
+│   └── waiting_bench.glb        # 5. Longarina hospitalar de espera (3 lugares)
+└── tech/
+    ├── workstation_pc.glb       # Homologado no Ciclo #20 (referência estética)
+    └── thermal_printer.glb      # 6. Impressora térmica de atendimento com LED
+```
+
+#### 1. `office_desk.glb` — Mesa de Escritório Executiva
+- **Dimensões Físicas:** 1.40m (largura) x 0.80m (profundidade) x 0.76m (altura da bancada).
+- **Geometria & Chanfros:** Tampo espesso de 30mm em MDF laminado carvalho claro (`#D4B895`) com modificador Bevel de 8mm e 3 segmentos; estrutura de sustentação em tubos retangulares de aço carbono cinza chumbo (`#2A2F35`, epóxi fosco); gaveteiro lateral acoplado com 3 gavetas chanfradas e puxadores metálicos em barra cilíndrica de alumínio escovado (`#C5CBD3`); passa-cabos circular na quina traseira direita.
+- **Orçamento Geométrico:** 1.200 a 2.500 triângulos.
+
+#### 2. `ergonomic_chair.glb` — Cadeira Ergonômica de Escritório
+- **Dimensões Físicas:** 0.64m x 0.64m x 0.98m (altura do encosto), assento regulado a 0.48m.
+- **Geometria & Chanfros:** Base estrela de 5 pontas com rodízios chanfrados duplos (`#1F242A`); pistão pneumático central com cilindro metálico reflexivo (`metallic: 0.85`, `roughness: 0.20`); assento anatômico espesso com curvas suaves estofado em tecido técnico grafite (`#252B33`); encosto de tela respirável com suporte lombar curvo; par de apoios de braço com almofadas superiores chanfradas.
+- **Orçamento Geométrico:** 2.000 a 3.800 triângulos.
+
+#### 3. `reception_counter.glb` — Balcão de Atendimento da Recepção
+- **Dimensões Físicas:** Modular em L: Módulo principal frontal de 2.80m x 0.75m x 1.10m de altura pública; Módulo lateral de 1.80m x 0.75m; bancada de trabalho interna rebaixada a 0.76m.
+- **Geometria & Chanfros:** Painel frontal canelado/ripado em laca off-white (`#F0EFEA`) com rodapé rebaixado em madeira nobre (`#452817`); tampo superior de atendimento ao público com bordas boleadas de 12mm; painel protetor frontal em vidro temperado / acrílico translúcido (`transmission: 0.9`, `roughness: 0.05`); passa-fios e prateleiras internas para formulários e periféricos.
+- **Orçamento Geométrico:** 2.500 a 4.500 triângulos.
+
+#### 4. `storage_cabinet.glb` — Armário de Prontuários e Suprimentos
+- **Dimensões Físicas:** 0.90m (largura) x 0.45m (profundidade) x 1.85m (altura).
+- **Geometria & Chanfros:** Gabinete vertical em chapa tratada branca hospitalar (`#E8ECE9`, `roughness: 0.40`); duas portas verticais com rebaixo perimetral chanfrado; fechadura cromada central com tambor de chave e puxadores verticais em alumínio; sapatas niveladoras cilíndricas de apoio com anel de borracha; prateleiras internas reforçadas.
+- **Orçamento Geométrico:** 1.000 a 2.200 triângulos.
+
+#### 5. `thermal_printer.glb` — Impressora Térmica de Atendimento
+- **Dimensões Físicas:** 0.22m (largura) x 0.16m (profundidade) x 0.14m (altura).
+- **Geometria & Chanfros:** Chassi compacto em ABS fosco cinza escuro (`#1E2228`); tampa superior com ranhura de saída do papel térmico e serrilha de corte metálica; botão de avanço (Feed) e micro-LED de alimentação verde (`StatusLed_Printer`, `#10B981`); porta USB e conector de fonte traseiros.
+- **Ativação Dinâmica:** Renderizada dinamicamente sobre a bancada ao lado da estação de trabalho quando `machine.spooler_running === true`.
+- **Orçamento Geométrico:** 800 a 1.600 triângulos.
+
+#### 6. `waiting_bench.glb` — Longarina Hospitalar de Espera
+- **Dimensões Físicas:** 1.80m (largura) x 0.60m (profundidade) x 0.78m (altura).
+- **Geometria & Chanfros:** Viga transversal contínua em aço tubular de alta resistência (`#2F353E`); 3 conchas anatômicas individuais (assento + encosto) em polipropileno injetado com bordas perfeitamente arredondadas em azul ardósia hospitalar (`#4A6572`, `roughness: 0.50`); suportes em pernas formato Y invertido com ponteiras de borracha cinza. Posicionada na área de espera da recepção.
+- **Orçamento Geométrico:** 1.800 a 3.200 triângulos.
+
+---
+
+### 37.3. Arquitetura de Componentes React e Three.js (`@frontend`)
+
+Cada modelo contará com um componente desacoplado em `frontend/src/components/models/`:
+
+1. `DeskModel.jsx`: Carrega `office_desk.glb` via `useGLTF`, gerencia clonagem de materiais por instância e recebe `position` e `rotation`.
+2. `ChairModel.jsx`: Carrega `ergonomic_chair.glb`, posicionado ergonomicamente atrás de cada mesa.
+3. `ReceptionCounterModel.jsx`: Carrega `reception_counter.glb`, posicionado no setor de recepção.
+4. `StorageCabinetModel.jsx`: Carrega `storage_cabinet.glb`, encostado na parede lateral da recepção.
+5. `ThermalPrinterModel.jsx`: Carrega `thermal_printer.glb`, acoplado condicionalmente à máquina com spooler ativo.
+6. `WaitingBenchModel.jsx`: Carrega `waiting_bench.glb`, alocado nas áreas de circulação e recepção.
+
+Todos os componentes implementarão:
+- Pré-carregamento declarativo: `useGLTF.preload('/models/.../*.glb')`.
+- Isolamento estático com `scene.clone(true)` para evitar colisão de materiais entre instâncias.
+- `castShadow = true` e `receiveShadow = true` nos meshes de mobiliário.
+
+---
+
+### 37.4. Requisitos Funcionais do Ciclo #21 (`@pm`)
+
+- **RF-73 (Modelagem Profissional no Blender com Bevels):** Desenvolver scripts Python automatizados (`scripts/build_furniture_models_blender.py`) utilizando a API nativa `bpy` para gerar os 6 modelos com chanfros reais e materiais PBR coerentes.
+- **RF-74 (Exportação GLB Válida e Leve):** Exportar os arquivos binários `.glb` com contagem poligonal controlada e zero dependência de texturas rasterizadas pesadas.
+- **RF-75 (Componentização Desacoplada no Frontend):** Criar os 6 componentes React dedicados com suporte a sombras e clonagem limpa.
+- **RF-76 (Composição Completa da Sala-Piloto Recepção):** Substituir integralmente todos os blocos procedurais remanescentes da Recepção pelos novos ativos GLB (balcão, mesas, cadeiras, impressoras, armário e longarinas).
+- **RF-77 (Validação Individual com Capturas em Estúdio):** Produzir capturas reais de cada modelo isolado e da recepção montada antes de qualquer expansão para outros setores.
+- **RF-78 (Garantia de Desempenho e Interatividade):** Manter taxa sustentada de 60 FPS e tempo de quadro inferior a 0.5ms no WebGL.
+
+---
+
+### 37.5. Critérios de Aceitação do Ciclo #21 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-75** | Produção dos 6 Arquivos GLB Válidos | O script de modelagem do Blender é executado | Inspeciona os 6 arquivos gerados em `frontend/public/models/` | Todos os 6 arquivos (`office_desk.glb`, `ergonomic_chair.glb`, `reception_counter.glb`, `storage_cabinet.glb`, `thermal_printer.glb`, `waiting_bench.glb`) são binários válidos com Bevels e PBR. |
+| **CA-76** | Unidade Estética com `workstation_pc.glb` | Os novos modelos são visualizados em estúdio | Compara a paleta e acabamento com o computador aprovado | Cores, chanfros, reflexos metálicos e proporções métricas são perfeitamente harmônicos entre si. |
+| **CA-77** | Recepção sem Geometrias Primitivas | O usuário visualiza o setor da Recepção | Inspeciona balcão, mesas, armário e cadeiras | Nenhum móvel da recepção é gerado com `boxGeometry` ou cubos brutos simples; todos utilizam os modelos GLB do Blender. |
+| **CA-78** | Preservação do `workstation_pc.glb` na Estação 9 | A recepção completa é montada | Examina o computador da estação-piloto | O computador aprovado no Ciclo #20 continua instalado sobre a nova mesa, com LED de telemetria, tela corporativa e contorno CAD. |
+| **CA-79** | Acoplamento Dinâmico da Impressora Térmica | Uma máquina possui `spooler_running: true` | O componente do computador é renderizado | A `thermal_printer.glb` é exibida sobre a mesa com LED verde ativo; se o spooler for desligado, a impressora é ocultada. |
+| **CA-80** | Inserção de Longarina de Espera | O operador examina a área de espera da recepção | Observa a circulação | A longarina de 3 lugares (`waiting_bench.glb`) está posicionada na área frontal da recepção sem bloquear passagens. |
+| **CA-81** | Interatividade e `DiagnosticDrawer` Intactos | O operador clica na estação de trabalho da recepção | Clica no monitor / gabinete | A estação é selecionada com contorno CAD, a câmera focaliza e o `DiagnosticDrawer` abre com a telemetria em tempo real. |
+| **CA-82** | Auditoria de Performance e Build 60 FPS | O projeto é compilado com `npm run build` | Executa o build e mede FPS na maquete | Código de saída 0, 0 erros no console e renderização fluida a 60 FPS estáveis. |
+
+---
+
+## 38. Gate de Aprovação — FASE 1 (Ciclo #21)
+
+O pipeline do Ciclo #21 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+
+Apresentamos a especificação funcional e arquitetural para o desenvolvimento dos **6 modelos de mobiliário profissional** via Blender 4.2 LTS e a conclusão da **Recepção como primeiro ambiente completo**.
+
+Responda com **`Approved`** para que as equipes `@lead`, `@designer`, `@engineer` e `@frontend` iniciem a modelagem no Blender, a exportação dos GLBs e a integração na sala-piloto!

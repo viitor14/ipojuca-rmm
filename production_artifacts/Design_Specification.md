@@ -172,3 +172,25 @@ Todos os modelos são compilados com escala métrica 1:1, ponto de pivô fixado 
 6. **`tech/thermal_printer.glb`:**
    - **Dimensões:** `Largura: 0.28m | Altura: 0.18m | Profundidade: 0.24m`.
    - **Sub-nós:** Fenda com folha de papel e LED indicador `SpoolerLed`.
+
+---
+
+## 8. Especificação Artística dos Modelos de Mobiliário 3D — Ciclo #21 (`@designer`)
+
+Em continuidade direta à homologação do `workstation_pc.glb`, a biblioteca de mobiliário adota o **Padrão Estético Habblaude de Alta Fidelidade**:
+
+1. **Linguagem Geométrica:**
+   - Construção com arestas suavizadas via modificadores `Bevel` (de 6mm a 12mm de chanfro com 3 a 4 segmentos).
+   - Eliminação completa de caixas procedurais puras ou arestas em ângulo de 90° sem acabamento.
+   - Proporções críveis e antropométricas (altura de mesa a 0.76m, assento de cadeira a 0.48m, balcão a 1.10m).
+2. **Paleta de Materiais e Shaders PBR:**
+   - `Mat_LightOak`: Carvalho claro natural (`#D4B895`, `roughness: 0.45`, `metallic: 0.0`) para tampos e superfícies nobres.
+   - `Mat_DarkSteel`: Tubos de aço carbono estrutural (`#2A2F35`, `roughness: 0.40`, `metallic: 0.25`) para pernas e vigas.
+   - `Mat_CharcoalFabric`: Tecido técnico anatômico (`#252B33`, `roughness: 0.80`) para estofados e assentos.
+   - `Mat_OffWhiteLacquer`: Laca off-white acetinada (`#F0EFEA`, `roughness: 0.35`) para armários e painel do balcão.
+   - `Mat_BrushedMetal`: Alumínio escovado reflexivo (`#C5CBD3`, `roughness: 0.25`, `metallic: 0.88`) para puxadores e pistões.
+   - `Mat_GlassAcrylic`: Acrílico translúcido protetor (`#E8F4F8`, `roughness: 0.05`, `transmission: 0.90`) para o balcão.
+   - `Mat_SlatePolypropylene`: Polipropileno azul ardósia hospitalar (`#4A6572`, `roughness: 0.50`) para a longarina.
+3. **Escala e Pivô Padronizados:**
+   - Ponto de pivô `(0, 0, 0)` centralizado na base do piso (`Z = 0` no Blender, mapeando para o plano de apoio).
+   - Orientação frontal apontando para `+Y` no Blender (mapeando para `+Z` no glTF / Three.js).

@@ -102,3 +102,15 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
   4. O mapeamento de telemetria é unidirecional: dados da VPS alteram apenas atributos visuais (cor/emissividade) de malhas pré-carregadas no cliente, sem parsing de dados não estruturados.
 - **Parecer `@security`:** **APROVADO**. A pipeline de modelos GLB atende integralmente aos padrões de segurança e integridade estática de assets.
 
+---
+
+## 9. Parecer de Segurança — Ciclo #21 (Integridade e Sanitização Local da Biblioteca de Mobiliário via Blender)
+
+- **Risco Avaliado:** Inclusão inadvertida de binários de terceiros não auditados, backdoors em scripts de malha ou sobrecarga de recursos locais por geometrias não otimizadas.
+- **Controles Implementados:**
+  1. **Geração 100% Local e Auditada:** Todos os 6 modelos (`office_desk.glb`, `ergonomic_chair.glb`, `reception_counter.glb`, `storage_cabinet.glb`, `thermal_printer.glb`, `waiting_bench.glb`) são gerados localmente por script determinístico na API Python (`bpy`) do Blender 4.2 LTS institucional.
+  2. **Ausência de Dependências Externas:** Bloqueio absoluto do download de assets de repositórios públicos ou CDNs de terceiros.
+  3. **Sanitização de Buffer e Validação glTF 2.0:** Malhas contêm apenas primitivas vetoriais com modificadores `Bevel` e materiais PBR nativos, livres de scripts embutidos ou metadados de rastreamento.
+  4. **Proteção de VRAM e Prevenção de DoS no Navegador:** Orçamento poligonal controlado de 800 a 4.500 tris por asset, impedindo esgotamento de memória de vídeo nos postos de saúde.
+- **Parecer `@security`:** **APROVADO PELO `@security`**. Pipeline seguro e em conformidade estrita com os requisitos de integridade do RMM Ipojuca.
+
