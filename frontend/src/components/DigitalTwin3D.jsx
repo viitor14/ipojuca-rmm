@@ -4,7 +4,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Html } from '@react-three/drei';
 import styled, { keyframes } from 'styled-components';
 import { theme, STATUS_LABELS, fixTextEncoding } from '../styles/theme';
-import { WorkstationModel } from './models/WorkstationModel';
+import { WorkstationModel, FallbackWorkstationModel } from './models/WorkstationModel';
 import { DeskModel } from './models/DeskModel';
 import { ChairModel } from './models/ChairModel';
 import { ReceptionCounterModel } from './models/ReceptionCounterModel';
@@ -591,7 +591,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
       {isNorth ? (
         /* Parede Externa dos Fundos do Prédio (Altura Total com 2 Janelas e Decorações) */
         <group position={[0, wallHeight / 2, -depth / 2 + wallThickness / 2]}>
-          <mesh castShadow receiveShadow>
+          <mesh receiveShadow>
             <boxGeometry args={[width, wallHeight, wallThickness]} />
             <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
           </mesh>
@@ -702,7 +702,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
         /* Parede Divisória Interna Voltada Para o Corredor (Com Vão de Porta de 1.2m e Portal de Madeira) */
         <group position={[0, 0, -depth / 2 + wallThickness / 2]}>
           <group position={[-doorWidth / 2 - wallSegmentW / 2, wallHeight / 2, 0]}>
-            <mesh castShadow receiveShadow>
+            <mesh receiveShadow>
               <boxGeometry args={[wallSegmentW, wallHeight, wallThickness]} />
               <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
             </mesh>
@@ -717,7 +717,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
           </group>
 
           <group position={[doorWidth / 2 + wallSegmentW / 2, wallHeight / 2, 0]}>
-            <mesh castShadow receiveShadow>
+            <mesh receiveShadow>
               <boxGeometry args={[wallSegmentW, wallHeight, wallThickness]} />
               <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
             </mesh>
@@ -732,7 +732,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
           </group>
 
           <group position={[0, 1.28, 0]}>
-            <mesh castShadow receiveShadow>
+            <mesh receiveShadow>
               <boxGeometry args={[doorWidth + 0.02, 0.34, wallThickness]} />
               <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
             </mesh>
@@ -769,7 +769,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
         /* Parede Divisória Interna Voltada Para o Corredor (Com Vão de Porta de 1.2m e Portal de Madeira) */
         <group position={[0, 0, depth / 2 - wallThickness / 2]}>
           <group position={[-doorWidth / 2 - wallSegmentW / 2, wallHeight / 2, 0]}>
-            <mesh castShadow receiveShadow>
+            <mesh receiveShadow>
               <boxGeometry args={[wallSegmentW, wallHeight, wallThickness]} />
               <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
             </mesh>
@@ -784,7 +784,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
           </group>
 
           <group position={[doorWidth / 2 + wallSegmentW / 2, wallHeight / 2, 0]}>
-            <mesh castShadow receiveShadow>
+            <mesh receiveShadow>
               <boxGeometry args={[wallSegmentW, wallHeight, wallThickness]} />
               <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
             </mesh>
@@ -799,7 +799,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
           </group>
 
           <group position={[0, 1.28, 0]}>
-            <mesh castShadow receiveShadow>
+            <mesh receiveShadow>
               <boxGeometry args={[doorWidth + 0.02, 0.34, wallThickness]} />
               <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
             </mesh>
@@ -848,7 +848,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
 
       {/* 5. PAREDE LATERAL OESTE (X-) */}
       <group position={[-width / 2 + wallThickness / 2, wallHeight / 2, 0]}>
-        <mesh castShadow receiveShadow>
+        <mesh receiveShadow>
           <boxGeometry args={[wallThickness, wallHeight, depth]} />
           <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
         </mesh>
@@ -887,7 +887,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
       {/* 6. PAREDE LATERAL LESTE (X+) */}
       {isEast && (
         <group position={[width / 2 - wallThickness / 2, wallHeight / 2, 0]}>
-          <mesh castShadow receiveShadow>
+          <mesh receiveShadow>
             <boxGeometry args={[wallThickness, wallHeight, depth]} />
             <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
           </mesh>
@@ -1228,7 +1228,7 @@ function ClinicalFurnitureVoxel({ sector }) {
   );
 }
 
-/* Distribui as estações em grade dentro de cada setor */
+/* Distribui as estações de forma espacialmente coerente em cada setor */
 function computeMachineLayout(machines, sectors) {
   const result = new Map();
   const bySector = new Map();
@@ -1240,20 +1240,45 @@ function computeMachineLayout(machines, sectors) {
   bySector.forEach((list, sectorId) => {
     const sector = sectors.find((sec) => Number(sec.id) === sectorId);
     if (!sector) return;
-    const ordered = [...list].sort((a, b) => Number(a.id) - Number(b.id));
+    const ordered = [...list].sort((a, b) => {
+      // Prioriza a estação-piloto (id 9 ou DESKTOP-32HK6KT) como posto principal
+      if (Number(a.id) === 9 || a.hostname === 'DESKTOP-32HK6KT') return -1;
+      if (Number(b.id) === 9 || b.hostname === 'DESKTOP-32HK6KT') return 1;
+      return Number(a.id) - Number(b.id);
+    });
     const bx = Number(sector.bounds_x || 0);
     const bz = Number(sector.bounds_z || 0);
-    const w = Number(sector.width_3d || 9.0);
-    const cols = ordered.length <= 4 ? 2 : 3;
-    const spacing = Math.min(2.4, (w - 2.0) / cols);
-    ordered.forEach((m, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      result.set(m.id, {
-        x: bx + (col - (cols - 1) / 2) * spacing,
-        z: bz - 0.5 + row * 1.85,
+    const isReception = sector.code === 'REC' || Number(sector.id) === 1;
+
+    if (isReception) {
+      // Layout especializado da Recepção: desobstrui o tapete central
+      const receptionSlots = [
+        { x: bx - 1.15, z: bz - 0.75 }, // Posto 1: Estação Principal (Piloto machine.id = 9)
+        { x: bx + 1.85, z: bz - 0.75 }, // Posto 2: Atendimento Secundário
+        { x: bx - 2.50, z: bz + 0.85 }, // Posto 3: Triagem Lateral
+        { x: bx + 2.50, z: bz + 0.85 }, // Posto 4: Pós-consulta / Regulação
+      ];
+      ordered.forEach((m, i) => {
+        const slot = receptionSlots[i] || {
+          x: bx + (i % 2 === 0 ? -2.2 : 2.2),
+          z: bz + (Math.floor(i / 2) * 1.5),
+        };
+        result.set(m.id, slot);
       });
-    });
+    } else {
+      // Distribuição padrão em grade para os demais setores clínicos
+      const w = Number(sector.width_3d || 9.0);
+      const cols = ordered.length <= 4 ? 2 : 3;
+      const spacing = Math.min(2.4, (w - 2.0) / cols);
+      ordered.forEach((m, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        result.set(m.id, {
+          x: bx + (col - (cols - 1) / 2) * spacing,
+          z: bz - 0.5 + row * 1.85,
+        });
+      });
+    }
   });
   return result;
 }
@@ -1265,6 +1290,9 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos }) {
   const posX = layoutPos ? layoutPos.x : Number(machine.pos_x || 0);
   const posZ = layoutPos ? layoutPos.z : Number(machine.pos_z || 0);
 
+  // Diretrizes 5 e 7: machine.id = 9 é a estação-piloto (hostname DESKTOP-32HK6KT complementar)
+  const isPilotMachine = Number(machine.id) === 9 || machine.hostname === 'DESKTOP-32HK6KT';
+
   return (
     <group position={[posX, 0, posZ]}>
       {/* 1. MESA DE TRABALHO EXECUTIVA (office_desk.glb) */}
@@ -1273,13 +1301,23 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos }) {
       {/* 2. CADEIRA DE ESCRITÓRIO ERGONÔMICA (ergonomic_chair.glb) */}
       <ChairModel position={[-0.08, 0, 0.54]} />
 
-      {/* 3. ESTAÇÃO DE TRABALHO PC (workstation_pc.glb) */}
-      <WorkstationModel
-        machine={machine}
-        isSelected={isSelected}
-        onSelect={onSelect}
-        position={[0, 0.76, 0]}
-      />
+      {/* 3. ESTAÇÃO DE TRABALHO PC: Se for a máquina 9, utiliza o novo modelo GLB profissional do Blender */}
+      {isPilotMachine ? (
+        <WorkstationModel
+          machine={machine}
+          isSelected={isSelected}
+          onSelect={onSelect}
+          position={[0, 0.76, 0]}
+        />
+      ) : (
+        /* Fallback: mantido para as demais máquinas até validação da sala-piloto */
+        <FallbackWorkstationModel
+          machine={machine}
+          isSelected={isSelected}
+          onSelect={onSelect}
+          position={[0, 0.76, 0]}
+        />
+      )}
 
       {/* 4. IMPRESSORA ACOPLADA SE SPOOLER ATIVO (thermal_printer.glb) */}
       {machine.spooler_running && (

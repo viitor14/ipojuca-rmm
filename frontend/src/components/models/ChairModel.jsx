@@ -19,3 +19,4 @@ export function ChairModel({ position = [0, 0, 0], rotation = [0, 0, 0] }) {
 }
 
 useGLTF.preload('/models/furniture/ergonomic_chair.glb');
+

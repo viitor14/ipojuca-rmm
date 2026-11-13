@@ -35,3 +35,4 @@ export function ThermalPrinterModel({
 }
 
 useGLTF.preload('/models/tech/thermal_printer.glb');
+

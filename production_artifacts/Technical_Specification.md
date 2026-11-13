@@ -1015,5 +1015,153 @@ Para desacoplar a renderização gráfica da lógica de monitoramento do RMM, se
 
 ## 31. Gate de Aprovação — FASE 1 (Ciclo #18)
 
-O pipeline do Ciclo #18 encontra-se **pausado no Gate de Aprovação da Fase 1**.
-Responda com **`Approved`** para que `@lead`, `@designer`, `@frontend` e `@engineer` iniciem a geração da biblioteca de assets GLB e a implementação da Sala-Piloto baseada em GLB no código-fonte!
+*Ciclo #18 concluído e aprovado.*
+
+---
+
+## 32. Ciclo #19: Redesenho Espacial Inteligente e Refinamento Artístico da Sala-Piloto (Recepção)
+## Diagnóstico Profundo das Evidências Visuais e Solução Arquitetural Definitiva
+
+### 32.1. Análise Crítica do Feedback do Usuário e Evidências das Imagens (`@pm` + `@designer`)
+O usuário enviou novas capturas de tela demonstrando o estado visual atual da Recepção e expressou sua insatisfação: *"A recepção continua do mesmo jeito, nao mudou"*.
+A análise minuciosa do código e das capturas revelou quatro causas-raiz determinantes:
+1. **Entulhamento por Grade Mecânica de 4 Mesas no Centro da Sala (`computeMachineLayout`):**
+   - Na USF Nossa Senhora do Ó, todos os 4 computadores cadastrados pertencem ao setor 1 (Recepção).
+   - O algoritmo padrão distribui automaticamente todas as máquinas em grade (`cols = 2, rows = 2`) no centro geométrico do setor.
+   - Para cada máquina, o componente `ComputerAvatarVoxel` instanciava uma mesa de escritório completa, uma cadeira ergonômica, um PC e uma impressora.
+   - Isso gerou 4 mesas executivas enormes dispostas como um "call center" claustrofóbico bem no meio do tapete azul, bloqueando a circulação, sufocando a sala e descaracterizando a recepção de saúde.
+2. **Balcão de Atendimento Desconectado e Deserto:**
+   - O balcão em L foi posicionado isoladamente no canto esquerdo da sala, sem atendentes, sem computadores e sem cadeiras.
+   - Em uma unidade de saúde real e na referência Habblaude, o balcão é o coração da recepção: os computadores de atendimento devem ficar **NO BALCÃO**, com as cadeiras dos atendentes atrás dele.
+3. **Sombra Diagonal Dura Serrilhada Cortando o Chão e o Tapete:**
+   - A `directionalLight` posicionada em `[12, 22, 12]` incide na diagonal sul-leste.
+   - As paredes divisórias e externas da sala possuem `wallHeight = 1.45` e `castShadow = true`.
+   - Como consequência física direta, a parede sul/leste projeta uma silhueta triangular escura e serrilhada que encobre metade do tapete azul e do piso de madeira, criando manchas e artefatos de iluminação.
+   - Em maquetes isométricas de alto padrão (Habblaude / Dioramas), as paredes de corte e frontais nunca devem projetar sombras obstruindo o interior das salas (`castShadow = false` nas paredes de corte e divisórias internas). Apenas o mobiliário, equipamentos e personagens devem projetar sombras de contato suaves.
+4. **Primitivas Geométricas Cúbicas nos Modelos GLB Exportados:**
+   - O script `build_models_glb.mjs` construiu os modelos 3D utilizando malhas puramente quadradas (`BoxGeometry` sem chanfros/bevels, monitor fino porém plano sem base esbelta, gabinete como paralelepípedo rígido).
+   - Visualmente, o resultado continuou aparentando caixas procedurais cinzas e brancas.
+   - Os modelos precisam ser substancialmente enriquecidos com geometrias estilizadas, bordas chanfradas, proporções orgânicas de miniatura isométrica e acabamento de design refinado.
+
+### 32.2. Solução Arquitetural e Novo Layout Funcional da Recepção (`@lead` + `@designer`)
+Para transformar a recepção em um ambiente acolhedor, espaçoso e com a qualidade estética do Habblaude:
+1. **Layout Arquitetônico Hospitalar Real:**
+   - **Estações 1 e 2 (Atendimento ao Cidadão):** Alocadas diretamente na bancada interna do Balcão de Recepção em L. Os monitores ficam voltados para os atendentes com visão para o público, acompanhados de cadeiras ergonômicas executivas e impressora térmica de senhas/prontuários integrada.
+   - **Estação 3 (Mesa Lateral de Triagem / Enfermagem):** Posicionada elegantemente encostada na parede lateral, com mesa esbelta de triagem, monitor, cadeira e espaço de circulação.
+   - **Estação 4 (Totem de Autoatendimento ou Segundo Posto Perimetral):** Alocada em ponto estratégico não obstrutivo.
+   - **Área Central Livre para Conforto dos Pacientes:** O centro da sala (área do tapete azul) fica 100% desobstruído de mesas, recebendo uma longarina de espera de 3 lugares, bebedouro de coluna com galão de água mineral translúcido e plantas decorativas em vasos cerâmicos.
+2. **Iluminação de Estúdio Isométrico e Eliminação de Sombras Espúrias:**
+   - Desativar `castShadow` das paredes do setor (mantendo `receiveShadow = true`), permitindo que a luz banhe o piso de madeira e o tapete azul sem manchas pretas nem triângulos escuros.
+   - Manter `castShadow` e `receiveShadow` ativados em todo o mobiliário (balcão, mesas, cadeiras, monitores, armários, bebedouro), gerando contato no solo natural e tridimensionalidade.
+   - Ajustar a iluminação com luz de hemisfério suave e luz direcional zenital balanceada.
+3. **Remodelação Artística Real dos Arquivos GLB:**
+   - **`reception_counter.glb`:** Balcão curvo/facetado estilizado com nicho rebaixado para monitores, tampo de madeira nobre chanfrado, iluminação decorativa e rodapé embutido.
+   - **`workstation_pc.glb`:** Monitor widescreen ultrafino com base em arco metálico, bordas chanfradas, tela com emissão sutil da telemetria, teclado anatômico com teclas destacadas, mouse sem fio e mini-gabinete com grade de ventilação e LED pulsante.
+   - **`office_desk.glb`:** Mesa de triagem estilizada com cantos chanfrados, estrutura tubular de sustentação e gaveteiro harmonioso.
+   - **`ergonomic_chair.glb`:** Cadeira com assento e encosto ergonômicos curvilíneos, costuras estéticas, apoios de braço arredondados e base aranha cromada de 5 pontas.
+   - **`thermal_printer.glb`:** Impressora compacta de cupom/prontuário com fenda de papel realista e LED indicador de status do spooler.
+
+### 32.3. Requisitos Funcionais do Ciclo #19 (`@pm`)
+- **RF-64 (Novo Layout Espacial Inteligente por Setor):** Especializar o cálculo de layout para a Recepção (`REC` / `sector_id = 1`), posicionando até duas estações de trabalho de forma integrada ao Balcão de Atendimento e as estações subsequentes na bancada perimetral de triagem, liberando o tapete central para a área de espera de pacientes.
+- **RF-65 (Eliminação de Sombras Diagonais e Manchas de Paredes):** Configurar as paredes com `castShadow = false` (mantendo `receiveShadow = true`), eliminando as faixas escuras diagonais sobre o tapete e garantindo iluminação limpa e uniforme.
+- **RF-66 (Remodelação e Detalhamento Artístico dos Modelos GLB):** Reescrever o gerador `scripts/build_models_glb.mjs` para produzir modelos 3D com curvaturas, chanfros nos cantos, proporções Habblaude refinadas e materiais PBR de alto contraste e sofisticação.
+- **RF-67 (Eliminação de Móveis Duplicados):** Integrar os postos de computadores ao balcão e mesas sem gerar móveis redundantes ou colidentes.
+- **RF-68 (Preservação da Telemetria, Seleção e Diagnósticos):** Manter o clique em qualquer estação funcional, abrindo o `DiagnosticDrawer` com os dados reais do computador e mantendo 60 FPS cravados.
+
+---
+
+### 32.4. Critérios de Aceitação do Ciclo #19 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-62** | Centro da Recepção Desobstruído | O operador abre o Gêmeo Digital da USF | Observa a área central da Recepção (tapete azul) | Constata que o centro está desobstruído de mesas aglomeradas, com circulação livre e a longarina de espera de pacientes visível. |
+| **CA-63** | Computadores Integrados ao Balcão e Triagem | O operador inspeciona a posição dos 4 computadores | Analisa a disposição no espaço 3D | Observa que 2 computadores estão integrados ao balcão de atendimento e os demais em bancada perimetral de triagem encostada à parede. |
+| **CA-64** | Eliminação da Sombra Diagonal Cortante | O operador avalia a iluminação sobre o piso e tapete | Observa a incidência de luz | Constata a ausência da sombra diagonal cortante sobre o tapete; o chão está iluminado de forma limpa, com sombras suaves apenas sob os móveis. |
+| **CA-65** | Modelos GLB com Estilo e Chanfros Aprimorados | O operador examina os modelos de balcão, mesa, cadeira e PC | Dá zoom na câmera sobre a sala | Identifica chanfros, detalhes anatômicos e refinamento geométrico superior, abandonando o aspecto de cubos brancos rígidos. |
+| **CA-66** | Interatividade e Diagnósticos Preservados | O operador clica em qualquer computador da recepção | Clica no modelo do PC | O computador é selecionado, a câmera focaliza suavemente o equipamento e o drawer lateral de diagnósticos se abre com os dados reais. |
+| **CA-67** | Compilação de Produção e 60 FPS | O build é executado via `npm run build` | Avalia o bundle e execução WebGL | Compilação concluída com sucesso (código 0) e renderização estável a 60 FPS. |
+
+---
+
+## 33. Gate de Aprovação — FASE 1 (Ciclo #19)
+
+*Ciclo #19 aprovado pelo usuário em 13/11/2026.*
+
+---
+
+## 34. Ciclo #20: Primeiro Asset 3D Profissional do RMM — `workstation_pc.glb`
+## Verificação de Ambiente, Produção do Asset Estilizado e Integração Isolada
+
+### 34.1. Relatório de Verificação do Ambiente de Desenvolvimento (Etapa 1)
+Em atendimento estrito às diretrizes da Etapa 1, realizamos a auditoria técnica do ambiente:
+1. **Instalação do Blender:**
+   - O comando `where blender` e a varredura em `C:\Program Files\Blender Foundation` confirmaram que o **Blender não está instalado no sistema operacional**.
+2. **Execução e Exportação GLB via Blender:**
+   - Como o binário `blender.exe` não está presente, a execução direta via CLI do Blender está temporariamente bloqueada.
+3. **Estrutura de Diretórios dos Modelos:**
+   - Confirmada e operacional: `frontend/public/models/tech/` e `frontend/public/models/furniture/`.
+4. **Carregamento via `useGLTF`:**
+   - Confirmado: `@react-three/drei` (v9.114.0) já suporta e carrega perfeitamente buffers GLB binários com pré-carregamento e clonagem de materiais.
+5. **Soluções Viáveis para Produção do Asset sem Simulação:**
+   - **Solução 1 (Instalação Oficial do Blender):** Executar a instalação do Blender oficial via winget (`winget install BlenderFoundation.Blender`) ou instalador MSI da Blender Foundation. O agente criará um script Python automatizado (`export_workstation.py`) usando a API nativa `bpy` do Blender para gerar a malha chanfrada, aplicar modificadores e exportar o GLB.
+   - **Solução 2 (Pipeline com Geometrias Chanfradas Profissionais via Three.js):** Construir o modelo utilizando curvas, `ExtrudeGeometry` com cantos arredondados (`bevelEnabled: true, bevelSegments: 5, bevelSize: 0.015`), malhas torneadas (`LatheGeometry`) e materiais PBR completos, exportando o buffer binário `.glb` autêntico sem depender da instalação externa do executável do Blender.
+   - Ambas as soluções produzem um arquivo GLB binário real e autêntico (não simulado).
+
+---
+
+### 34.2. Especificação do Primeiro Asset 3D: `workstation_pc.glb` (Etapa 2 e 3)
+O arquivo `frontend/public/models/tech/workstation_pc.glb` será modelado com alta fidelidade e proporções isométricas estilizadas inspiradas no Habblaude:
+- **Monitor Widescreen Estilizado:**
+  - Carcaça traseira com chanfros orgânicos (sem cantos vivos de 90°).
+  - Moldura frontal ultrafina com micro-LED de telemetria (`StatusLed`).
+  - Haste metálica tubular estilizada e base em disco/arco com pés de borracha.
+  - **Tela Independente (`ScreenDisplay`):** Malha desacoplada dedicada com material emissivo dinâmico que reflete o status de saúde (`NORMAL`, `WARNING`, `CRITICAL`, `OFFLINE`).
+- **Gabinete Mini-Torre Estilizado:**
+  - Carcaça com bordas arredondadas e acabamento preto acetinado/cinza escuro.
+  - Painel frontal com grade de ventilação, botão Power com friso metálico e LED de atividade (`ActivityLed`).
+  - Painel traseiro com relevo das portas de conexão (USB, Ethernet, HDMI).
+- **Periféricos:**
+  - **Teclado:** Base anatômica chanfrada com teclas esculpidas em perfil baixo e barra de espaço destacada.
+  - **Mouse:** Perfil curvo ergonômico com botão esquerdo/direito dividido e roda de rolagem (*scroll wheel*).
+  - **Mousepad:** Base emborrachada esbelta com costura de borda.
+- **Parâmetros Técnicos:**
+  - Origem (`0, 0, 0`) posicionada na base exata de contato com o tampo da mesa/balcão.
+  - Escala métrica: 1 unidade = 1 metro.
+  - Orientação padronizada: frente voltada para o eixo Z positivo.
+
+---
+
+### 34.3. Estratégia de Integração Isolada na Recepção (Etapa 4)
+- **Seleção de Estação Única:** Selecionar estritamente o computador principal de atendimento da recepção (`DESKTOP-32HK6KT` / `machine.id = 9`).
+- **Preservação de Dados e Fallback:**
+  - Todas as variáveis reais (hostname, IP, status, CPU, RAM, disco, temperatura, spooler) permanecem conectadas.
+  - As demais estações mantêm o modelo atual até a aprovação e validação deste asset-piloto.
+  - O clique no mouse, animação do `CameraRig`, halo de seleção e abertura do `DiagnosticDrawer` continuam 100% integrados.
+
+---
+
+### 34.4. Requisitos Funcionais do Ciclo #20 (`@pm`)
+- **RF-69 (Asset GLB `workstation_pc.glb` com Malha Chanfrada):** Produzir o arquivo `workstation_pc.glb` autêntico contendo monitor, gabinete, suporte, teclado, mouse e tela independente `ScreenDisplay`.
+- **RF-70 (Sub-Nós Padronizados para Telemetria):** O modelo deve expor `ScreenDisplay` e `StatusLed` para atualização atômica de emissividade pelo R3F sem recarregar geometrias.
+- **RF-71 (Integração Isolada da Estação-Piloto):** Aplicar o novo modelo unicamente na estação de atendimento da recepção, mantendo os demais postos inalterados.
+- **RF-72 (Preservação Rigorosa de Interatividade e Telemetria):** Garantir que clique, foco de câmera, hover tooltip e painel de diagnóstico continuem funcionando em sincronia com o agente real do Windows.
+
+---
+
+### 34.5. Critérios de Aceitação do Ciclo #20 (`@pm` + `@qa`)
+
+| ID | Cenário | Dado que | Quando | Então |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-68** | GLB `workstation_pc.glb` Válido e Binário | O arquivo é exportado em `frontend/public/models/tech/` | Inspeciona com analisador GLTF / three.js | O arquivo é binário válido, com malhas nomeadas (`ScreenDisplay`, `StatusLed`, `Chassis`), chanfros suaves e sem erros de parsing. |
+| **CA-69** | Integração na Estação de Atendimento da Recepção | O operador visualiza a Recepção no 3D | Examina o computador da recepção | Observa o novo modelo estilizado com proporção harmoniosa em relação à mesa, acabamento refinado e ausência de cubos primitivos. |
+| **CA-70** | Tela Emissiva Dinâmica Vinculada ao Status | O status de saúde da máquina varia (Normal/Warning/Critical/Offline) | A telemetria atualiza via Socket.io | O material do nó `ScreenDisplay` reflete a cor e intensidade correspondente sem travamentos de frame. |
+| **CA-71** | Interatividade e Painel de Diagnóstico Preservados | O operador clica no computador com o novo modelo | Clica no monitor/gabinete | O computador é selecionado, a câmera focaliza o posto e o `DiagnosticDrawer` exibe CPU, RAM, Disco, Temperatura e dados do agente. |
+| **CA-72** | Desempenho e Compilação 60 FPS | O frontend é compilado com `npm run build` | Mede o FPS e tempo de renderização | Compilação com código 0 e taxa mantida em 60 FPS. |
+
+---
+
+## 35. Gate de Aprovação — FASE 1 (Ciclo #20)
+
+O pipeline do Ciclo #20 encontra-se **pausado no Gate de Aprovação da Fase 1**.
+Apresentamos a auditoria do ambiente (Blender não instalado no SO) e o plano de modelagem com chanfros profissionais.
+Responda com **`Approved`** para que iniciemos a produção do arquivo `workstation_pc.glb` e a integração na estação-piloto!

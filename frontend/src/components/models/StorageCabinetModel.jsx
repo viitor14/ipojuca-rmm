@@ -19,3 +19,4 @@ export function StorageCabinetModel({ position = [0, 0, 0], rotation = [0, 0, 0]
 }
 
 useGLTF.preload('/models/furniture/storage_cabinet.glb');
+

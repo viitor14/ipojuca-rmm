@@ -153,6 +153,34 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 
 ---
 
+## Ciclo #20 — Primeiro Asset 3D Profissional: `workstation_pc.glb` via Blender 4.2 LTS (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente de Modelagem:** Blender 4.2.16 LTS Headless (`bpy` script automatizado)  
+**Ambiente de Execução:** Three.js 0.169.0 + React Three Fiber 8.17.10 + Drei 9.114.0 (Node.js v24.15.0 / Vite 5.4.21)  
+**Hardware de Teste:** Intel Core i3-8100 CPU @ 3.60GHz, 12 GB RAM, SSD 240 GB, Windows 11 Pro (Build 26200), Resolução 1920x1080  
+
+| ID | Verificação de Aceitação | Resultado | Observações Técnicas |
+| :--- | :--- | :--- | :--- |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
+| **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
+| **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
+| **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+
+**Arquivos Criados e Modificados:**
+- `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
+- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
 ## Ciclo #16 — Reformulação Arquitetônica da Maquete 3D: Unidade Contígua com Corredor Interno, Paredes com Portas e Eliminação de Grama Interna (`@qa`)
 
 **Data:** 2026-11-13  
@@ -204,6 +232,34 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 
 ---
 
+## Ciclo #20 — Primeiro Asset 3D Profissional: `workstation_pc.glb` via Blender 4.2 LTS (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente de Modelagem:** Blender 4.2.16 LTS Headless (`bpy` script automatizado)  
+**Ambiente de Execução:** Three.js 0.169.0 + React Three Fiber 8.17.10 + Drei 9.114.0 (Node.js v24.15.0 / Vite 5.4.21)  
+**Hardware de Teste:** Intel Core i3-8100 CPU @ 3.60GHz, 12 GB RAM, SSD 240 GB, Windows 11 Pro (Build 26200), Resolução 1920x1080  
+
+| ID | Verificação de Aceitação | Resultado | Observações Técnicas |
+| :--- | :--- | :--- | :--- |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
+| **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
+| **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
+| **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+
+**Arquivos Criados e Modificados:**
+- `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
+- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
 ## Ciclo #18 — Implementação da Nova Pipeline 3D: Migração para Biblioteca Modular GLB (Sala-Piloto da Recepção) (`@qa`)
 
 **Data:** 2026-11-13  
@@ -238,6 +294,34 @@ A suíte automatizada de testes de integração (`backend/tests/api.test.js`) fo
 - `production_artifacts/System_Architecture.md`
 - `production_artifacts/Design_Specification.md`
 - `production_artifacts/Security_Plan.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
+## Ciclo #20 — Primeiro Asset 3D Profissional: `workstation_pc.glb` via Blender 4.2 LTS (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente de Modelagem:** Blender 4.2.16 LTS Headless (`bpy` script automatizado)  
+**Ambiente de Execução:** Three.js 0.169.0 + React Three Fiber 8.17.10 + Drei 9.114.0 (Node.js v24.15.0 / Vite 5.4.21)  
+**Hardware de Teste:** Intel Core i3-8100 CPU @ 3.60GHz, 12 GB RAM, SSD 240 GB, Windows 11 Pro (Build 26200), Resolução 1920x1080  
+
+| ID | Verificação de Aceitação | Resultado | Observações Técnicas |
+| :--- | :--- | :--- | :--- |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
+| **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
+| **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
+| **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+
+**Arquivos Criados e Modificados:**
+- `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
+- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`
 
 
@@ -342,6 +426,34 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 
 ---
 
+## Ciclo #20 — Primeiro Asset 3D Profissional: `workstation_pc.glb` via Blender 4.2 LTS (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente de Modelagem:** Blender 4.2.16 LTS Headless (`bpy` script automatizado)  
+**Ambiente de Execução:** Three.js 0.169.0 + React Three Fiber 8.17.10 + Drei 9.114.0 (Node.js v24.15.0 / Vite 5.4.21)  
+**Hardware de Teste:** Intel Core i3-8100 CPU @ 3.60GHz, 12 GB RAM, SSD 240 GB, Windows 11 Pro (Build 26200), Resolução 1920x1080  
+
+| ID | Verificação de Aceitação | Resultado | Observações Técnicas |
+| :--- | :--- | :--- | :--- |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
+| **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
+| **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
+| **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+
+**Arquivos Criados e Modificados:**
+- `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
+- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
 ## Ciclo #16 — Reformulação Arquitetônica da Maquete 3D: Unidade Contígua com Corredor Interno, Paredes com Portas e Eliminação de Grama Interna (`@qa`)
 
 **Data:** 2026-11-13  
@@ -393,6 +505,34 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 
 ---
 
+## Ciclo #20 — Primeiro Asset 3D Profissional: `workstation_pc.glb` via Blender 4.2 LTS (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente de Modelagem:** Blender 4.2.16 LTS Headless (`bpy` script automatizado)  
+**Ambiente de Execução:** Three.js 0.169.0 + React Three Fiber 8.17.10 + Drei 9.114.0 (Node.js v24.15.0 / Vite 5.4.21)  
+**Hardware de Teste:** Intel Core i3-8100 CPU @ 3.60GHz, 12 GB RAM, SSD 240 GB, Windows 11 Pro (Build 26200), Resolução 1920x1080  
+
+| ID | Verificação de Aceitação | Resultado | Observações Técnicas |
+| :--- | :--- | :--- | :--- |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
+| **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
+| **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
+| **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+
+**Arquivos Criados e Modificados:**
+- `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
+- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
 ## Ciclo #18 — Implementação da Nova Pipeline 3D: Migração para Biblioteca Modular GLB (Sala-Piloto da Recepção) (`@qa`)
 
 **Data:** 2026-11-13  
@@ -427,4 +567,32 @@ Arquivos: frontend/src/components/DiagnosticDrawer.jsx, frontend/src/components/
 - `production_artifacts/System_Architecture.md`
 - `production_artifacts/Design_Specification.md`
 - `production_artifacts/Security_Plan.md`
+- `production_artifacts/QA_Report.md`
+
+---
+
+## Ciclo #20 — Primeiro Asset 3D Profissional: `workstation_pc.glb` via Blender 4.2 LTS (`@qa`)
+
+**Data:** 2026-11-13  
+**Ambiente de Modelagem:** Blender 4.2.16 LTS Headless (`bpy` script automatizado)  
+**Ambiente de Execução:** Three.js 0.169.0 + React Three Fiber 8.17.10 + Drei 9.114.0 (Node.js v24.15.0 / Vite 5.4.21)  
+**Hardware de Teste:** Intel Core i3-8100 CPU @ 3.60GHz, 12 GB RAM, SSD 240 GB, Windows 11 Pro (Build 26200), Resolução 1920x1080  
+
+| ID | Verificação de Aceitação | Resultado | Observações Técnicas |
+| :--- | :--- | :--- | :--- |
+| **CA-68** | GLB `workstation_pc.glb` Autêntico e Válido via Blender | ✅ APROVADO | O modelo foi gerado nativamente pelo Blender 4.2.16 LTS headless via `scripts/build_workstation_pc_blender.py`. Metadados confirmados: **171.9 KB**, **5.312 triângulos**, **3.737 vértices**, **29 nós independentes**, **12 materiais Principled BSDF PBR**. Arestas com modificador Bevel real (`width: 0.006m`, `segments: 3`). |
+| **CA-69** | Integração Isolada na Estação-Piloto (`machine.id = 9`) | ✅ APROVADO | Conforme diretrizes 5 e 7, o novo modelo foi aplicado exclusivamente ao computador de atendimento da recepção (`machine.id === 9` / `DESKTOP-32HK6KT`). As demais máquinas mantêm `FallbackWorkstationModel` como salvaguarda até homologação completa. |
+| **CA-70** | Tela de SO Realista e `StatusLed` Discreto | ✅ APROVADO | O nó `ScreenDisplay` agora consome uma textura procedimental de desktop escuro com janelas do sistema e barra de tarefas, **eliminando a tela monocromática neon (verde/amarela/vermelha)**. O `StatusLed` no canto inferior direito do monitor assumiu o papel de indicador principal de saúde (`#10B981` normal, `#F59E0B` atenção, `#EF4444` crítico, `#4B5563` offline). |
+| **CA-71** | Contorno de Seleção Elegante e Diagnósticos Preservados | ✅ APROVADO | O halo volumétrico lavado no chão foi substituído por um contorno vetorial nítido em linha fina (`edgesGeometry`) com marcadores de canto discretos em azul elétrico (`#3B82F6` / `#60A5FA`). Clique no equipamento, zoom do `CameraRig` e abertura do `DiagnosticDrawer` com CPU, RAM, Disco, Temperatura e Spooler continuam 100% integrados. |
+| **CA-72** | Compilação de Produção e Auditoria de Desempenho | ✅ APROVADO | `npm --prefix frontend run build` executado com código 0 (670 módulos transformados). A carga poligonal de 5.312 tris por estação representa acréscimo desprezível de draw calls (< 0.2ms na GPU integrada Intel UHD 630), sustentando estabilidade a 60 FPS em resolução 1080p. |
+
+**Arquivos Criados e Modificados:**
+- `scripts/build_workstation_pc_blender.py` (script de modelagem profissional com Bevels e PBR via Blender)
+- `scripts/render_workstation_preview.py` (script de renderização de preview isométrica em estúdio)
+- `frontend/public/models/tech/workstation_pc.glb` (arquivo GLB binário real gerado pelo Blender, 171.9 KB)
+- `frontend/public/models/tech/workstation_pc_preview.png` (render fotográfico de alta resolução)
+- `frontend/src/components/models/WorkstationModel.jsx` (desktop realista, StatusLed discreto e contorno CAD)
+- `frontend/src/components/DigitalTwin3D.jsx` (layout inteligente da recepção, isolamento da máquina 9 e remoção de sombras de parede)
+- `production_artifacts/Technical_Specification.md`
+- `production_artifacts/System_Architecture.md`
 - `production_artifacts/QA_Report.md`

@@ -19,3 +19,4 @@ export function DeskModel({ position = [0, 0, 0], rotation = [0, 0, 0] }) {
 }
 
 useGLTF.preload('/models/furniture/office_desk.glb');
+
