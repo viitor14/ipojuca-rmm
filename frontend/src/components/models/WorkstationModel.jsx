@@ -192,7 +192,7 @@ export function WorkstationModel({
   rotation = [0, 0, 0],
 }) {
   const [hovered, setHovered] = useState(false);
-  const { scene } = useGLTF('/models/tech/workstation_pc.glb');
+  const { scene } = useGLTF('/models/tech/workstation_pc.glb?v=24');
 
   const statusColor = theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
   const isOffline = machine.health_status === 'OFFLINE';
@@ -303,7 +303,7 @@ export function WorkstationModel({
   );
 }
 
-useGLTF.preload('/models/tech/workstation_pc.glb');
+useGLTF.preload('/models/tech/workstation_pc.glb?v=24');
 
 /**
  * MODELO PROCEDURAL DE FALLBACK (Preservado para as demais máquinas até validação)

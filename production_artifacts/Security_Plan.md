@@ -143,3 +143,18 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
   2. **Preservação do Raycasting e Identificação:** O `WorkstationModel` mantém seus metadados de `machine.id`, eventos `onClick`/`onSelect` e `StatusLed` desacoplado de qualquer mutação na cadeira adjacente.
   3. **Integridade de Assets GLB:** Os arquivos binários `.glb` assinados por hash SHA-256 não sofreram alteração de conteúdo nem re-empacotamento inseguro.
 - **Parecer `@security`:** **APROVADO**. Alteração estritamente espacial e ergonômica sem risco de segurança ou vazamento de dados.
+
+
+---
+
+## 12. Parecer de Segurança — Ciclo #24 (Cache-Busting Estático e Integridade dos Modelos GLB)
+
+**Responsável:** `@security`  
+**Skills Consultadas:** `.agents/skills/security/threat_modeling.md`, `.agents/skills/security/endpoint_security.md`, `.agents/skills/security/security_audit.md`
+
+- **Risco Avaliado:** Introdução de query strings (`?v=24`) nos carregadores `useGLTF` dos assets estáticos locais em `frontend/src/components/models/*.jsx` e reconstrução binária de malhas no Blender (`reception_counter.glb`, `storage_cabinet.glb`, `waiting_bench.glb`).
+- **Controles Verificados:**
+  1. **Query Strings Fixas e Estáticas:** O sufixo `?v=24` é uma constante literal hardcoded no bundle Vite (sem interpolação de entrada do usuário, parâmetros de URL ou dados externos), eliminando qualquer risco de Path Traversal, SSRF ou Cache Poisoning dinâmico.
+  2. **Integridade Local dos Binários GLB:** Todos os 6 modelos de mobiliário e periféricos foram regenerados localmente via Blender 4.2.16 LTS com geometrias chanfradas e materiais PBR padrão, sem scripts ou extensões arbitrárias.
+  3. **Preservação de Segurança de Endpoints:** Nenhuma rota da API, autorização JWT, HMAC de agente ou fluxo do `DiagnosticDrawer` sofreu alteração.
+- **Parecer `@security`:** **APROVADO**. Conformidade integral com a arquitetura segura do RMM Ipojuca.

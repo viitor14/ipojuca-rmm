@@ -475,3 +475,24 @@ A auditoria binária nos arquivos GLB no espaço nativo do Three.js estabeleceu:
   - Posto 1 (Balcão/Piloto ID 9): `rotY: Math.PI`, `hideDesk: true` (atendente na cabine interna, olhando para o visor público em `-Z`).
   - Posto 2 (Sul): `rotY: Math.PI` (atendente ao sul, voltado para a circulação norte).
   - Postos 3 e 4 (Norte/Nordeste): `rotY: 0` (atendentes ao norte, voltados para a circulação sul).
+
+
+---
+
+## 16. Resolução Estrutural de Colisões, Cache-Busting GLB e Sincronia 1:1 da Recepção — Ciclo #24
+
+**Responsável:** `@lead`  
+**Skills Consultadas:** `.agents/skills/lead/system_architecture.md`, `.agents/skills/lead/technical_orchestration.md`
+
+### 1. Correção de Preservação de Posição no Blender (`transform_apply`)
+- Em `scripts/build_furniture_models_blender.py`, `bpy.ops.object.transform_apply(scale=True)` aplicava por padrão `location=True`, zerando a posição de origem para `(0, 0, 0)` antes das rotações subsequentes (caso crítico da `MainBeam` em `waiting_bench.glb`, que caía para $Y = 0$).
+- Padronizado explicitamente `transform_apply(location=False, rotation=False, scale=True)` nos helpers e `transform_apply(location=False, rotation=True, scale=False)` nas peças rotacionadas, garantindo simetria e altura nominal de `MainBeam` ($Y \in [0.345, 0.415]$, $X \in [-0.88, +0.88]$).
+
+### 2. Reestruturação Espacial Anti-Colisão e Proporcionalidade Arquitetônica
+- **`reception_counter.glb`:** Mureta frontal reduzida para `0.24m` ($Y = +0.22$), `CounterTopPublic` restrito a `0.30m` ($Y = +0.20$) sem invadir `InternalDesk`, retorno em L compactado (`1.20m`) e `InternalDesk` (`2.24m × 0.54m`) 100% livre para o Posto 1.
+- **`storage_cabinet.glb`:** Compactado para `1.38m` de altura total ($0.80\text{m} \times 0.38\text{m}$), inferior à parede de corte (`1.45m`), instalado em `[-3.82, 0, -2.08]` com folga de `3cm` até o rodapé norte (`-2.30m`) e fora da janela norte-oeste (`[-3.30, -2.00]`).
+- **Orientação da Longarina (`WaitingBenchModel`):** Corrigida rotação de `+Math.PI / 2` para `-Math.PI / 2` em `DigitalTwin3D.jsx`, posicionando o encosto junto à parede oeste e os assentos voltados para a sala (`+X`).
+- **Parede Norte (`SectorRoomVoxel`):** Painel ripado ajustado para `1.8m` e quadros/murais deslocados para `X = -1.45m` em alvenaria livre entre o painel e a janela.
+
+### 3. Estratégia de Cache-Busting no React Three Fiber / Drei
+- Adicionado sufixo de versão `?v=24` em todas as chamadas `useGLTF` e `useGLTF.preload` dos 7 componentes em `frontend/src/components/models/*.jsx`, assegurando invalidação imediata de cache HTTP de navegador para assets `.glb` atualizados.

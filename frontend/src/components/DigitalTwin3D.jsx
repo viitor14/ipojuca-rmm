@@ -636,7 +636,7 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
           {/* Painel ripado decorativo na recepção */}
           {themeConfig.hasPanel && (
             <mesh position={[0, 0.05, wallThickness / 2 + 0.015]}>
-              <boxGeometry args={[2.4, 0.85, 0.02]} />
+              <boxGeometry args={[1.8, 0.85, 0.02]} />
               <meshStandardMaterial color="#DDB892" roughness={0.5} />
             </mesh>
           )}
@@ -665,37 +665,37 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
             </group>
           )}
 
-          {/* Quadro de arte emoldurado */}
+          {/* Quadro de arte emoldurado (posicionado no pano de parede livre, fora da janela) */}
           {themeConfig.hasArt && (
-            <group position={[-width / 3.4, 0.22, wallThickness / 2 + 0.05]}>
+            <group position={[-1.45, 0.22, wallThickness / 2 + 0.03]}>
               <mesh>
-                <boxGeometry args={[0.9, 0.65, 0.025]} />
+                <boxGeometry args={[0.76, 0.58, 0.025]} />
                 <meshStandardMaterial color="#6B472B" roughness={0.5} />
               </mesh>
               <mesh position={[0, 0, 0.015]}>
-                <boxGeometry args={[0.78, 0.53, 0.005]} />
+                <boxGeometry args={[0.64, 0.46, 0.005]} />
                 <meshStandardMaterial color="#588157" roughness={0.65} />
               </mesh>
-              <mesh position={[0.18, 0.12, 0.02]}>
-                <circleGeometry args={[0.08, 12]} />
+              <mesh position={[0.14, 0.10, 0.02]}>
+                <circleGeometry args={[0.07, 12]} />
                 <meshBasicMaterial color="#F4A261" />
               </mesh>
             </group>
           )}
 
-          {/* Mural de avisos (ADM) */}
+          {/* Mural de avisos (ADM - posicionado fora da janela) */}
           {themeConfig.hasNoticeBoard && (
-            <group position={[-width / 3.4, 0.22, wallThickness / 2 + 0.05]}>
+            <group position={[-1.45, 0.22, wallThickness / 2 + 0.03]}>
               <mesh>
-                <boxGeometry args={[1.1, 0.65, 0.025]} />
+                <boxGeometry args={[0.82, 0.58, 0.025]} />
                 <meshStandardMaterial color="#C5A059" roughness={0.8} />
               </mesh>
-              <mesh position={[-0.32, 0.12, 0.016]}>
-                <boxGeometry args={[0.16, 0.16, 0.005]} />
+              <mesh position={[-0.22, 0.10, 0.016]}>
+                <boxGeometry args={[0.15, 0.15, 0.005]} />
                 <meshBasicMaterial color="#FDE047" />
               </mesh>
-              <mesh position={[0.05, 0.12, 0.016]}>
-                <boxGeometry args={[0.16, 0.16, 0.005]} />
+              <mesh position={[0.06, 0.10, 0.016]}>
+                <boxGeometry args={[0.15, 0.15, 0.005]} />
                 <meshBasicMaterial color="#93C5FD" />
               </mesh>
             </group>
@@ -934,16 +934,16 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ }) {
   return (
     <group>
       {/* 1. BALCÃO DE ATENDIMENTO EM L (reception_counter.glb) - Ponto focal na entrada */}
-      <ReceptionCounterModel position={[-2.2, 0, 0.8]} />
+      <ReceptionCounterModel position={[-2.2, 0, 0.55]} />
 
       {/* 2. IMPRESSORA TÉRMICA DE PRONTUÁRIO NO BALCÃO (thermal_printer.glb) */}
-      <ThermalPrinterModel position={[-1.4, 1.08, 0.8]} isActive={true} />
+      <ThermalPrinterModel position={[-2.95, 1.10, 0.40]} isActive={true} />
 
       {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (storage_cabinet.glb) - Rente à alvenaria norte */}
-      <StorageCabinetModel position={[-3.6, 0, backZ + 0.3]} rotation={[0, Math.PI, 0]} />
+      <StorageCabinetModel position={[-3.82, 0, -halfD + 0.42]} rotation={[0, Math.PI, 0]} />
 
       {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (WaterDispenserHabblaude) */}
-      <group position={[halfW - 0.75, 0, backZ + 0.15]}>
+      <group position={[halfW - 0.65, 0, -halfD + 0.42]}>
         <mesh position={[0, 0.48, 0]} castShadow receiveShadow>
           <boxGeometry args={[0.38, 0.96, 0.38]} />
           <meshStandardMaterial color="#ECEEF0" roughness={0.4} />
@@ -1012,8 +1012,8 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ }) {
         </mesh>
       </group>
 
-      {/* 6. LONGARINA DE ESPERA PARA PACIENTES (waiting_bench.glb) - Parede oeste, frente livre */}
-      <WaitingBenchModel position={[-halfW + 0.55, 0, -0.3]} rotation={[0, Math.PI / 2, 0]} />
+      {/* 6. LONGARINA DE ESPERA PARA PACIENTES (waiting_bench.glb) - Parede oeste, assentos voltados para a sala (+X) */}
+      <WaitingBenchModel position={[-halfW + 0.55, 0, -0.35]} rotation={[0, -Math.PI / 2, 0]} />
     </group>
   );
 }
@@ -1226,16 +1226,16 @@ function computeMachineLayout(machines, sectors) {
     const isReception = sector.code === 'REC' || Number(sector.id) === 1;
 
     if (isReception) {
-      // Layout ergonômico e desobstruído da Recepção (Ciclo #23)
+      // Layout ergonômico e 100% livre de colisões da Recepção (Ciclo #24)
       const receptionSlots = [
-        // Posto 1: Atendimento Principal (Piloto machine.id = 9) integrado à bancada do balcão em L
-        { x: bx - 1.85, z: bz + 0.98, rotY: Math.PI, hideDesk: true },
+        // Posto 1: Atendimento Principal (Piloto machine.id = 9) na bancada interna do balcão em L
+        { x: bx - 1.85, z: bz + 0.78, rotY: Math.PI, hideDesk: true },
         // Posto 2: Atendimento Secundário / Apoio (Mesa executiva sul, atendente voltado para o norte)
         { x: bx + 2.20, z: bz + 0.85, rotY: Math.PI },
         // Posto 3: Triagem Clínica (Quadrante norte, atendente voltado para o sul/circulação)
-        { x: bx - 1.20, z: bz - 1.25, rotY: 0 },
+        { x: bx - 1.20, z: bz - 1.20, rotY: 0 },
         // Posto 4: Regulação / Pós-Consulta (Quadrante nordeste, atendente voltado para o sul/circulação)
-        { x: bx + 2.20, z: bz - 1.25, rotY: 0 },
+        { x: bx + 2.20, z: bz - 1.20, rotY: 0 },
       ];
       ordered.forEach((m, i) => {
         const slot = receptionSlots[i] || {

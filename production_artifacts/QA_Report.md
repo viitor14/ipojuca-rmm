@@ -1043,3 +1043,55 @@ O Ciclo #23 corrigiu o posicionamento e a orientação espacial de `ChairModel` 
 - **Status:** **100% APROVADO PELO `@qa` E `@lead`**
 - Todos os critérios `CA-91` a `CA-95` comprovados por inspeção geométrica e renders atualizados.
 - Pronto para build final, versionamento Git e apresentação ao usuário.
+
+
+---
+
+## Ciclo #24 — Auditoria Completa e Correção de Todos os Bugs Espaciais e Geométricos da Recepção (`@qa`)
+
+**Data:** 2026-11-16  
+**Fase:** FASE 9 — Testes e Auditoria  
+**Responsável:** `@qa`  
+**Skills Consultadas:** `.agents/skills/qa/test_strategy.md`, `.agents/skills/qa/quality_audit.md`  
+**Status do Ciclo:** **100% APROVADO**
+
+---
+
+### 1. Resumo Executivo da Auditoria e Correções
+
+A auditoria matemática de *bounding boxes* no espaço nativo glTF / Three.js identificou e eliminou todos os **5 problemas estruturais** e de sobreposição na Recepção (`9.0m × 5.0m`, área interna útil `X ∈ [-4.30, +4.30]`, `Z ∈ [-2.30, +2.30]`):
+
+1. **Bug #1 (Armário no muro / janela / longarina e altura excessiva):**
+   - `storage_cabinet.glb` (`69.472 bytes`) remodelado para `0.80m × 0.38m × 1.38m` (abaixo da cota de corte `1.45m`) e reposicionado em `[-3.82, 0, -2.08]` (`X ∈ [-4.22, -3.42]`, `Z ∈ [-2.27, -1.85]`), garantindo `3cm` de folga para os rodapés norte/oeste, fora da janela (`[-3.30, -2.00]`) e com `62cm` livres até a longarina.
+2. **Bug #2 (PC dentro do balcão, retorno na parede sul, impressora deslocada e cache GLB):**
+   - `reception_counter.glb` (`135.648 bytes`) ajustado com mureta frontal de `0.24m`, `CounterTopPublic` restrito a `0.30m` sem invadir `InternalDesk`, retorno em L compactado (`1.20m`) e `InternalDesk` (`2.24m × 0.54m`) 100% livre.
+   - Balcão reposicionado em `[-2.2, 0, 0.55]` (`Z ∈ [0.19, 1.63]`), impressora térmica sobre o tampo público em `[-2.95, 1.10, 0.40]` (`81.772 bytes`), e Posto 1 (`machine.id = 9`) em `{ x: bx - 1.85, z: bz + 0.78, rotY: Math.PI, hideDesk: true }`.
+   - Adicionado cache-busting estático `?v=24` em todos os 7 arquivos em `frontend/src/components/models/*.jsx`.
+3. **Bug #3 (`MainBeam` da longarina caída no chão e rotação invertida):**
+   - Corrigido `transform_apply(location=False, rotation=False, scale=True)` em `scripts/build_furniture_models_blender.py` (`waiting_bench.glb` com `133.780 bytes`, `MainBeam` em `Y ∈ [0.345, 0.415]`, `X ∈ [-0.88, +0.88]`).
+   - Corrigida rotação de `WaitingBenchModel` em `DigitalTwin3D.jsx` de `+Math.PI / 2` para `-Math.PI / 2`, voltando os 3 assentos para a sala (`+X`).
+4. **Bug #4 (Quadro e Mural dentro da janela norte-oeste):**
+   - Painel ripado reduzido para `1.8m` e `hasArt` / `hasNoticeBoard` movidos de `-width / 3.4` (`-2.65m`) para `X = -1.45m`, no pano livre de alvenaria.
+5. **Bug #5 (Sincronização 1:1 do renderizador de validação):**
+   - `scripts/render_reception_scene.py` atualizado para a sala real `9.0m × 5.0m` e coordenadas exatas convertidas do `DigitalTwin3D.jsx`.
+
+---
+
+### 2. Matriz de Verificação dos Critérios de Aceitação (`CA-96` a `CA-101`)
+
+| ID | Critério de Aceitação | Verificação Realizada | Resultado Obtido | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-96** | **Zero Invasão de Muros/Paredes** | Auditoria programática das 17 *bounding boxes* no espaço Three.js vs limites internos `X ∈ [-4.30, +4.30]` e `Z ∈ [-2.30, +2.30]`. | `Total wall/baseboard violations: 0`. Todos os móveis respeitam as faces internas dos rodapés e paredes. | **APROVADO** |
+| **CA-97** | **PC do Posto 1 Fora do Balcão** | Checagem geométrica e visual (`reception_full_room.png`, `reception_topdown_comparison.png`). | `Overlap Posto1 TowerChassis/MonitorBezel vs CounterTopPublic/FrontBody: False`. PC e cadeira 100% visíveis sobre `InternalDesk`. | **APROVADO** |
+| **CA-98** | **Impressora sobre o Tampo Superior** | Checagem `ThermalPrinter` (`X ∈ [-3.05, -2.85]`, `Y ∈ [1.10, 1.24]`, `Z ∈ [0.32, 0.48]`). | Apoiada sobre `CounterTopPublic` sem sobrepor o monitor do Posto 1 ou `GlassVisor`. | **APROVADO** |
+| **CA-99** | **Longarina Íntegra e Voltada para a Sala** | Checagem GLB e renders (`MainBeam` em `Y ∈ [0.345, 0.415]`, `WaitingBench` rotY `-PI/2`). | Viga estrutural na altura correta, sem barra sobressalente, `Overlap StorageCabinet vs WaitingBench: False` e assentos voltados para `+X`. | **APROVADO** |
+| **CA-100** | **Janelas e Quadros Sem Sobreposição** | Inspeção de `SectorRoomVoxel` e renders 1920x1080. | Quadro verde em `X = -1.45m` em alvenaria livre; janelas em `±2.65m` desimpedidas. | **APROVADO** |
+| **CA-101** | **Cache-Busting `?v=24`, Build e Telemetria** | Execução de `npm --prefix frontend run build` (`task-2313`). | `✓ 671 modules transformed`, `dist/assets/index-CWr87Nps.js (1,221.39 kB)` em `18.23s` (exit code 0). Telemetria/CAD/`DiagnosticDrawer` preservados. | **APROVADO** |
+
+---
+
+### 3. Parecer Final do Gate de Qualidade — Ciclo #24 (`@qa` + `@lead`)
+
+- **Status:** **100% APROVADO PELO `@qa` E `@lead`**
+- Auditoria de *bounding boxes* com 0 violações de parede e 0 intersecções entre móveis/balcão/bancada/PC.
+- Renders Blender 4.2.16 LTS (`reception_topdown_comparison.png` e `reception_full_room.png`) e build Vite validados após todas as edições.

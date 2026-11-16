@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 
 export function ReceptionCounterModel({ position = [0, 0, 0], rotation = [0, 0, 0] }) {
-  const { scene } = useGLTF('/models/furniture/reception_counter.glb');
+  const { scene } = useGLTF('/models/furniture/reception_counter.glb?v=24');
 
   const modelInstance = useMemo(() => {
     const clone = scene.clone(true);
@@ -18,5 +18,5 @@ export function ReceptionCounterModel({ position = [0, 0, 0], rotation = [0, 0, 
   return <primitive object={modelInstance} position={position} rotation={rotation} />;
 }
 
-useGLTF.preload('/models/furniture/reception_counter.glb');
+useGLTF.preload('/models/furniture/reception_counter.glb?v=24');
 

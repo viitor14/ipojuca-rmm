@@ -53,7 +53,7 @@ def add_beveled_box(name, size, location, material, bevel_width=0.006, segments=
     obj = bpy.context.active_object
     obj.name = name
     obj.scale = size
-    bpy.ops.object.transform_apply(scale=True)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     
     bev = obj.modifiers.new(name="Bevel", type='BEVEL')
     bev.width = bevel_width
@@ -71,7 +71,7 @@ def add_beveled_cylinder(name, radius, depth, location, material, vertices=24, b
     bpy.ops.mesh.primitive_cylinder_add(radius=radius, depth=depth, vertices=vertices, location=location)
     obj = bpy.context.active_object
     obj.name = name
-    bpy.ops.object.transform_apply(scale=True)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     
     bev = obj.modifiers.new(name="Bevel", type='BEVEL')
     bev.width = bevel_width
@@ -171,7 +171,7 @@ def build_ergonomic_chair():
         spoke.name = f"Spoke_{i}"
         spoke.scale = (spoke_len, 0.045, 0.035)
         spoke.rotation_euler.z = angle
-        bpy.ops.object.transform_apply(scale=True, rotation=True)
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
         
         bev = spoke.modifiers.new(name="Bevel", type='BEVEL')
         bev.width = 0.005
@@ -227,32 +227,32 @@ def build_reception_counter():
     mat_glass = make_pbr_material("Mat_GlassVisor", (0.92, 0.95, 0.98, 0.4), roughness=0.05, transmission=0.90)
     mat_metal = make_pbr_material("Mat_ChromeFixtures", (0.80, 0.82, 0.85, 1.0), roughness=0.20, metallic=0.90)
     
-    # 1. Corpo Frontal Principal (Comprimento 2.80m, Espessura da mureta 0.26m, Altura 1.06m)
-    add_beveled_box("FrontBody", (2.80, 0.26, 1.04), (0.0, 0.21, 0.54), mat_lacquer, bevel_width=0.010, segments=3)
+    # 1. Corpo Frontal Principal (Comprimento 2.80m, Espessura da mureta 0.24m, Altura 1.06m)
+    add_beveled_box("FrontBody", (2.80, 0.24, 1.04), (0.0, 0.22, 0.54), mat_lacquer, bevel_width=0.010, segments=3)
     
     # Rodapé frontal em madeira nobre
-    add_beveled_box("Baseboard_Front", (2.82, 0.28, 0.08), (0.0, 0.21, 0.04), mat_wood_trim, bevel_width=0.004)
+    add_beveled_box("Baseboard_Front", (2.82, 0.26, 0.08), (0.0, 0.22, 0.04), mat_wood_trim, bevel_width=0.004)
     
     # Friso canelado / decorativo frontal
     for i in range(11):
         fx = -1.25 + i * 0.25
         add_beveled_box(f"Rib_{i}", (0.02, 0.015, 0.85), (fx, 0.35, 0.54), mat_wood_trim, bevel_width=0.002)
         
-    # 2. Tampo de Atendimento ao Público Superior (1.10m altura)
-    add_beveled_box("CounterTopPublic", (2.86, 0.38, 0.04), (0.0, 0.16, 1.08), mat_oak_top, bevel_width=0.010, segments=4)
+    # 2. Tampo de Atendimento ao Público Superior (1.10m altura, restrito à mureta frontal sem invadir a bancada interna)
+    add_beveled_box("CounterTopPublic", (2.84, 0.30, 0.04), (0.0, 0.20, 1.08), mat_oak_top, bevel_width=0.010, segments=4)
     
     # 3. Visor Protetor em Vidro/Acrílico Translúcido com Suportes Metálicos
-    add_beveled_box("GlassVisor", (2.60, 0.012, 0.35), (0.0, 0.18, 1.28), mat_glass, bevel_width=0.003)
+    add_beveled_box("GlassVisor", (2.60, 0.012, 0.35), (0.0, 0.28, 1.28), mat_glass, bevel_width=0.003)
     for bx in [-1.0, 0.0, 1.0]:
-        add_beveled_cylinder(f"GlassBracket_{bx}", 0.018, 0.08, (bx, 0.18, 1.13), mat_metal, vertices=16)
+        add_beveled_cylinder(f"GlassBracket_{bx}", 0.018, 0.08, (bx, 0.28, 1.13), mat_metal, vertices=16)
         
-    # 4. Retorno Lateral em L (Lado Esquerdo, Profundidade 1.60m)
-    add_beveled_box("ReturnBody", (0.68, 1.50, 1.04), (-1.06, -0.80, 0.54), mat_lacquer, bevel_width=0.010, segments=3)
-    add_beveled_box("ReturnBaseboard", (0.70, 1.52, 0.08), (-1.06, -0.80, 0.04), mat_wood_trim, bevel_width=0.004)
-    add_beveled_box("ReturnTopPublic", (0.38, 1.56, 0.04), (-1.21, -0.80, 1.08), mat_oak_top, bevel_width=0.010, segments=4)
+    # 4. Retorno Lateral em L (Lado Esquerdo, Profundidade 1.20m)
+    add_beveled_box("ReturnBody", (0.36, 1.20, 1.04), (-1.22, -0.45, 0.54), mat_lacquer, bevel_width=0.010, segments=3)
+    add_beveled_box("ReturnBaseboard", (0.38, 1.22, 0.08), (-1.22, -0.45, 0.04), mat_wood_trim, bevel_width=0.004)
+    add_beveled_box("ReturnTopPublic", (0.40, 1.26, 0.04), (-1.22, -0.45, 1.08), mat_oak_top, bevel_width=0.010, segments=4)
     
-    # 5. Bancada de Trabalho Interna (Altura 0.76m, para computadores e papéis)
-    add_beveled_box("InternalDesk", (2.08, 0.52, 0.035), (0.32, -0.18, 0.7425), mat_oak_top, bevel_width=0.006)
+    # 5. Bancada de Trabalho Interna (Altura 0.76m, 100% desimpedida para computadores)
+    add_beveled_box("InternalDesk", (2.24, 0.54, 0.035), (0.14, -0.17, 0.7425), mat_oak_top, bevel_width=0.006)
     
     export_glb(os.path.join(output_furniture, "reception_counter.glb"))
 
@@ -266,23 +266,22 @@ def build_storage_cabinet():
     mat_metal = make_pbr_material("Mat_BrushedAlum", (0.80, 0.82, 0.85, 1.0), roughness=0.25, metallic=0.85)
     mat_dark_feet = make_pbr_material("Mat_RubberFeet", (0.15, 0.17, 0.19, 1.0), roughness=0.6)
     
-    # 1. Carcaça Principal (0.90m x 0.45m x 1.82m)
-    add_beveled_box("CabinetChassis", (0.90, 0.45, 1.80), (0.0, 0.0, 0.94), mat_cabinet, bevel_width=0.008, segments=3)
+    # 1. Carcaça Principal (0.80m x 0.38m x 1.38m total — compatível com wallHeight=1.45m da maquete)
+    add_beveled_box("CabinetChassis", (0.80, 0.38, 1.34), (0.0, 0.0, 0.71), mat_cabinet, bevel_width=0.008, segments=3)
     
     # 2. Portas Verticais Duplas Chanfradas
-    door_w = 0.435
-    door_h = 1.74
-    for side, x in [("L", -0.222), ("R", 0.222)]:
-        add_beveled_box(f"Door_{side}", (door_w, 0.02, door_h), (x, 0.235, 0.94), mat_cabinet, bevel_width=0.005)
-        # Puxadores elegantes verticais
-        add_beveled_box(f"Handle_{side}", (0.02, 0.025, 0.32), (x + (-0.12 if side == 'L' else 0.12) * -1, 0.255, 0.94), mat_metal, bevel_width=0.002)
+    door_w = 0.385
+    door_h = 1.28
+    for side, x in [("L", -0.198), ("R", 0.198)]:
+        add_beveled_box(f"Door_{side}", (door_w, 0.02, door_h), (x, 0.195, 0.71), mat_cabinet, bevel_width=0.005)
+        add_beveled_box(f"Handle_{side}", (0.02, 0.025, 0.28), (x + (-0.11 if side == 'L' else 0.11) * -1, 0.215, 0.75), mat_metal, bevel_width=0.002)
         
     # Fechadura central cromada
-    add_beveled_cylinder("LockCylinder", 0.012, 0.025, (0.03, 0.245, 0.94), mat_metal, vertices=16)
+    add_beveled_cylinder("LockCylinder", 0.012, 0.025, (0.03, 0.205, 0.75), mat_metal, vertices=16)
     
     # 3. Sapatas Cilíndricas com Base de Borracha
-    for x in [-0.40, 0.40]:
-        for y in [-0.18, 0.18]:
+    for x in [-0.35, 0.35]:
+        for y in [-0.14, 0.14]:
             add_beveled_cylinder(f"Foot_{x}_{y}", 0.025, 0.04, (x, y, 0.02), mat_dark_feet, vertices=16)
             
     export_glb(os.path.join(output_furniture, "storage_cabinet.glb"))
@@ -344,7 +343,7 @@ def build_waiting_bench():
     add_beveled_cylinder("MainBeam", 0.035, 1.76, (0.0, 0.0, 0.38), mat_steel, vertices=24)
     beam = bpy.context.active_object
     beam.rotation_euler.y = math.radians(90)
-    bpy.ops.object.transform_apply(rotation=True)
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
     
     # 2. Pernas Estruturais em Y Invertido (Esquerda e Direita)
     for side, x in [("L", -0.72), ("R", 0.72)]:
@@ -355,7 +354,7 @@ def build_waiting_bench():
         foot_bar = bpy.context.active_object
         foot_bar.name = f"FootBar_{side}"
         foot_bar.rotation_euler.x = math.radians(90)
-        bpy.ops.object.transform_apply(rotation=True)
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
         foot_bar.data.materials.append(mat_steel)
         
         # Ponteiras de borracha anti-derrapantes

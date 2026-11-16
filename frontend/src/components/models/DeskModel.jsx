@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 
 export function DeskModel({ position = [0, 0, 0], rotation = [0, 0, 0] }) {
-  const { scene } = useGLTF('/models/furniture/office_desk.glb');
+  const { scene } = useGLTF('/models/furniture/office_desk.glb?v=24');
 
   const modelInstance = useMemo(() => {
     const clone = scene.clone(true);
@@ -18,5 +18,5 @@ export function DeskModel({ position = [0, 0, 0], rotation = [0, 0, 0] }) {
   return <primitive object={modelInstance} position={position} rotation={rotation} />;
 }
 
-useGLTF.preload('/models/furniture/office_desk.glb');
+useGLTF.preload('/models/furniture/office_desk.glb?v=24');
 

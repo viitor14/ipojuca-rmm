@@ -230,3 +230,17 @@ Para assegurar credibilidade visual de maquete arquitetônica premium (estética
   - Todos os postos da recepção seguem o princípio de **atendimento voltado para o fluxo**:
     - No balcão (Posto 1), o atendente opera dentro da cabine voltado para o visor de vidro e para o acesso público.
     - Nos postos de parede norte e sul (Postos 2, 3 e 4), o operador senta entre a mesa e a parede, olhando para a área central de circulação e recepcionando o paciente pelo lado frontal do painel de modéstia.
+
+
+---
+
+## 11. Refinamento Proporcional, Mobiliário sem Colisões e Coerência Visual da Recepção — Ciclo #24
+
+**Responsável:** `@designer`  
+**Skills Consultadas:** `.agents/skills/designer/design_system.md`, `.agents/skills/designer/ux_dashboard.md`
+
+### 1. Proporção Maquete Cutaway e Limpeza Perimetral
+- **Armário Abaixo da Cota de Corte (`1.38m < 1.45m`):** Ao reduzir o armário de arquivos para `1.38m`, toda a peça permanece visualmente contida na escala de diorama isométrico sem ultrapassar o topo das paredes internas, enquanto mantém as portas duplas e puxadores metálicos chanfrados em evidência no canto noroeste.
+- **Respiro nas Paredes e Janelas:** A janela norte-oeste (`[-3.30, -2.00]`) fica completamente desimpedida tanto em relação ao armário (`X <= -3.42`) quanto em relação ao quadro de arte (`X = -1.45`), restaurando a entrada de luz natural e a leitura arquitetônica da sala.
+- **Longarina com Visada de Atendimento:** Com rotação `-90°` (`-Math.PI / 2`), os 3 assentos em polipropileno azul ardósia voltados para o centro da recepção convidam o usuário visualmente para a área de espera, com viga contínua alinhada na altura correta (`0.38m`).
+- **Balcão Funcional e Limpo:** A impressora térmica repousa na extremidade oeste do tampo superior público (`Y = 1.10m`), liberando toda a visão da estação piloto (`machine.id = 9`) sobre a bancada interna de carvalho (`Y = 0.76m`).

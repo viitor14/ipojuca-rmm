@@ -1525,3 +1525,84 @@ Apresentamos a especificação técnica detalhada para a correção da posição
 > [!IMPORTANT]
 > Nenhuma linha de código será alterada antes da sua aprovação explícita.
 > Por favor, responda com **`Approved`** para que as equipes `@lead`, `@frontend` e `@engineer` possam executar os ajustes, recompilar o frontend e gerar as novas capturas e renders de validação!
+
+
+---
+
+## 43. Ciclo #24 — Auditoria Completa e Correção de Todos os Bugs Espaciais e Geométricos da Recepção
+
+### 1. Diagnóstico Completo Baseado em Bounding Boxes Reais (`@pm` + `@lead` + `@qa`)
+
+Em resposta à solicitação do usuário:
+> *"Percebi que na recepção contem bugs ainda, o armario esta dentro do muro, tem um pc que esta dentro do balcao, analisa todos bugs que contem nesta recepção e corrige todos"*
+
+Foi realizada uma auditoria matemática completa das *bounding boxes* reais de todos os 7 arquivos `.glb` no espaço nativo do Three.js em comparação direta com os limites físicos internos da sala de Recepção em `DigitalTwin3D.jsx` (`width = 9.0m`, `depth = 5.0m`, `wallThickness = 0.18m`, área útil interna `X ∈ [-4.32, +4.32]`, `Z ∈ [-2.32, +2.32]`, parede norte com rodapé em `-2.30m` e altura `wallHeight = 1.45m`) e com `scripts/render_reception_scene.py`.
+
+Foram identificados **5 bugs estruturais e geométricos** na Recepção:
+
+#### Bug #1 — Armário Colidindo com o Muro / Janela / Longarina e Altura Desproporcional
+- **No `scripts/render_reception_scene.py`:** O armário em `Y = 3.05m` tinha sua face traseira em `3.275m`, ultrapassando o rodapé/parede norte (`3.25m`), entrando literalmente dentro do muro.
+- **No `DigitalTwin3D.jsx` (linha 943):**
+  - Posicionado em `[-3.6, 0, backZ + 0.3]` (`Z = -1.60m`), gerando ocupação `X ∈ [-4.05, -3.15]`, `Z ∈ [-1.82, -1.33]` e `Y ∈ [0, 1.84m]`.
+  - **Intersecção com a Longarina (`WaitingBenchModel`):** A longarina ocupa `X ∈ [-4.24, -3.66]`, `Z ∈ [-1.56, +0.50]` — colidindo diretamente com o canto frontal esquerdo do armário (`X ∈ [-4.05, -3.66]`, `Z ∈ [-1.56, -1.33]`).
+  - **Invasão de Janela e Desproporção Vertical:** O armário tinha `1.84m` de altura (ultrapassando o topo da parede de corte de `1.45m` em `+39cm`) e invadia a janela norte-oeste (`X ∈ [-3.35, -1.95]`).
+- **Correção (`RF-89`):** Redimensionar `storage_cabinet.glb` para altura compatível com a maquete (`1.38m` de altura total, `0.80m` de largura, `0.38m` de profundidade) e posicioná-lo rente à alvenaria livre do canto noroeste em `X = -3.82m`, `Z = -2.08m` (face traseira em `-2.27m`, a `3cm` do rodapé `-2.30m`, fora da janela e recuado para trás da longarina).
+
+#### Bug #2 — PC Dentro do Balcão, Balcão na Parede Sul, Impressora Fora do Tampo e Cache de GLB
+Uma análise detalhada explicou exatamente por que o PC continuava aparecendo dentro do balcão:
+1. **Cache HTTP de `useGLTF` sem bust de versão:** Os loaders (`ReceptionCounterModel.jsx`, `DeskModel.jsx`, etc.) carregavam `/models/.../*.glb` sem query string de versão, permitindo ao navegador reutilizar a versão em cache antiga do `reception_counter.glb` (que possuía bloco sólido de `0.68m` engolindo o Posto 1).
+2. **Colisão com `CounterTopPublic` e `TowerChassis`:** No `reception_counter.glb` atual, o tampo superior público (`CounterTopPublic`) ocupava `Z ∈ [0.45, 0.83]` na altura `Y ∈ [1.06, 1.10]`, avançando sobre a bancada interna (`Z ∈ [0.72, 1.24]`). O gabinete do Posto 1 (`TowerChassis`: `Z ∈ [0.75, 1.09]`, `Y ∈ [0.76, 1.11]`) interseccionava fisicamente o tampo superior público.
+3. **Colisão do Retorno em L com a Parede Sul:** Com o balcão em `Z = 0.80m`, o retorno lateral (`ReturnTopPublic`) alcançava `Z = +2.38m`, ultrapassando o limite interno da parede sul (`+2.32m` / rodapé `+2.30m`) em `8cm`.
+4. **Impressora Térmica Fora do Tampo:** Em `[-1.4, 1.08, 0.8]`, a impressora ficava sobre a beirada traseira do tampo superior, fora da área útil frontal e alinhada diretamente acima do monitor do Posto 1.
+- **Correção (`RF-90` e `RF-91`):**
+  - Remodelar `reception_counter.glb` mantendo a mureta frontal (`0.26m`), ajustando `CounterTopPublic` (`0.30m` de profundidade estrita sobre a mureta frontal em `Y = +0.20m`, sem invadir a `InternalDesk`), reduzindo `ReturnBody` para `1.20m` (`Z` total `1.64m`) e preservando `InternalDesk` totalmente livre (`0.52m` em `Y = -0.18m`).
+  - Posicionar o balcão em `[-2.2, 0, 0.55]` (`Z ∈ [0.21, 1.85]`, folga de `45cm` até o rodapé sul e passagem aberta).
+  - Posicionar a impressora térmica sobre a extremidade oeste do tampo público superior em `[-2.95, 1.10, 0.40]`.
+  - Posicionar o Posto 1 (Piloto `machine.id = 9`) em `{ x: bx - 1.85, z: bz + 0.82, rotY: Math.PI, hideDesk: true }` e aplicar sufixo `?v=24` em todos os `useGLTF` e `useGLTF.preload` de `frontend/src/components/models/*.jsx`.
+
+#### Bug #3 — Viga Estrutural (`MainBeam`) da Longarina Caída no Chão e Deslocada (`waiting_bench.glb`)
+- No `build_waiting_bench()` em `scripts/build_furniture_models_blender.py`, `add_beveled_cylinder("MainBeam", ...)` chamava internamente `bpy.ops.object.transform_apply(scale=True)` — no Blender, `transform_apply` assume `location=True` por padrão quando omitido — zerando a posição da viga para `(0, 0, 0)` antes de aplicar `beam.rotation_euler.y = math.radians(90)`.
+- Resultado comprovado na auditoria do GLB: `MainBeam` ficava no chão (`Y ∈ [-0.035, +0.035]`) e deslocada lateralmente (`X ∈ [-0.50, +1.26]`), atravessando para fora da perna direita como visto no último render isométrico.
+- **Correção (`RF-92`):** Alterar `add_beveled_box` e `add_beveled_cylinder` para aplicarem apenas `bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)` e usar `transform_apply(location=False, rotation=True, scale=False)` nas peças rotacionadas, restaurando a `MainBeam` na altura `Y = 0.38m` entre as colunas (`X ∈ [-0.88, +0.88]`).
+
+#### Bug #4 — Quadro de Arte (`hasArt`) / Mural (`hasNoticeBoard`) Dentro da Janela Norte-Oeste (`SectorRoomVoxel`)
+- Em `DigitalTwin3D.jsx`, as janelas da parede norte ficam centradas em `±width / 3.4` (`±2.65m`, linhas 611-612), e o quadro de arte `hasArt` / mural `hasNoticeBoard` também era montado em `-width / 3.4` (`-2.65m`, linhas 670 e 688), causando sobreposição direta com o vidro e caixilho da janela esquerda.
+- **Correção (`RF-93`):** Deslocar `hasArt` / `hasNoticeBoard` para o pano livre de alvenaria entre o painel ripado central (`[-1.20, +1.20]`) e a janela (`±width / 5.4` ou extremidade segura fora da janela).
+
+#### Bug #5 — Descompasso de Dimensões Entre `scripts/render_reception_scene.py` e `DigitalTwin3D.jsx`
+- O script de validação renderizava uma sala fictícia `7.8m x 6.8m` em coordenadas Blender diferentes das coordenadas reais do frontend (`9.0m x 5.0m` em Three.js), ocultando desvios de parede e janela nos renders de preview.
+- **Correção (`RF-94`):** Atualizar `scripts/render_reception_scene.py` para espelhar fielmente as dimensões reais da Recepção (`9.0m x 5.0m`), paredes, janelas, porta sul e posições exatas definidas em `DigitalTwin3D.jsx`.
+
+---
+
+### 2. Requisitos Funcionais do Ciclo #24 (`@pm`)
+
+- **RF-89 (Alinhamento e Proporção do Armário de Prontuários):** Redimensionar `storage_cabinet.glb` (`1.38m` altura x `0.80m` largura x `0.38m` profundidade) e posicioná-lo rente à parede norte (`[-3.82, 0, -2.08]`), sem penetrar a alvenaria/rodapé (`-2.30m`), sem obstruir a janela e sem colidir com a longarina.
+- **RF-90 (Desobstrução Completa do Posto 1 no Balcão e Retorno em L):** Ajustar `reception_counter.glb` para que `CounterTopPublic` não invada `InternalDesk`, reduzir `ReturnBody` para não invadir a parede sul (`< +2.30m`), reposicionar balcão (`[-2.2, 0, 0.55]`), impressora térmica (`[-2.95, 1.10, 0.40]`) e Posto 1 (`z = bz + 0.82`).
+- **RF-91 (Cache-Busting de Assets GLB no R3F):** Aplicar parâmetro de versão `?v=24` nos caminhos `/models/.../*.glb` em `frontend/src/components/models/*.jsx` para forçar a atualização imediata no navegador sem resquícios de cache antigo.
+- **RF-92 (Correção Estrutural da Longarina `waiting_bench.glb`):** Corrigir `transform_apply` em `scripts/build_furniture_models_blender.py` para manter `MainBeam` a `0.38m` de altura conectando os três assentos entre `X = -0.88m` e `+0.88m`, mantendo a longarina livre da parede oeste (`X >= -4.30m`) e do armário.
+- **RF-93 (Remoção de Sobreposição em Parede Norte — `hasArt` / `hasNoticeBoard`):** Separar as coordenadas X dos quadros/murais em relação às janelas em `SectorRoomVoxel`.
+- **RF-94 (Sincronia 1:1 do Renderizador de Validação):** Alinhar `scripts/render_reception_scene.py` às dimensões reais `9.0m x 5.0m` e às coordenadas exatas do `DigitalTwin3D.jsx`, validando geometricamente com script de intersecção de *bounding boxes*.
+
+---
+
+### 3. Critérios de Aceitação do Ciclo #24 (`@pm` + `@qa`)
+
+| ID | Critério de Aceitação | Verificação | Resultado Esperado |
+| :--- | :--- | :--- | :--- |
+| **CA-96** | **Zero Invasão de Paredes/Muros** | Auditoria programática de *bounding boxes* vs limites internos (`X ∈ [-4.30, +4.30]`, `Z ∈ [-2.30, +2.30]`). | Armário, balcão em L, longarina, bebedouro, planta e todas as 4 estações respeitam integralmente o interior das paredes e rodapés. |
+| **CA-97** | **PC do Posto 1 Fora do Balcão** | Inspeção do `reception_counter.glb` e do Posto 1 (`workstation_pc.glb`). | Monitor, gabinete (`TowerChassis`), teclado, mouse e cadeira totalmente visíveis e sem intersecção com `FrontBody` nem com `CounterTopPublic`. |
+| **CA-98** | **Impressora sobre o Tampo Superior** | Inspeção de `ThermalPrinterModel`. | Impressora apoiada sobre `CounterTopPublic` sem sobrepor o monitor do Posto 1. |
+| **CA-99** | **Longarina Íntegra (Viga na Altura Certa)** | Inspeção de `waiting_bench.glb` e renders. | `MainBeam` a `0.38m` de altura unindo os 3 assentos, sem barra sobressalente no chão e sem colidir com o armário. |
+| **CA-100** | **Janelas e Quadros Sem Sobreposição** | Inspeção de `SectorRoomVoxel` na parede norte. | Quadro de arte em trecho livre de parede, sem atravessar janela. |
+| **CA-101** | **Cache-Busting, Build e Telemetria** | Execução de `npm --prefix frontend run build` e auditoria de `DigitalTwin3D.jsx` e `models/*.jsx`. | Todos os GLBs carregados com `?v=24`, build Vite limpo (exit code 0), telemetria, seleção CAD e `DiagnosticDrawer` preservados. |
+
+---
+
+## 44. Gate de Aprovação — FASE 1 (Ciclo #24)
+
+O pipeline do **Ciclo #24** encontra-se **pausado no Gate de Aprovação da Fase 1**.
+
+> [!IMPORTANT]
+> Nenhuma linha de código foi alterada ainda, em respeito ao fluxo de aprovação.
+> Por favor, responda com **`Approved`** para que a equipe execute todas as correções especificadas (`RF-89` a `RF-94`), regenere os modelos `.glb`, valide o build e apresente as novas capturas sem colisões.
