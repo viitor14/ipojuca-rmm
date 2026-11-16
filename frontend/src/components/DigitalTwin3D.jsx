@@ -1267,7 +1267,7 @@ function computeMachineLayout(machines, sectors) {
 /* =========================================================================
  * ESTAÇÃO DE TRABALHO: MESA, CADEIRA E COMPUTADOR EM MODELOS GLB MODULARES
  * ========================================================================= */
-function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos }) {
+function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos, showLabels = true }) {
   const posX = layoutPos ? layoutPos.x : Number(machine.pos_x || 0);
   const posZ = layoutPos ? layoutPos.z : Number(machine.pos_z || 0);
   const rotY = layoutPos?.rotY || 0;
@@ -1286,6 +1286,7 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos }) {
         machine={machine}
         isSelected={isSelected}
         onSelect={onSelect}
+        showLabel={showLabels}
         position={[0, 0.76, 0]}
       />
 
@@ -1410,7 +1411,7 @@ export function DigitalTwin3D({
           );
         })}
 
-        {/* Computadores Reais com Miniaturas sobre as Mesas */}
+        {/* Computadores Reais com Miniaturas sobre as Mesas e Identificação de Status em 3 Camadas */}
         {unitMachines.map((machine) => (
           <ComputerAvatarVoxel
             key={`machine-${machine.id}`}
@@ -1418,6 +1419,7 @@ export function DigitalTwin3D({
             isSelected={selectedMachine?.id === machine.id}
             onSelect={onSelectMachine}
             layoutPos={machineLayout.get(machine.id)}
+            showLabels={sceneLayers.labels !== false}
           />
         ))}
 

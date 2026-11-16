@@ -1606,3 +1606,83 @@ O pipeline do **Ciclo #24** encontra-se **pausado no Gate de Aprovação da Fase
 > [!IMPORTANT]
 > Nenhuma linha de código foi alterada ainda, em respeito ao fluxo de aprovação.
 > Por favor, responda com **`Approved`** para que a equipe execute todas as correções especificadas (`RF-89` a `RF-94`), regenere os modelos `.glb`, valide o build e apresente as novas capturas sem colisões.
+
+
+---
+
+## 45. Ciclo #25 — Sistema de Identificação Visual de Status em 3 Camadas para os Computadores no Gêmeo Digital 3D
+
+### 1. Diagnóstico do Problema de Visibilidade Reportado (`@pm` + `@designer` + `@frontend`)
+
+O usuário solicitou:
+> *"Agora eu preciso de alguma identificação que fique facil para eu ver o status do computador"*
+
+A análise técnica da experiência atual em [WorkstationModel.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/models/WorkstationModel.jsx) e [DigitalTwin3D.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DigitalTwin3D.jsx) identificou 3 limitações que dificultam a leitura rápida do estado de cada computador:
+
+1. **`StatusLed` Oculto em Visão Macro e Quando de Costas para a Câmera:**
+   - O `StatusLed` da moldura do monitor tem apenas `4.5mm` de raio (`0.009m`) e aponta exclusivamente para a frente da tela.
+   - Em estações orientadas de costas para a câmera isométrica (como os Postos 3 e 4 na parede norte da Recepção) ou em enquadramento geral da unidade (`ISO` / `TOP`), o LED do monitor torna-se invisível ou imperceptível.
+2. **Tooltip de Identificação Dependente Exclusivamente de Hover (`{hovered && <Html>}`):**
+   - Atualmente, o nome da máquina (`hostname`), IP e setor só aparecem quando o operador passa o ponteiro exatamente sobre o computador. Não há etiqueta persistente na cena 3D exibindo o status (`ONLINE`, `ATENÇÃO`, `CRÍTICO`, `OFFLINE`).
+3. **Ausência de Sinalização 3D Omnidirecional (360°) no Gabinete e Tampo para Incidentes:**
+   - Quando uma máquina entra em `WARNING` ou `CRITICAL` (ou fica `OFFLINE`), não há um elemento 3D luminoso visível por todos os ângulos da câmera (sem transformar a tela inteira em cor sólida neon, preservando a diretriz estética do Ciclo #20).
+
+---
+
+### 2. Solução Arquitetural em 3 Camadas Complementares (`@lead` + `@designer`)
+
+Preservando integralmente a diretriz do Ciclo #20 (*tela realista com wallpaper/SO em CanvasTexture, nunca uma tela verde/vermelha chapada*), propomos uma sinalização limpa, elegante e legível em qualquer zoom ou ângulo:
+
+#### Camada 1 — Pílula Flutuante Permanente de Status 3D (`StatusPillBadge` via `<Html>` Drei)
+- **Posicionamento:** Flutuação discreta e centrada acima de cada estação (`position={[0, 0.52, 0]}`, `distanceFactor={15}`), sem poluir a mesa nem obstruir o monitor.
+- **Conteúdo Compacto Permanente:**
+  - **Indicador LED circular com pulso suave** nas cores semânticas oficiais (`#10B981` ONLINE, `#F59E0B` ATENÇÃO, `#EF4444` CRÍTICO, `#64748B` OFFLINE — com animação de pulso mais rápida em estados `WARNING`/`CRITICAL`).
+  - **Hostname curto** em tipografia legível (ex: `DESKTOP-32HK6KT`).
+  - **Badge textual de status** (`ONLINE`, `ATENÇÃO`, `CRÍTICO`, `OFFLINE`) com fundo e borda translúcida semântica.
+- **Interatividade e Controle de Camadas (`sceneLayers.labels`):**
+  - Clicável diretamente no badge para selecionar a máquina (`onSelect(machine)`), focar a câmera e abrir o `DiagnosticDrawer`.
+  - Ao passar o mouse (`hover`) ou quando selecionada (`isSelected`), a pílula expande suavemente exibindo IP, CPU%, RAM% e Setor.
+  - Respeita a camada `Rótulos` (`sceneLayers.labels`), mantendo entretanto máquinas em `WARNING` ou `CRITICAL` sempre visíveis por segurança operacional.
+
+#### Camada 2 — Indicador Luminoso 3D Omnidirecional 360° (`StatusBeacon3D`)
+- **Elementos Físicos Discretos sobre a Estação (`workstation_pc.glb` / `WorkstationModel.jsx`):**
+  - **Friso Luminoso Superior do Gabinete:** Barra LED fina e chanfrada no topo traseiro/superior do gabinete (`TowerTopBeacon` em `Y = 0.355m` acima do gabinete), visível de frente, de costas, lateral e top-down.
+  - **Anel/Filete na Base do Monitor:** Acento luminoso discreto contornando a base do suporte do monitor.
+- Ambos reagem reativamente em `useEffect` (sem reconstruir geometria) à cor e emissividade do `health_status`, permitindo distinguir `ONLINE` (verde esmeralda discreto), `ATENÇÃO` (âmbar vibrante), `CRÍTICO` (vermelho intenso pulsante) e `OFFLINE` (cinza apagado) em 360°, mesmo com os rótulos ocultos ou em visão superior.
+
+#### Camada 3 — Moldura CAD de Estado no Tampo (`StatusPerimeterFrame`)
+- Evolução do contorno de seleção CAD já existente no tampo:
+  - **Selecionada (`isSelected`):** Contorno azul (`#3B82F6`) com cantoneiras CAD (`#60A5FA`).
+  - **Alerta / Crítico (`WARNING` / `CRITICAL` mesmo não selecionada):** Contorno sutil âmbar (`#F59E0B`) ou vermelho pulsante (`#EF4444`) delimitando a estação com incidente para localização imediata na planta da unidade.
+
+---
+
+### 3. Requisitos Funcionais do Ciclo #25 (`@pm`)
+
+- **RF-95 (Pílula Permanente de Status sobre a Estação):** Exibir continuamente sobre cada computador uma pílula HTML 3D compacta contendo ponto de LED, `hostname` e rótulo textual de status (`ONLINE`, `ATENÇÃO`, `CRÍTICO`, `OFFLINE`), clicável para selecionar o equipamento e expansível no `hover`.
+- **RF-96 (Sinalizador Omnidirecional 360° no Gabinete e Base):** Adicionar elementos geométricos discretos no topo do gabinete e na base do suporte com material emissivo reativo ao `health_status`, visíveis por todos os ângulos (incluindo de costas e top-down).
+- **RF-97 (Moldura CAD Semântica para Alertas):** Destacar automaticamente estações em `WARNING` (âmbar) ou `CRITICAL` (vermelho pulsante) através da moldura perimetral discreta sobre a mesa, preservando o destaque azul quando selecionada.
+- **RF-98 (Preservação da Tela Realista do Monitor e Integração com Camadas):** Manter o `ScreenDisplay` com desktop corporativo realista (`CanvasTexture`), respeitando a preferência do controle `Rótulos` (`sceneLayers.labels` — com prioridade para manter alertas `WARNING`/`CRITICAL` sempre visíveis).
+- **RF-99 (Performance 60 FPS e Preservação de Telemetria):** Atualizações de cor/emissividade e estado dos badges via React `useEffect`/CSS sem reconstrução de malhas `.glb` nem impacto na latência do Socket.io ou no `DiagnosticDrawer`.
+
+---
+
+### 4. Critérios de Aceitação do Ciclo #25 (`@pm` + `@qa`)
+
+| ID | Critério de Aceitação | Cenário de Teste | Resultado Esperado |
+| :--- | :--- | :--- | :--- |
+| **CA-102** | **Leitura Imediata sem Passar o Mouse** | Abrir a visão isométrica ou superior da unidade sem tocar nos PCs. | É possível ler imediatamente o `hostname` e o status (`ONLINE`, `ATENÇÃO`, `CRÍTICO`, `OFFLINE`) de todas as estações visíveis pela pílula 3D. |
+| **CA-103** | **Visibilidade em 360° (Inclusive de Costas)** | Observar as estações da parede norte voltadas para o sul (costas para a câmera isométrica) ou desativar os rótulos de texto. | O friso superior do gabinete e o anel/filete na base permitem identificar a cor do status mesmo quando o monitor está de costas. |
+| **CA-104** | **Distinção Clara de Incidentes** | Simular ou observar máquinas em `NORMAL`, `WARNING`, `CRITICAL` e `OFFLINE`. | `CRITICAL` e `WARNING` destacam-se imediatamente com pulso e moldura CAD vermelha/âmbar; `OFFLINE` aparece claramente como cinza/desligado; `NORMAL` exibe verde limpo. |
+| **CA-105** | **Clique, Hover e DiagnosticDrawer** | Clicar na pílula 3D ou no modelo do computador e passar o mouse sobre ele. | Hover expande IP, CPU%, RAM% e Setor; clique seleciona a máquina, foca a câmera e abre o `DiagnosticDrawer`. |
+| **CA-106** | **Tela Realista Preservada e Build Limpo** | Verificar `ScreenDisplay` no 3D e executar `npm --prefix frontend run build`. | Tela continua exibindo o sistema operacional realista (não monocromática neon) e o build Vite finaliza com exit code 0 mantendo 60 FPS estáveis. |
+
+---
+
+## 46. Gate de Aprovação — FASE 1 (Ciclo #25)
+
+O pipeline do **Ciclo #25** encontra-se **pausado no Gate de Aprovação da Fase 1**.
+
+> [!IMPORTANT]
+> Nenhuma linha de código-fonte foi alterada ainda, conforme o protocolo de aprovação.
+> Por favor, responda **`Approved`** para que a equipe implemente a identificação visual de status em 3 camadas, atualize os modelos/componentes, execute o build e apresente os renders/evidências de validação.

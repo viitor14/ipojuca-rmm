@@ -192,11 +192,53 @@ import_glb(cabinet_glb, Vector((-3.82, 2.08, 0)), rotation_z=math.pi)
 # 3. LONGARINA DE ESPERA (waiting_bench.glb) - Three.js [-3.95, 0, -0.35], rotY=-PI/2 (assentos para +X)
 import_glb(bench_glb, Vector((-3.95, 0.35, 0)), rotation_z=math.radians(-90))
 
-# 4. QUATRO ESTAÇÕES DE TRABALHO ERGONÔMICAS E NÃO COLIDENTES (1:1 com DigitalTwin3D.jsx)
+# 4. QUATRO ESTAÇÕES DE TRABALHO ERGONÔMICAS E IDENTIFICAÇÃO VISUAL 3D (Ciclo #25)
+def add_workstation_status_indicators(ws_pos, rot_z, is_warning=False):
+    c, s = math.cos(rot_z), math.sin(rot_z)
+    color = (0.96, 0.62, 0.04, 1.0) if is_warning else (0.06, 0.73, 0.51, 1.0)
+    em_strength = 3.2 if is_warning else 2.2
+    mat_ind = create_pbr_mat(
+        f"Mat_StatusInd_{'Warn' if is_warning else 'Ok'}_{round(ws_pos.x,2)}",
+        color, roughness=0.2, emission=color, emission_strength=em_strength
+    )
+    mat_pill_bg = create_pbr_mat(
+        f"Mat_PillBg_{round(ws_pos.x,2)}",
+        (1.0, 0.98, 0.92, 1.0) if is_warning else (0.98, 0.99, 0.99, 1.0),
+        roughness=0.25
+    )
+
+    def place_box(lx, ly, lz, sx, sy, sz, mat):
+        wx = ws_pos.x + lx * c - ly * s
+        wy = ws_pos.y + lx * s + ly * c
+        wz = ws_pos.z + lz
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(wx, wy, wz))
+        obj = bpy.context.active_object
+        obj.scale = (sx, sy, sz)
+        obj.rotation_euler.z = rot_z
+        obj.data.materials.append(mat)
+        return obj
+
+    # Camada 2: Friso LED 360° no topo do gabinete e filete na base do monitor
+    place_box(0.42, -0.06, 0.355, 0.12, 0.28, 0.010, mat_ind)
+    place_box(-0.06, -0.10, 0.015, 0.18, 0.12, 0.005, mat_ind)
+
+    # Camada 1: Pílula indicadora suspensa acima da estação (status imediatamente visível)
+    place_box(-0.06, -0.10, 0.52, 0.42, 0.14, 0.018, mat_pill_bg)
+    place_box(-0.20, -0.10, 0.53, 0.06, 0.06, 0.012, mat_ind)
+    place_box(0.03, -0.10, 0.53, 0.24, 0.04, 0.010, mat_ind)
+
+    # Camada 3: Moldura CAD âmbar para máquina em estado de ATENÇÃO (WARNING)
+    if is_warning:
+        place_box(0.0, 0.41, 0.006, 1.38, 0.025, 0.010, mat_ind)
+        place_box(0.0, -0.41, 0.006, 1.38, 0.025, 0.010, mat_ind)
+        place_box(-0.69, 0.0, 0.006, 0.025, 0.82, 0.010, mat_ind)
+        place_box(0.69, 0.0, 0.006, 0.025, 0.82, 0.010, mat_ind)
+
 # Posto 1 (Piloto machine 9): na bancada interna do balcão - Three.js [-1.85, 0.76, 0.78], rotY=PI
 posto1_pos = Vector((-1.85, -0.78, 0.76))
 ws_root1, ws_objs1 = import_glb(workstation_glb, posto1_pos, rotation_z=math.pi)
 import_glb(chair_glb, Vector((-1.70, -1.30, 0)), rotation_z=0)
+add_workstation_status_indicators(posto1_pos, math.pi, is_warning=False)
 
 # Configura LED de status do posto 1 para verde
 for o in ws_objs1:
@@ -221,7 +263,9 @@ standalone_desks = [
 for idx, (slot, rot_z, chair_offset, chair_rot) in enumerate(standalone_desks, start=2):
     import_glb(desk_glb, slot, rotation_z=rot_z)
     import_glb(chair_glb, slot + chair_offset, rotation_z=chair_rot)
-    ws_root, ws_objs = import_glb(workstation_glb, slot + Vector((0, 0, 0.76)), rotation_z=rot_z)
+    ws_pos = slot + Vector((0, 0, 0.76))
+    ws_root, ws_objs = import_glb(workstation_glb, ws_pos, rotation_z=rot_z)
+    add_workstation_status_indicators(ws_pos, rot_z, is_warning=(idx == 3))
     for o in ws_objs:
         if o.name.startswith("StatusLed") and o.data and o.data.materials:
             color = (0.06, 0.73, 0.51, 1.0) if idx != 3 else (0.95, 0.65, 0.12, 1.0)

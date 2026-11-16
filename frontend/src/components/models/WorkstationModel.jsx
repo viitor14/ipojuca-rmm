@@ -1,54 +1,253 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { useGLTF, Html } from '@react-three/drei';
-import styled from 'styled-components';
-import { theme, fixTextEncoding } from '../../styles/theme';
+import styled, { keyframes, css } from 'styled-components';
+import { theme, STATUS_LABELS, fixTextEncoding } from '../../styles/theme';
 
-const DeviceTooltip = styled.div`
-  pointer-events: none;
-  background: #ffffff;
-  color: #242925;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
-  padding: 8px 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+const statusPulse = keyframes`
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.28); opacity: 0.65; }
+`;
+
+const STATUS_BADGE_THEME = {
+  NORMAL: {
+    dot: '#10B981',
+    beacon: '#10B981',
+    text: '#065F46',
+    bg: 'rgba(255, 255, 255, 0.94)',
+    pillBg: 'rgba(16, 185, 129, 0.14)',
+    border: 'rgba(16, 185, 129, 0.45)',
+    label: STATUS_LABELS.NORMAL,
+    emissive: 1.6,
+    fastPulse: false,
+  },
+  WARNING: {
+    dot: '#F59E0B',
+    beacon: '#F59E0B',
+    text: '#92400E',
+    bg: 'rgba(255, 251, 235, 0.97)',
+    pillBg: 'rgba(245, 158, 11, 0.18)',
+    border: 'rgba(245, 158, 11, 0.72)',
+    label: STATUS_LABELS.WARNING,
+    emissive: 2.4,
+    fastPulse: true,
+  },
+  CRITICAL: {
+    dot: '#EF4444',
+    beacon: '#EF4444',
+    text: '#991B1B',
+    bg: 'rgba(254, 242, 242, 0.97)',
+    pillBg: 'rgba(239, 68, 68, 0.18)',
+    border: 'rgba(239, 68, 68, 0.80)',
+    label: STATUS_LABELS.CRITICAL,
+    emissive: 3.0,
+    fastPulse: true,
+  },
+  OFFLINE: {
+    dot: '#64748B',
+    beacon: '#475569',
+    text: '#475569',
+    bg: 'rgba(248, 250, 252, 0.92)',
+    pillBg: 'rgba(100, 116, 139, 0.14)',
+    border: 'rgba(148, 163, 184, 0.55)',
+    label: STATUS_LABELS.OFFLINE,
+    emissive: 0.0,
+    fastPulse: false,
+  },
+};
+
+const StatusPillBadge = styled.button`
+  pointer-events: auto;
+  cursor: pointer;
+  background: ${({ $badgeBg }) => $badgeBg};
+  backdrop-filter: blur(8px);
+  color: #1e293b;
+  border: 1.5px solid ${({ $isSelected, $borderColor }) => ($isSelected ? '#3B82F6' : $borderColor)};
+  border-radius: 999px;
+  padding: 4px 9px;
+  box-shadow: ${({ $isSelected }) =>
+    $isSelected
+      ? '0 0 0 2px rgba(59, 130, 246, 0.25), 0 6px 16px rgba(15, 23, 42, 0.14)'
+      : '0 4px 12px rgba(15, 23, 42, 0.12)'};
   font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.74rem;
-  line-height: 1.35;
+  font-size: 0.68rem;
+  line-height: 1.2;
   white-space: nowrap;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 3px;
-  transform: translate3d(-50%, -120%, 0);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 
-  .tt-head {
+  &:hover {
+    transform: translateY(-1px) scale(1.03);
+  }
+
+  .sp-top {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-weight: 700;
-    color: #242925;
+    gap: 5px;
   }
 
-  .tt-status-dot {
-    width: 7px;
-    height: 7px;
+  .sp-dot {
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: ${({ $statusColor }) => $statusColor};
-    display: inline-block;
+    background: ${({ $dotColor }) => $dotColor};
+    box-shadow: 0 0 6px ${({ $dotColor }) => $dotColor};
+    flex-shrink: 0;
+    ${({ $animate, $fastPulse }) =>
+      $animate &&
+      css`
+        animation: ${statusPulse} ${$fastPulse ? '1.1s' : '2.4s'} ease-in-out infinite;
+      `}
   }
 
-  .tt-meta {
+  .sp-host {
+    font-weight: 700;
+    color: #0f172a;
+    max-width: 112px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sp-tag {
+    font-size: 0.61rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    color: ${({ $tagText }) => $tagText};
+    background: ${({ $tagBg }) => $tagBg};
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+
+  .sp-extra {
+    display: flex;
+    align-items: center;
+    gap: 7px;
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.68rem;
-    color: #737b75;
+    font-size: 0.62rem;
+    color: #475569;
+    padding-top: 2px;
+    border-top: 1px solid rgba(148, 163, 184, 0.28);
   }
 
-  .tt-sector {
-    font-size: 0.7rem;
-    color: #52796b;
+  .sp-sector {
+    font-family: ${({ theme }) => theme.fonts.sans};
     font-weight: 600;
+    color: #52796b;
   }
 `;
+
+const _sharedFrameBoxGeometry = new THREE.BoxGeometry(1.38, 0.012, 0.82);
+
+/** Moldura CAD de seleção (azul) ou alerta (âmbar/vermelho) sobre o tampo */
+function StatusPerimeterFrame({ isSelected, isAlert, alertColor }) {
+  if (!isSelected && !isAlert) return null;
+  const frameColor = isSelected ? '#3B82F6' : alertColor;
+  const bracketColor = isSelected ? '#60A5FA' : alertColor;
+
+  return (
+    <group position={[0, 0.005, 0]}>
+      <lineSegments>
+        <edgesGeometry args={[_sharedFrameBoxGeometry]} />
+        <lineBasicMaterial color={frameColor} linewidth={2} />
+      </lineSegments>
+      {[-0.69, 0.69].map((cx) =>
+        [-0.41, 0.41].map((cz) => (
+          <mesh key={`bracket-${cx}-${cz}`} position={[cx, 0.008, cz]}>
+            <boxGeometry args={[0.06, 0.015, 0.06]} />
+            <meshBasicMaterial color={bracketColor} />
+          </mesh>
+        ))
+      )}
+    </group>
+  );
+}
+
+/** Barra superior no gabinete e filete na base do monitor visíveis em 360 graus */
+function StatusBeacon3D({ badgeTheme, isOffline }) {
+  return (
+    <group>
+      {/* Friso luminoso superior no gabinete (visível de frente, de costas e top-down) */}
+      <mesh position={[0.42, 0.354, 0.06]}>
+        <boxGeometry args={[0.12, 0.010, 0.28]} />
+        <meshStandardMaterial
+          color={badgeTheme.beacon}
+          emissive={badgeTheme.beacon}
+          emissiveIntensity={isOffline ? 0.0 : badgeTheme.emissive}
+          roughness={0.2}
+        />
+      </mesh>
+      {/* Filete luminoso discreto sobre a base do monitor */}
+      <mesh position={[-0.06, 0.014, 0.10]}>
+        <boxGeometry args={[0.18, 0.005, 0.12]} />
+        <meshStandardMaterial
+          color={badgeTheme.beacon}
+          emissive={badgeTheme.beacon}
+          emissiveIntensity={isOffline ? 0.0 : badgeTheme.emissive * 0.85}
+          roughness={0.25}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+/** Pílula flutuante de status permanente e clicável acima da estação */
+function WorkstationStatusPill({
+  machine,
+  badgeTheme,
+  isOffline,
+  isSelected,
+  hovered,
+  showLabel,
+  onSelect,
+  onHover,
+}) {
+  const isAlert = machine.health_status === 'WARNING' || machine.health_status === 'CRITICAL';
+  if (!showLabel && !isAlert && !isSelected && !hovered) return null;
+
+  const cpuPct = Math.round(Number(machine.cpu_usage_pct || 0));
+  const ramPct = Math.round(Number(machine.ram_usage_pct || 0));
+
+  return (
+    <Html position={[0, 0.52, 0]} center distanceFactor={15} zIndexRange={[10, 0]}>
+      <StatusPillBadge
+        type="button"
+        $badgeBg={badgeTheme.bg}
+        $borderColor={badgeTheme.border}
+        $dotColor={badgeTheme.dot}
+        $tagText={badgeTheme.text}
+        $tagBg={badgeTheme.pillBg}
+        $isSelected={isSelected}
+        $animate={!isOffline}
+        $fastPulse={badgeTheme.fastPulse}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onSelect) onSelect(machine);
+        }}
+        onMouseEnter={() => onHover(true)}
+        onMouseLeave={() => onHover(false)}
+      >
+        <div className="sp-top">
+          <span className="sp-dot" />
+          <span className="sp-host">{machine.hostname}</span>
+          <span className="sp-tag">{badgeTheme.label}</span>
+        </div>
+        {(hovered || isSelected) && (
+          <div className="sp-extra">
+            <span>{machine.ip_address}</span>
+            <span>CPU {cpuPct}%</span>
+            <span>RAM {ramPct}%</span>
+            {machine.sector_name && (
+              <span className="sp-sector">{fixTextEncoding(machine.sector_name)}</span>
+            )}
+          </div>
+        )}
+      </StatusPillBadge>
+    </Html>
+  );
+}
 
 /**
  * Gera textura de tela realista de SO profissional em Canvas (evita telas monocromáticas neon)
@@ -188,14 +387,17 @@ export function WorkstationModel({
   machine,
   isSelected = false,
   onSelect,
+  showLabel = true,
   position = [0, 0.76, 0],
   rotation = [0, 0, 0],
 }) {
   const [hovered, setHovered] = useState(false);
   const { scene } = useGLTF('/models/tech/workstation_pc.glb?v=24');
 
-  const statusColor = theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
-  const isOffline = machine.health_status === 'OFFLINE';
+  const statusKey = STATUS_BADGE_THEME[machine.health_status] ? machine.health_status : 'NORMAL';
+  const badgeTheme = STATUS_BADGE_THEME[statusKey];
+  const isOffline = statusKey === 'OFFLINE';
+  const isAlert = statusKey === 'WARNING' || statusKey === 'CRITICAL';
 
   // Textura realista de área de trabalho obtida do cache singleton
   const screenTexture = useMemo(
@@ -233,44 +435,36 @@ export function WorkstationModel({
       }
       // 2. StatusLed: Indicador principal de estado de saúde do equipamento
       if (child.name === 'StatusLed' && child.material) {
-        child.material.color.set(statusColor);
+        child.material.color.set(badgeTheme.beacon);
         if ('emissive' in child.material) {
-          child.material.emissive.set(statusColor);
-          child.material.emissiveIntensity = isOffline ? 0.0 : 2.0;
+          child.material.emissive.set(badgeTheme.beacon);
+          child.material.emissiveIntensity = isOffline ? 0.0 : badgeTheme.emissive;
         }
         child.material.needsUpdate = true;
       }
-      // 3. ActivityLed: Led de atividade do gabinete
+      // 3. ActivityLed: Led de atividade do gabinete sincronizado com o status
       if (child.name === 'ActivityLed' && child.material) {
-        child.material.color.set(isOffline ? '#374151' : '#3B82F6');
+        child.material.color.set(isOffline ? '#374151' : badgeTheme.beacon);
         if ('emissive' in child.material) {
-          child.material.emissive.set(isOffline ? '#000000' : '#3B82F6');
-          child.material.emissiveIntensity = isOffline ? 0.0 : 1.5;
+          child.material.emissive.set(isOffline ? '#000000' : badgeTheme.beacon);
+          child.material.emissiveIntensity = isOffline ? 0.0 : badgeTheme.emissive * 0.9;
         }
         child.material.needsUpdate = true;
       }
     });
-  }, [modelInstance, screenTexture, isOffline, statusColor]);
+  }, [modelInstance, screenTexture, isOffline, badgeTheme]);
 
   return (
     <group position={position} rotation={rotation}>
-      {/* Contorno de seleção elegante e discreto (substitui o halo luminoso por contorno fino com cantos CAD) */}
-      {isSelected && (
-        <group position={[0, 0.005, 0]}>
-          <lineSegments>
-            <edgesGeometry args={[new THREE.BoxGeometry(1.38, 0.012, 0.82)]} />
-            <lineBasicMaterial color="#3B82F6" linewidth={2} />
-          </lineSegments>
-          {[-0.69, 0.69].map((cx) =>
-            [-0.41, 0.41].map((cz) => (
-              <mesh key={`bracket-${cx}-${cz}`} position={[cx, 0.008, cz]}>
-                <boxGeometry args={[0.06, 0.015, 0.06]} />
-                <meshBasicMaterial color="#60A5FA" />
-              </mesh>
-            ))
-          )}
-        </group>
-      )}
+      {/* Camada 3: Moldura CAD semântica de seleção (azul) ou alerta (âmbar/vermelho) */}
+      <StatusPerimeterFrame
+        isSelected={isSelected}
+        isAlert={isAlert}
+        alertColor={badgeTheme.dot}
+      />
+
+      {/* Camada 2: Sinalizador luminoso 3D omnidirecional 360° no gabinete e base */}
+      <StatusBeacon3D badgeTheme={badgeTheme} isOffline={isOffline} />
 
       {/* Modelo GLB Profissional Interativo */}
       <primitive
@@ -286,19 +480,17 @@ export function WorkstationModel({
         onPointerOut={() => setHovered(false)}
       />
 
-      {/* Tooltip flutuante no hover */}
-      {hovered && (
-        <Html position={[0, 0.55, 0]} distanceFactor={14}>
-          <DeviceTooltip $statusColor={statusColor}>
-            <div className="tt-head">
-              <span className="tt-status-dot" />
-              <span>{machine.hostname}</span>
-            </div>
-            <div className="tt-meta">{machine.ip_address}</div>
-            <div className="tt-sector">{fixTextEncoding(machine.sector_name)}</div>
-          </DeviceTooltip>
-        </Html>
-      )}
+      {/* Camada 1: Pílula flutuante permanente de status (expande no hover/seleção) */}
+      <WorkstationStatusPill
+        machine={machine}
+        badgeTheme={badgeTheme}
+        isOffline={isOffline}
+        isSelected={isSelected}
+        hovered={hovered}
+        showLabel={showLabel}
+        onSelect={onSelect}
+        onHover={setHovered}
+      />
     </group>
   );
 }
@@ -306,26 +498,30 @@ export function WorkstationModel({
 useGLTF.preload('/models/tech/workstation_pc.glb?v=24');
 
 /**
- * MODELO PROCEDURAL DE FALLBACK (Preservado para as demais máquinas até validação)
+ * MODELO PROCEDURAL DE FALLBACK (Preservado para contingência de carregamento)
  */
 export function FallbackWorkstationModel({
   machine,
   isSelected = false,
   onSelect,
+  showLabel = true,
   position = [0, 0.76, 0],
   rotation = [0, 0, 0],
 }) {
   const [hovered, setHovered] = useState(false);
-  const statusColor = theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
+  const statusKey = STATUS_BADGE_THEME[machine.health_status] ? machine.health_status : 'NORMAL';
+  const badgeTheme = STATUS_BADGE_THEME[statusKey];
+  const isOffline = statusKey === 'OFFLINE';
+  const isAlert = statusKey === 'WARNING' || statusKey === 'CRITICAL';
 
   return (
     <group position={position} rotation={rotation}>
-      {isSelected && (
-        <mesh position={[0, -0.74, 0]}>
-          <planeGeometry args={[1.7, 1.5]} />
-          <meshBasicMaterial color="#52796B" transparent opacity={0.2} side={THREE.DoubleSide} />
-        </mesh>
-      )}
+      <StatusPerimeterFrame
+        isSelected={isSelected}
+        isAlert={isAlert}
+        alertColor={badgeTheme.dot}
+      />
+      <StatusBeacon3D badgeTheme={badgeTheme} isOffline={isOffline} />
       <group
         onClick={(e) => {
           e.stopPropagation();
@@ -369,18 +565,16 @@ export function FallbackWorkstationModel({
           <meshStandardMaterial color="#1E293B" />
         </mesh>
       </group>
-      {hovered && (
-        <Html position={[0, 0.6, 0]} distanceFactor={14}>
-          <DeviceTooltip $statusColor={statusColor}>
-            <div className="tt-head">
-              <span className="tt-status-dot" />
-              <span>{machine.hostname}</span>
-            </div>
-            <div className="tt-meta">{machine.ip_address}</div>
-            <div className="tt-sector">{fixTextEncoding(machine.sector_name)}</div>
-          </DeviceTooltip>
-        </Html>
-      )}
+      <WorkstationStatusPill
+        machine={machine}
+        badgeTheme={badgeTheme}
+        isOffline={isOffline}
+        isSelected={isSelected}
+        hovered={hovered}
+        showLabel={showLabel}
+        onSelect={onSelect}
+        onHover={setHovered}
+      />
     </group>
   );
 }

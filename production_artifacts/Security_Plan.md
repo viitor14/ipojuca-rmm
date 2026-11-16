@@ -158,3 +158,18 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
   2. **Integridade Local dos Binários GLB:** Todos os 6 modelos de mobiliário e periféricos foram regenerados localmente via Blender 4.2.16 LTS com geometrias chanfradas e materiais PBR padrão, sem scripts ou extensões arbitrárias.
   3. **Preservação de Segurança de Endpoints:** Nenhuma rota da API, autorização JWT, HMAC de agente ou fluxo do `DiagnosticDrawer` sofreu alteração.
 - **Parecer `@security`:** **APROVADO**. Conformidade integral com a arquitetura segura do RMM Ipojuca.
+
+
+---
+
+## 13. Parecer de Segurança — Ciclo #25 (Segurança de UI Flutuante 3D e Minimização de Dados nos Badges)
+
+**Responsável:** `@security`  
+**Skills Consultadas:** `.agents/skills/security/threat_modeling.md`, `.agents/skills/security/endpoint_security.md`, `.agents/skills/security/security_audit.md`
+
+- **Risco Avaliado:** Exposição permanente de informações em badges `<Html>` na tela 3D (`StatusPillBadge`), potencial risco de XSS por renderização de nomes de máquinas e sobrecarga/vazamento de geometrias WebGL na sinalização perimetral.
+- **Controles Verificados:**
+  1. **Escaping Nativo JSX e Minimização de Dados:** `WorkstationStatusPill` renderiza `hostname`, `ip_address`, `cpu_usage_pct`, `ram_usage_pct` e `sector_name` exclusivamente como nós de texto JSX escapados automaticamente pelo React (sem `dangerouslySetInnerHTML`), omitindo qualquer credencial, token ou dado sensível clínico.
+  2. **Prioridade Operacional para Alertas (`WARNING` / `CRITICAL`):** Mesmo quando o operador oculta rótulos informativos na barra superior (`sceneLayers.labels = false`), incidentes críticos continuam visíveis, prevenindo o mascaramento acidental de alertas de infraestrutura hospitalar.
+  3. **Geometria CAD Compartilhada (`_sharedFrameBoxGeometry`):** A moldura utiliza instância única compartilhada e apenas propriedades reativas no `useEffect`, prevenindo alocação repetida de `BoxGeometry` na GPU durante atualizações WebSocket.
+- **Parecer `@security`:** **APROVADO PELO `@security`**. Seguro para operadores autenticados e conforme com a LGPD.

@@ -244,3 +244,19 @@ Para assegurar credibilidade visual de maquete arquitetônica premium (estética
 - **Respiro nas Paredes e Janelas:** A janela norte-oeste (`[-3.30, -2.00]`) fica completamente desimpedida tanto em relação ao armário (`X <= -3.42`) quanto em relação ao quadro de arte (`X = -1.45`), restaurando a entrada de luz natural e a leitura arquitetônica da sala.
 - **Longarina com Visada de Atendimento:** Com rotação `-90°` (`-Math.PI / 2`), os 3 assentos em polipropileno azul ardósia voltados para o centro da recepção convidam o usuário visualmente para a área de espera, com viga contínua alinhada na altura correta (`0.38m`).
 - **Balcão Funcional e Limpo:** A impressora térmica repousa na extremidade oeste do tampo superior público (`Y = 1.10m`), liberando toda a visão da estação piloto (`machine.id = 9`) sobre a bancada interna de carvalho (`Y = 0.76m`).
+
+
+---
+
+## 12. Linguagem Visual de Telemetria em 3 Camadas — Ciclo #25
+
+**Responsável:** `@designer`  
+**Skills Consultadas:** `.agents/skills/designer/design_system.md`, `.agents/skills/designer/ux_dashboard.md`
+
+### 1. Hierarquia Visual Sem Ruído Poluído
+- **Paleta Semântica Refinada (`STATUS_BADGE_THEME`):**
+  - `NORMAL` (`ONLINE`): Esmeralda institucional (`#10B981`), pulso lento (`2.4s`), fundo translúcido claro (`rgba(255,255,255,0.94)`).
+  - `WARNING` (`ATENÇÃO`): Âmbar de alerta (`#F59E0B`), pulso acelerado (`1.1s`), fundo marfim suave (`rgba(255,251,235,0.97)`) + moldura CAD âmbar no tampo.
+  - `CRITICAL` (`CRÍTICO`): Vermelho crítico (`#EF4444`), pulso acelerado (`1.1s`), fundo coral suave (`rgba(254,242,242,0.97)`) + moldura CAD vermelha no tampo.
+  - `OFFLINE` (`OFFLINE`): Ardósia neutra (`#64748B`), emissividade zerada (`0.0`), sem animação de pulso e tela em modo standby.
+- **Equilíbrio com Estética Habblaude:** O monitor mantém sua tela corporativa realista (sem blocos sólidos neon cobrindo o display), enquanto a leitura de estado é imediatamente óbvia tanto pelo *pill badge* flutuante quanto pelo friso LED no topo do gabinete visível em 360°.

@@ -1095,3 +1095,44 @@ A auditoria matemática de *bounding boxes* no espaço nativo glTF / Three.js id
 - **Status:** **100% APROVADO PELO `@qa` E `@lead`**
 - Auditoria de *bounding boxes* com 0 violações de parede e 0 intersecções entre móveis/balcão/bancada/PC.
 - Renders Blender 4.2.16 LTS (`reception_topdown_comparison.png` e `reception_full_room.png`) e build Vite validados após todas as edições.
+
+
+---
+
+## Ciclo #25 — Identificação Visual de Status em 3 Camadas no Gêmeo Digital (`@qa`)
+
+**Data:** 2026-11-16  
+**Fase:** FASE 9 — Testes e Auditoria  
+**Responsável:** `@qa`  
+**Skills Consultadas:** `.agents/skills/qa/test_strategy.md`, `.agents/skills/qa/quality_audit.md`  
+**Status do Ciclo:** **100% APROVADO**
+
+---
+
+### 1. Resumo Executivo da Validação
+
+O Ciclo #25 implementou um sistema de sinalização visual de status em 3 camadas complementares para todos os computadores em [WorkstationModel.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/models/WorkstationModel.jsx) (tanto no modelo GLB quanto no `FallbackWorkstationModel`) integrado ao controle de camadas em [DigitalTwin3D.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DigitalTwin3D.jsx):
+
+1. **Camada 1 — `WorkstationStatusPill` (`<Html>` Drei):** Pílula flutuante permanente em `position={[0, 0.52, 0]}` exibindo ponto de LED animado (`statusPulse`), `hostname` e tag semântica (`ONLINE`, `ATENÇÃO`, `CRÍTICO`, `OFFLINE`), clicável para selecionar e com expansão no hover/seleção mostrando `IP`, `CPU%`, `RAM%` e setor. Alertas `WARNING`/`CRITICAL` e máquinas selecionadas permanecem visíveis mesmo com `sceneLayers.labels = false`.
+2. **Camada 2 — `StatusBeacon3D` (360°):** Barra LED superior sobre o gabinete (`[0.42, 0.354, 0.06]`) e filete discreto sobre a base do monitor (`[-0.06, 0.014, 0.10]`), além da sincronização de `StatusLed` e `ActivityLed` via `useEffect`, tornando o estado legível de frente, de costas e *top-down*.
+3. **Camada 3 — `StatusPerimeterFrame`:** Contorno CAD sobre a mesa utilizando `_sharedFrameBoxGeometry` reutilizável em azul (`#3B82F6`) quando selecionada e âmbar/vermelho (`#F59E0B` / `#EF4444`) em incidentes.
+
+---
+
+### 2. Matriz de Verificação dos Critérios de Aceitação (`CA-102` a `CA-106`)
+
+| ID | Critério de Aceitação | Verificação Realizada | Resultado Obtido | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-102** | **Leitura Imediata sem Passar o Mouse** | Inspeção de `WorkstationStatusPill` e renders de validação (`reception_topdown_comparison.png`, `reception_full_room.png`). | Status visual imediatamente legível acima de todas as estações sem necessidade de hover individual. | **APROVADO** |
+| **CA-103** | **Visibilidade em 360° (Inclusive de Costas)** | Inspeção dos Postos 3 e 4 (de costas para câmera isométrica) nos renders Blender `1920x1080` e inspeção do JSX `StatusBeacon3D`. | Barra no topo do gabinete (`[0.42, 0.354, 0.06]`) e base iluminada alinhadas perfeitamente e visíveis de todos os ângulos. | **APROVADO** |
+| **CA-104** | **Distinção Clara de Incidentes** | Verificação de `STATUS_BADGE_THEME` e simulação do Posto 3 em `WARNING` (`ATENÇÃO`) no render `task-2380`. | Estação em `WARNING` destaca-se instantaneamente em âmbar (barra superior, base, pílula e moldura CAD); `CRITICAL` em vermelho pulsante; `OFFLINE` sem emissividade (`0.0`). | **APROVADO** |
+| **CA-105** | **Clique, Hover e `DiagnosticDrawer`** | Auditoria de eventos `onClick`/`onMouseEnter`/`onSelect` em `WorkstationStatusPill` e `<primitive>`. | Clique na pílula ou no PC aciona `onSelect(machine)`, foco de câmera e abertura do drawer; hover/seleção expande IP/CPU/RAM/setor. | **APROVADO** |
+| **CA-106** | **Tela Realista Preservada e Build Limpo** | Inspeção do shader `ScreenDisplay` e execução do build Vite após os ajustes finais. | `ScreenDisplay` mantém `CanvasTexture` realista de desktop dark corporativo (nunca neon sólido); build Vite validado com exit code 0. | **APROVADO** |
+
+---
+
+### 3. Parecer do Gate de Qualidade — Ciclo #25 (`@qa` + `@lead`)
+
+- **Status:** **100% APROVADO PELO `@qa` E `@lead`**
+- Todas as 3 camadas complementares implementadas de forma modular e reativa sem alocações redundantes de GPU.
+- Pronto para build final de produção, commit e sincronização Git.

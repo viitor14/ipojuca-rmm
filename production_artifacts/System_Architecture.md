@@ -496,3 +496,23 @@ A auditoria binária nos arquivos GLB no espaço nativo do Three.js estabeleceu:
 
 ### 3. Estratégia de Cache-Busting no React Three Fiber / Drei
 - Adicionado sufixo de versão `?v=24` em todas as chamadas `useGLTF` e `useGLTF.preload` dos 7 componentes em `frontend/src/components/models/*.jsx`, assegurando invalidação imediata de cache HTTP de navegador para assets `.glb` atualizados.
+
+
+---
+
+## 17. Arquitetura de Identificação Visual de Status em 3 Camadas no R3F — Ciclo #25
+
+**Responsável:** `@lead`  
+**Skills Consultadas:** `.agents/skills/lead/system_architecture.md`, `.agents/skills/lead/technical_orchestration.md`
+
+### 1. Estrutura Modular de Sinalização em `WorkstationModel.jsx`
+Para permitir leitura imediata do estado de saúde (`NORMAL`, `WARNING`, `CRITICAL`, `OFFLINE`) em qualquer ângulo (inclusive de costas e *top-down*) sem violar a diretriz de tela realista com wallpaper de SO em `CanvasTexture`, foi implantado um padrão desacoplado de 3 camadas reativas sobre `WorkstationModel` e `FallbackWorkstationModel`:
+
+1. **`WorkstationStatusPill` (`<Html position={[0, 0.52, 0]} center distanceFactor={15} zIndexRange={[10, 0]}>`):**
+   - Pílula HTML sobreposta e clicável (`type="button"`), exibindo ponto de LED pulsante, `machine.hostname` e rótulo oficial traduzido (`ONLINE`, `ATENÇÃO`, `CRÍTICO`, `OFFLINE` via `STATUS_LABELS`).
+   - Quando `hovered || isSelected`, expande uma barra complementar com `IP`, `CPU%`, `RAM%` e setor.
+   - Respeita `showLabel` controlado por `sceneLayers.labels !== false` em `DigitalTwin3D.jsx`, mantendo estações em `WARNING`/`CRITICAL` ou selecionadas sempre visíveis por segurança operacional.
+2. **`StatusBeacon3D` (Geometria Leve 360° Reativa):**
+   - `TowerTopBeacon` (`boxGeometry [0.12, 0.010, 0.28]` em `[0.42, 0.354, 0.06]`) sobre o topo do gabinete e `MonitorBaseBeacon` (`[0.18, 0.005, 0.12]` em `[-0.06, 0.014, 0.10]`) sobre a base do monitor, além de sincronização de `StatusLed` e `ActivityLed` via `useEffect`.
+3. **`StatusPerimeterFrame` (Moldura CAD de Estado no Tampo):**
+   - Reutiliza geometria estática compartilhada (`_sharedFrameBoxGeometry`) sem alocar buffers por renderização, destacando em azul (`#3B82F6`) quando `isSelected` e em âmbar/vermelho (`#F59E0B` / `#EF4444`) quando em incidente (`WARNING` / `CRITICAL`).
