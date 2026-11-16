@@ -211,3 +211,22 @@ Em continuidade direta à homologação do `workstation_pc.glb`, a biblioteca de
 ### 2. Parâmetros de Iluminação e Sombras Suaves (Soft Studio Lighting)
 - **Direcional Principal:** Intensidade 1.15, `shadow-bias={-0.00004}`, `shadow-normalBias={0.025}`, `shadow-radius={2.5}`. Penumbra de contato suave e gradual sob as sapatas dos móveis e rodízios das cadeiras.
 - **Luz de Preenchimento:** Luz fria difusa secundária em ângulo oposto, preenchendo as cavidades verticais e eliminando faixas escuras.
+
+
+---
+
+## 10. Ergonomia de Posto de Trabalho — Alinhamento entre Cadeira, Vão de Pernas, Teclado e Monitor — Ciclo #23
+
+**Responsável:** `@designer`  
+**Skills Consultadas:** `.agents/skills/designer/design_system.md`, `.agents/skills/designer/ux_dashboard.md`
+
+### 1. Diretrizes de Ergonomia Visual e Antropometria 3D
+Para assegurar credibilidade visual de maquete arquitetônica premium (estética Habblaude) em todos os postos do hospital:
+- **Relação Cadeira $\leftrightarrow$ Mesa $\leftrightarrow$ Periféricos:**
+  - A cadeira ergonômica (`ergonomic_chair.glb`) deve obrigatoriamente situar-se no mesmo lado do teclado, mouse e tela do monitor (frente funcional da mesa), jamais atrás do painel de modéstia ou das costas do monitor.
+  - O eixo lateral $X = -0.15\text{m}$ alinha o usuário diretamente ao teclado (`kbd_x = -0.06m`) e à faixa central do vão livre de pernas da `office_desk.glb` ($X \in [-0.60, +0.20]$), garantindo distância confortável em relação ao gaveteiro lateral direito ($X \ge +0.23\text{m}$).
+  - A distância de profundidade $Z = -0.52\text{m}$ com rotação de $180^\circ$ acomoda a borda frontal do assento próximo ao tampo sem intersecção de geometrias com as gavetas.
+- **Orientação Funcional dos Atendentes na Recepção:**
+  - Todos os postos da recepção seguem o princípio de **atendimento voltado para o fluxo**:
+    - No balcão (Posto 1), o atendente opera dentro da cabine voltado para o visor de vidro e para o acesso público.
+    - Nos postos de parede norte e sul (Postos 2, 3 e 4), o operador senta entre a mesa e a parede, olhando para a área central de circulação e recepcionando o paciente pelo lado frontal do painel de modéstia.

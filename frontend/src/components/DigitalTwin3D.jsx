@@ -1226,16 +1226,16 @@ function computeMachineLayout(machines, sectors) {
     const isReception = sector.code === 'REC' || Number(sector.id) === 1;
 
     if (isReception) {
-      // Layout ergonômico e desobstruído da Recepção (Ciclo #22)
+      // Layout ergonômico e desobstruído da Recepção (Ciclo #23)
       const receptionSlots = [
         // Posto 1: Atendimento Principal (Piloto machine.id = 9) integrado à bancada do balcão em L
-        { x: bx - 1.85, z: bz + 0.95, rotY: 0, hideDesk: true },
-        // Posto 2: Atendimento Secundário / Apoio (Mesa executiva independente)
-        { x: bx + 2.20, z: bz + 0.85, rotY: 0 },
-        // Posto 3: Triagem Clínica (Quadrante norte, voltado para a circulação)
-        { x: bx - 1.20, z: bz - 1.25, rotY: Math.PI },
-        // Posto 4: Regulação / Pós-Consulta (Quadrante nordeste, voltado para a circulação)
-        { x: bx + 2.20, z: bz - 1.25, rotY: Math.PI },
+        { x: bx - 1.85, z: bz + 0.98, rotY: Math.PI, hideDesk: true },
+        // Posto 2: Atendimento Secundário / Apoio (Mesa executiva sul, atendente voltado para o norte)
+        { x: bx + 2.20, z: bz + 0.85, rotY: Math.PI },
+        // Posto 3: Triagem Clínica (Quadrante norte, atendente voltado para o sul/circulação)
+        { x: bx - 1.20, z: bz - 1.25, rotY: 0 },
+        // Posto 4: Regulação / Pós-Consulta (Quadrante nordeste, atendente voltado para o sul/circulação)
+        { x: bx + 2.20, z: bz - 1.25, rotY: 0 },
       ];
       ordered.forEach((m, i) => {
         const slot = receptionSlots[i] || {
@@ -1279,7 +1279,7 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos }) {
       {!hideDesk && <DeskModel position={[0, 0, 0]} />}
 
       {/* 2. CADEIRA DE ESCRITÓRIO ERGONÔMICA (ergonomic_chair.glb) */}
-      <ChairModel position={[-0.08, 0, 0.54]} />
+      <ChairModel position={[-0.15, 0, -0.52]} rotation={[0, Math.PI, 0]} />
 
       {/* 3. ESTAÇÃO DE TRABALHO PC: Modelo GLB profissional workstation_pc.glb */}
       <WorkstationModel

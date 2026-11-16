@@ -227,11 +227,11 @@ def build_reception_counter():
     mat_glass = make_pbr_material("Mat_GlassVisor", (0.92, 0.95, 0.98, 0.4), roughness=0.05, transmission=0.90)
     mat_metal = make_pbr_material("Mat_ChromeFixtures", (0.80, 0.82, 0.85, 1.0), roughness=0.20, metallic=0.90)
     
-    # 1. Corpo Frontal Principal (Comprimento 2.80m, Profundidade 0.70m, Altura 1.06m)
-    add_beveled_box("FrontBody", (2.80, 0.68, 1.04), (0.0, 0.0, 0.54), mat_lacquer, bevel_width=0.010, segments=3)
+    # 1. Corpo Frontal Principal (Comprimento 2.80m, Espessura da mureta 0.26m, Altura 1.06m)
+    add_beveled_box("FrontBody", (2.80, 0.26, 1.04), (0.0, 0.21, 0.54), mat_lacquer, bevel_width=0.010, segments=3)
     
     # Rodapé frontal em madeira nobre
-    add_beveled_box("Baseboard_Front", (2.82, 0.70, 0.08), (0.0, 0.0, 0.04), mat_wood_trim, bevel_width=0.004)
+    add_beveled_box("Baseboard_Front", (2.82, 0.28, 0.08), (0.0, 0.21, 0.04), mat_wood_trim, bevel_width=0.004)
     
     # Friso canelado / decorativo frontal
     for i in range(11):
@@ -252,7 +252,7 @@ def build_reception_counter():
     add_beveled_box("ReturnTopPublic", (0.38, 1.56, 0.04), (-1.21, -0.80, 1.08), mat_oak_top, bevel_width=0.010, segments=4)
     
     # 5. Bancada de Trabalho Interna (Altura 0.76m, para computadores e papéis)
-    add_beveled_box("InternalDesk", (2.00, 0.45, 0.035), (0.35, -0.15, 0.7425), mat_oak_top, bevel_width=0.006)
+    add_beveled_box("InternalDesk", (2.08, 0.52, 0.035), (0.32, -0.18, 0.7425), mat_oak_top, bevel_width=0.006)
     
     export_glb(os.path.join(output_furniture, "reception_counter.glb"))
 

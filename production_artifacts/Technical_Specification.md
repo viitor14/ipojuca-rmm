@@ -1440,3 +1440,88 @@ Apresentamos a especificação detalhada para a **resolução definitiva dos bug
 > [!IMPORTANT]
 > Nenhuma linha de código será modificada antes da aprovação explícita.
 > Por favor, responda com **`Approved`** para autorizarmos as equipes `@lead`, `@frontend` e `@engineer` a aplicarem as correções e gerarem os novos renders de validação!
+
+
+---
+
+## 41. Ciclo #23 — Correção do Posicionamento e Orientação da Cadeira em Relação ao Computador e Mesa
+
+### 1. Diagnóstico do Problema Reportado pelo Usuário (`@pm` + `@designer`)
+
+O usuário reportou:
+> *"A cadeira ficou do lado errado do pc"*
+
+A inspeção técnica das coordenadas locais em `ComputerAvatarVoxel`, `DeskModel`, `WorkstationModel` e `ChairModel` confirmou o defeito geométrico:
+
+1. **Inversão de Lado no Eixo de Profundidade (Z):**
+   - No modelo do computador (`workstation_pc.glb`), o monitor está posicionado com a tela voltada para o eixo `-Z`. O teclado, a barra de espaço, o mouse e o mousepad estão situados em `-Z` (lado frontal).
+   - No modelo da mesa (`office_desk.glb`), a abertura para as pernas e as frentes das 3 gavetas com puxadores estão no eixo `-Z` (lado do operador). O painel de modéstia traseiro (*modesty panel*) está no eixo `+Z` (costas da mesa).
+   - No entanto, o componente `ComputerAvatarVoxel` instanciava a cadeira como:
+     ```jsx
+     <ChairModel position={[-0.08, 0, 0.54]} />
+     ```
+   - A cadeira foi posicionada em `+0.54m` (+Z), ou seja, **ATRÁS DA MESA E ATRÁS DO MONITOR**, colidindo com o painel de modéstia de madeira/aço e ficando do lado oposto ao teclado!
+   - Quem sentasse na cadeira ficaria olhando para a carcaça traseira do monitor e para as costas da mesa, enquanto o teclado e a tela estavam do outro lado.
+
+2. **Inversão Angular da Cadeira (Rotação):**
+   - O modelo `ergonomic_chair.glb` possui seu encosto (*backrest* e apoio de cabeça) no eixo positivo e o assento voltado para a frente.
+   - Como a cadeira era instanciada sem rotação (`rotation={[0, 0, 0]}`), mesmo se estivesse do lado correto, estaria virada de costas para a mesa.
+   - Para que a cadeira fique virada **PARA** o computador (assento voltado para o tampo e teclado), ela deve ter rotação de 180° (`rotation={[0, Math.PI, 0]}`).
+
+3. **Alinhamento com o Vão de Pernas do Gaveteiro:**
+   - A mesa executiva `office_desk.glb` tem 1,40m de largura: o gaveteiro ocupa a lateral direita (`x = +0.23m` a `+0.65m`), e o vão livre de pernas ocupa a lateral esquerda (`x = -0.60m` a `+0.20m`).
+   - O teclado do computador está centrado em `x = -0.06m`.
+   - Posicionar a cadeira em `x = -0.15m` garante alinhamento ergonômico central com o teclado e encaixe suave no vão livre de pernas, sem sobreposição com o gaveteiro.
+
+---
+
+### 2. Solução Arquitetural Proposta (`@lead` + `@frontend`)
+
+1. **Reformulação do Componente `ComputerAvatarVoxel` em `DigitalTwin3D.jsx`:**
+   ```jsx
+   {/* 2. CADEIRA DE ESCRITÓRIO ERGONÔMICA (ergonomic_chair.glb) */}
+   {/* Posicionada no lado frontal do PC/mesa (Z negativo), alinhada ao teclado e vão de pernas, voltada para a tela */}
+   <ChairModel position={[-0.15, 0, -0.52]} rotation={[0, Math.PI, 0]} />
+   ```
+
+2. **Ajuste Espacial da Estação Piloto no Balcão de Recepção (Posto 1):**
+   - O balcão `reception_counter.glb` possui a bancada interna de atendimento (`InternalDesk`) em `z = -0.15m` relativo ao balcão.
+   - Com o Posto 1 posicionado em `z = bz + 0.65` e a cadeira corrigida em `z - 0.52`, a cadeira do recepcionista ficará perfeitamente acomodada dentro da cabine interna do balcão, com o assento voltado para o computador e o atendente olhando para o público através do visor de vidro.
+
+3. **Alinhamento de Rotação dos Postos de Atendimento na Recepção (`receptionSlots`):**
+   - **Posto 1 (Balcão de Entrada):** Atendente na cabine interna, olhando para a circulação/público.
+   - **Postos 3 e 4 (Parede Norte):** Configurados com orientação natural (`rotY: 0`), permitindo que a cadeira fique entre a mesa e a parede norte, com o atendente sentado de frente para a recepção (olhando para o sul) e a frente da mesa voltada para o paciente.
+   - **Posto 2 (Mesa Sul):** Configurado com `rotY: Math.PI`, com a cadeira entre a mesa e a parede sul, atendente olhando para o norte (para dentro da recepção).
+
+---
+
+### 3. Requisitos Funcionais do Ciclo #23 (`@pm`)
+
+- **RF-85 (Posicionamento Frontal da Cadeira em Relação ao PC):** Posicionar a cadeira de escritório no mesmo lado do teclado, do mouse e da tela do monitor (eixo `-Z` local da estação), eliminando a posição errônea atrás do monitor.
+- **RF-86 (Orientação Angular do Assento voltada para a Mesa):** Aplicar rotação de 180° (`rotation={[0, Math.PI, 0]}`) no modelo da cadeira, fazendo com que o assento fique orientado para o tampo da mesa e o encosto fique voltado para fora (posição natural de trabalho).
+- **RF-87 (Encaixe Ergonômico no Vão de Pernas):** Centralizar a cadeira na cota `x = -0.15m` para que o assento se encaixe no vão livre de pernas da mesa executiva `office_desk.glb`, sem colidir com as gavetas do pedestal lateral direito.
+- **RF-88 (Adequação Universal para Todos os Setores):** A correção em `ComputerAvatarVoxel` deve ser aplicada de forma universal para todos os computadores de todos os setores do hospital (Recepção, Consultórios, Farmácia, TI, Administração), garantindo consistência em todo o Gêmeo Digital.
+
+---
+
+### 4. Critérios de Aceitação do Ciclo #23 (`@pm` + `@qa`)
+
+| ID | Critério de Aceitação | Cenário de Teste | Ação do Operador | Resultado Esperado |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-91** | **Cadeira no Lado Correto do PC** | Inspeção de qualquer estação de trabalho com `workstation_pc.glb` | Visualizar a estação em visão isométrica e superior | A cadeira está posicionada no **lado frontal** da mesa, diretamente em frente ao teclado e mouse, e **NÃO** atrás do monitor. |
+| **CA-92** | **Orientação Correta do Assento** | Verificação visual do assento e encosto da cadeira | Observar a direção para onde o assento aponta | O assento da cadeira está virado de frente para o computador/mesa, com o encosto voltado para a circulação. |
+| **CA-93** | **Zero Colisão com o Gaveteiro** | Inspeção da base estrela e braços da cadeira | Aproximar o zoom da mesa executiva | A cadeira repousa no vão livre de pernas, sem encavalar sobre o gaveteiro modular ou sapatas de aço. |
+| **CA-94** | **Cadeira do Balcão Acomodada no Guichê** | Inspeção do Posto 1 (Piloto machine ID 9) no balcão de recepção | Observar a área interna do balcão em L | A cadeira está instalada dentro da cabine do guichê, de frente para a bancada interna e para o monitor do piloto. |
+| **CA-95** | **Integridade de Telemetria e 60 FPS** | Teste de seleção e renderização | Clicar na estação de trabalho e verificar diagnósticos | Seleção CAD funcional, LED reativo à telemetria, `DiagnosticDrawer` funcional e 60 FPS estáveis. |
+
+---
+
+## 42. Gate de Aprovação — FASE 1 (Ciclo #23)
+
+O pipeline do **Ciclo #23** encontra-se **pausado no Gate de Aprovação da Fase 1**.
+
+Apresentamos a especificação técnica detalhada para a correção da posição e orientação das cadeiras em relação aos computadores e mesas no Gêmeo Digital 3D.
+
+> [!IMPORTANT]
+> Nenhuma linha de código será alterada antes da sua aprovação explícita.
+> Por favor, responda com **`Approved`** para que as equipes `@lead`, `@frontend` e `@engineer` possam executar os ajustes, recompilar o frontend e gerar as novas capturas e renders de validação!

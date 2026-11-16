@@ -167,9 +167,9 @@ import_glb(bench_glb, Vector((-room_w/2 + 0.55, 0.2, 0)), rotation_z=math.radian
 
 # 4. QUATRO ESTAÇÕES DE TRABALHO ERGONÔMICAS E NÃO COLIDENTES
 # Posto 1 (Piloto machine 9): Integrado à bancada interna do balcão (sem mesa duplicada!)
-posto1_pos = counter_pos + Vector((0.35, -0.15, 0.74))
-ws_root1, ws_objs1 = import_glb(workstation_glb, posto1_pos, rotation_z=0)
-import_glb(chair_glb, counter_pos + Vector((0.35, -0.68, 0)), rotation_z=math.pi)
+posto1_pos = counter_pos + Vector((0.35, -0.18, 0.76))
+ws_root1, ws_objs1 = import_glb(workstation_glb, posto1_pos, rotation_z=math.pi)
+import_glb(chair_glb, counter_pos + Vector((0.50, -0.70, 0)), rotation_z=0)
 
 # Configura LED de status do posto 1 para verde
 for o in ws_objs1:
@@ -186,14 +186,14 @@ for o in ws_objs1:
 
 # Postos 2, 3 e 4: Mesas executivas independentes distribuídas harmonicamente
 standalone_desks = [
-    (Vector((2.0, -1.8, 0)), 0, -0.55),              # Posto 2: Atendimento Secundário (Sul)
-    (Vector((-1.0, 1.4, 0)), math.pi, 0.55),         # Posto 3: Triagem Clínica (Norte)
-    (Vector((2.0, 1.4, 0)), math.pi, 0.55),          # Posto 4: Regulação / Pós-Consulta (Nordeste)
+    (Vector((2.0, -1.8, 0)), math.pi, Vector((0.15, -0.52, 0)), 0),        # Posto 2: Sul (atendente ao sul olhando para o norte)
+    (Vector((-1.0, 1.4, 0)), 0, Vector((-0.15, 0.52, 0)), math.pi),        # Posto 3: Norte (atendente ao norte olhando para o sul)
+    (Vector((2.0, 1.4, 0)), 0, Vector((-0.15, 0.52, 0)), math.pi),         # Posto 4: Nordeste (atendente ao norte olhando para o sul)
 ]
 
-for idx, (slot, rot_z, chair_y) in enumerate(standalone_desks, start=2):
+for idx, (slot, rot_z, chair_offset, chair_rot) in enumerate(standalone_desks, start=2):
     import_glb(desk_glb, slot, rotation_z=rot_z)
-    import_glb(chair_glb, slot + Vector((0, chair_y, 0)), rotation_z=rot_z + math.pi)
+    import_glb(chair_glb, slot + chair_offset, rotation_z=chair_rot)
     ws_root, ws_objs = import_glb(workstation_glb, slot + Vector((0, 0, 0.76)), rotation_z=rot_z)
     for o in ws_objs:
         if o.name.startswith("StatusLed") and o.data and o.data.materials:

@@ -1000,3 +1000,46 @@ Após os ajustes arquiteturais e geométricos realizados em `frontend/src/compon
 - As falhas visuais de sombra e layout reportadas foram totalmente sanadas.
 - O código-fonte está otimizado, modular e versionável.
 - Pronto para apresentação e validação final do usuário.
+
+
+---
+
+## Ciclo #23 — Correção do Lado e Orientação da Cadeira em Relação ao PC e Mesa (`@qa`)
+
+**Data:** 2026-11-16  
+**Fase:** FASE 9 — Testes e Auditoria  
+**Responsável:** `@qa`  
+**Skills Consultadas:** `.agents/skills/qa/test_strategy.md`, `.agents/skills/qa/quality_audit.md`  
+**Status do Ciclo:** **100% APROVADO**
+
+---
+
+### 1. Resumo Executivo da Validação
+
+O Ciclo #23 corrigiu o posicionamento e a orientação espacial de `ChairModel` (`ergonomic_chair.glb`) dentro de `ComputerAvatarVoxel`, além de recalibrar as rotações dos postos da Recepção (`receptionSlots`) e a profundidade útil da bancada interna (`InternalDesk`) de `reception_counter.glb` para acomodar o Posto Piloto (`machine.id = 9`).
+
+- **Problema Corrigido:** `ChairModel` encontrava-se em `position={[-0.08, 0, 0.54]}` sem rotação, colocando a cadeira atrás do monitor e contra o painel traseiro da mesa, além de virada de costas para o computador. Além disso, no balcão `reception_counter.glb`, a parede frontal (`FrontBody`) tinha `0.68m` de espessura cobrindo quase toda a bancada interna.
+- **Solução Auditada:**
+  - `ComputerAvatarVoxel` atualizado para `<ChairModel position={[-0.15, 0, -0.52]} rotation={[0, Math.PI, 0]} />`.
+  - `receptionSlots` ajustado (`rotY: Math.PI` nos Postos 1 e 2; `rotY: 0` nos Postos 3 e 4; cota `z: bz + 0.98` no Posto 1).
+  - `reception_counter.glb` (`141.468 bytes`) reexportado pelo Blender 4.2 LTS com parede frontal de `0.26m` (`Y = +0.21`) e bancada interna livre de `0.52m` (`Y = -0.18`).
+
+---
+
+### 2. Matriz de Verificação dos Critérios de Aceitação (`CA-91` a `CA-95`)
+
+| ID | Critério de Aceitação | Verificação Realizada | Resultado Obtido | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-91** | **Cadeira no Lado Correto do PC** | Inspeção visual dos renders `reception_topdown_comparison.png` e `reception_full_room.png` após o rebuild do GLB e atualização do JSX. | Em todos os 4 postos da Recepção (e por herança de `ComputerAvatarVoxel` em todos os setores), a cadeira está no mesmo lado do teclado, mouse e tela (`-Z` local). | **APROVADO** |
+| **CA-92** | **Orientação Correta do Assento** | Análise angular do assento e encosto nos renders top-down e isométrico 1920x1080. | Assento voltado para a tela do monitor e teclado; encosto voltado para a circulação/parede traseira em 100% dos postos. | **APROVADO** |
+| **CA-93** | **Zero Colisão com o Gaveteiro** | Verificação do encaixe na cota `X = -0.15m` junto à mesa `office_desk.glb`. | A cadeira encaixa-se no vão livre de pernas à esquerda sem sobreposição com o gaveteiro modular (`Pedestal_Body`). | **APROVADO** |
+| **CA-94** | **Cadeira e PC do Balcão Acomodados no Guichê** | Inspeção do Posto 1 (Piloto ID 9) sobre `InternalDesk` no balcão reexportado (`141.468 bytes`). | Monitor, torre, teclado, mouse e cadeira encontram-se 100% expostos e funcionais na bancada interna, sem afundamento no corpo frontal do balcão. | **APROVADO** |
+| **CA-95** | **Integridade de Telemetria e Build** | Auditoria de `DigitalTwin3D.jsx` e execução limpa de `npm --prefix frontend run build`. | Seleção CAD, `StatusLed`, `DiagnosticDrawer` e Socket.io inalterados; build Vite concluído com sucesso (exit code 0). | **APROVADO** |
+
+---
+
+### 3. Parecer do Gate de Qualidade — Ciclo #23 (`@qa` + `@lead`)
+
+- **Status:** **100% APROVADO PELO `@qa` E `@lead`**
+- Todos os critérios `CA-91` a `CA-95` comprovados por inspeção geométrica e renders atualizados.
+- Pronto para build final, versionamento Git e apresentação ao usuário.

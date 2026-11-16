@@ -446,3 +446,32 @@ Para evitar vazamentos de telemetria entre unidades de saúde municipais no dash
 ### 3. Modelo de Dados de Layout Dinâmico (`computeMachineLayout`)
 - **Propriedade `rotY`:** Cada slot de máquina passa a receber rotação em radianos, orientando atendentes para o centro da sala e eliminando cadeiras de costas para o público.
 - **Propriedade `hideDesk`:** Quando um posto de trabalho está acoplado ao `ReceptionCounterModel` (Posto Piloto machine 9), a renderização da mesa avulsa `office_desk.glb` é suprimida em tempo de renderização, integrando o monitor e o teclado diretamente sobre a bancada interna de carvalho do balcão.
+
+
+---
+
+## 15. Alinhamento de Coordenadas Locais glTF em `ComputerAvatarVoxel` e Orientação Angular dos Postos — Ciclo #23
+
+**Responsável:** `@lead`  
+**Skills Consultadas:** `.agents/skills/lead/system_architecture.md`, `.agents/skills/lead/technical_orchestration.md`
+
+### 1. Mapeamento Exato de Coordenadas Blender $\rightarrow$ glTF 2.0 (Three.js)
+Na exportação via Blender com `export_yup=True` (padrão oficial glTF 2.0):
+- $X_{\text{glTF}} = X_{\text{Blender}}$
+- $Y_{\text{glTF}} = Z_{\text{Blender}}$ (vertical)
+- $Z_{\text{glTF}} = -Y_{\text{Blender}}$ (profundidade frontal/traseira)
+
+A auditoria binária nos arquivos GLB no espaço nativo do Three.js estabeleceu:
+1. **`office_desk.glb`:** Frentes de gaveta e vão de pernas em $Z = -0.36\text{m}$ (frente do operador); painel de modéstia em $Z = +0.33\text{m}$ (costas da mesa). Gaveteiro à direita ($X \in [+0.23, +0.65]$) e vão de pernas à esquerda ($X \in [-0.60, +0.20]$, centro em $X = -0.15\text{m}$).
+2. **`workstation_pc.glb`:** Tela (`ScreenDisplay`) em $Z = +0.082\text{m}$ apontando para $-Z$; teclado e mouse em $Z = -0.16\text{m}$ (`kbd_x = -0.06m`).
+3. **`ergonomic_chair.glb`:** Em `rotation = [0, 0, 0]`, o encosto está em $Z \in [+0.18, +0.265]$ e o assento aponta para $-Z$.
+4. **`reception_counter.glb`:** Visor de vidro público em $Z = -0.18\text{m}$ relativo ao balcão; bancada interna (`InternalDesk`) em $Z = +0.15\text{m}$ relativo ao balcão.
+
+### 2. Contrato de Montagem em `ComputerAvatarVoxel`
+- **`<ChairModel position={[-0.15, 0, -0.52]} rotation={[0, Math.PI, 0]} />`:**
+  - Posiciona a cadeira no lado frontal (`-Z`), alinhada ao teclado e centralizada no vão livre de pernas (`X = -0.15m`).
+  - A rotação de $\pi$ radianos ($180^\circ$) volta o assento para $+Z$ (de frente para o monitor e teclado) e o encosto para fora ($-Z$).
+- **`receptionSlots` em `computeMachineLayout`:**
+  - Posto 1 (Balcão/Piloto ID 9): `rotY: Math.PI`, `hideDesk: true` (atendente na cabine interna, olhando para o visor público em `-Z`).
+  - Posto 2 (Sul): `rotY: Math.PI` (atendente ao sul, voltado para a circulação norte).
+  - Postos 3 e 4 (Norte/Nordeste): `rotY: 0` (atendentes ao norte, voltados para a circulação sul).

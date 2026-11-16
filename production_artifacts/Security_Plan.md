@@ -128,3 +128,18 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
   3. **Preservação de RBAC e Isolamento de Contexto:** A reorganização espacial não altera o consumo de dados de telemetria nem expõe identificadores adicionais do host.
 - **Parecer `@security`:** **APROVADO**. Mudança puramente visual e matemática nos parâmetros de renderização, sem introdução de riscos cibernéticos ou operacionais.
 
+
+
+---
+
+## 11. Parecer de Segurança — Ciclo #23 (Transformações Geométricas Locais de Mobiliário)
+
+**Responsável:** `@security`  
+**Skills Consultadas:** `.agents/skills/security/threat_modeling.md`, `.agents/skills/security/endpoint_security.md`, `.agents/skills/security/security_audit.md`
+
+- **Risco Avaliado:** Alteração de rotação e translação em componentes Three.js (`ComputerAvatarVoxel` e `computeMachineLayout`) com potencial impacto na interatividade de seleção (`raycasting`), exposição de atributos de máquinas ou regressão na renderização de estados críticos.
+- **Controles Verificados:**
+  1. **Ausência de Superfície de Ataque:** A mudança envolve exclusivamente coordenadas locais estáticas (`position={[-0.15, 0, -0.52]}`, `rotation={[0, Math.PI, 0]}`) e vetores de rotação (`rotY`) no frontend React Three Fiber, sem qualquer alteração de APIs, contratos WebSocket, autenticação JWT/RBAC ou catálogo de tarefas remotas.
+  2. **Preservação do Raycasting e Identificação:** O `WorkstationModel` mantém seus metadados de `machine.id`, eventos `onClick`/`onSelect` e `StatusLed` desacoplado de qualquer mutação na cadeira adjacente.
+  3. **Integridade de Assets GLB:** Os arquivos binários `.glb` assinados por hash SHA-256 não sofreram alteração de conteúdo nem re-empacotamento inseguro.
+- **Parecer `@security`:** **APROVADO**. Alteração estritamente espacial e ergonômica sem risco de segurança ou vazamento de dados.
