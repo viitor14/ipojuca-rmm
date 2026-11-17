@@ -65,23 +65,33 @@ for _ in $(seq 1 30); do
 done
 
 echo "[4/5] Aplicando migration de identidade de hardware (idempotente)..."
-# O container mysql expoe MYSQL_USER/MYSQL_PASSWORD/MYSQL_DATABASE (nao DB_*).
-DB_USER_RESOLVED="${MYSQL_USER:-${DB_USER:-}}"
-DB_PASSWORD_RESOLVED="${MYSQL_PASSWORD:-${DB_PASSWORD:-}}"
-DB_NAME_RESOLVED="${MYSQL_DATABASE:-${DB_NAME:-}}"
-
-if [ -z "${DB_USER_RESOLVED}" ] || [ -z "${DB_PASSWORD_RESOLVED}" ] || [ -z "${DB_NAME_RESOLVED}" ]; then
-  echo "ERRO: defina MYSQL_USER/MYSQL_PASSWORD/MYSQL_DATABASE (ou DB_USER/DB_PASSWORD/DB_NAME)." >&2
-  exit 1
+# As credenciais vivem DENTRO do container mysql (MYSQL_USER/MYSQL_PASSWORD/MYSQL_DATABASE).
+# Overrides do host (DB_* ou MYSQL_*) sao opcionais e passados por -e.
+EXEC_ENV=""
+if [ -n "${MYSQL_USER:-${DB_USER:-}}" ]; then
+  EXEC_ENV="${EXEC_ENV} -e MYSQL_USER=${MYSQL_USER:-${DB_USER}}"
 fi
-echo "  usuario=${DB_USER_RESOLVED} banco=${DB_NAME_RESOLVED} (senha oculta)"
+if [ -n "${MYSQL_PASSWORD:-${DB_PASSWORD:-}}" ]; then
+  EXEC_ENV="${EXEC_ENV} -e MYSQL_PASSWORD=${MYSQL_PASSWORD:-${DB_PASSWORD}}"
+fi
+if [ -n "${MYSQL_DATABASE:-${DB_NAME:-}}" ]; then
+  EXEC_ENV="${EXEC_ENV} -e MYSQL_DATABASE=${MYSQL_DATABASE:-${DB_NAME}}"
+fi
 
-# Remove o USE fixo da migration: o banco e selecionado por argumento.
-sed '/^USE /d' "${MIGRATION_FILE}" | docker compose exec -T \
-  -e MYSQL_PWD="${DB_PASSWORD_RESOLVED}" \
-  -e MYSQL_USER="${DB_USER_RESOLVED}" \
-  -e MYSQL_DATABASE="${DB_NAME_RESOLVED}" \
-  mysql sh -c 'mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"'
+# Remove o USE fixo: o banco e selecionado por argumento dentro do container.
+# shellcheck disable=SC2086
+sed '/^USE /d' "${MIGRATION_FILE}" | docker compose exec -T ${EXEC_ENV} mysql sh -c '
+  if [ -z "${MYSQL_USER:-}" ] || [ -z "${MYSQL_DATABASE:-}" ]; then
+    echo "ERRO: MYSQL_USER/MYSQL_DATABASE ausentes no container mysql." >&2
+    exit 1
+  fi
+  if [ -z "${MYSQL_PASSWORD:-}" ] && [ -z "${MYSQL_ROOT_PASSWORD:-}" ]; then
+    echo "ERRO: MYSQL_PASSWORD/MYSQL_ROOT_PASSWORD ausentes no container mysql." >&2
+    exit 1
+  fi
+  echo "  usuario=${MYSQL_USER} banco=${MYSQL_DATABASE} (senha oculta)"
+  MYSQL_PWD="${MYSQL_PASSWORD:-$MYSQL_ROOT_PASSWORD}" exec mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"
+'
 
 echo "[5/5] Verificando capacidades publicadas..."
 curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health"
