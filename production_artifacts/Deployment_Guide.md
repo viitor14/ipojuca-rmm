@@ -119,14 +119,17 @@ cd /opt/ipojuca-rmm && git pull origin main && docker compose up -d --build fron
 
 Conclusão: os containers `backend` e `frontend` da VPS estão anteriores ao Ciclo #26. O código local está correto e testado; falta publicar.
 
-**Comando de atualização (na VPS, como root):**
+**Comando de atualização (na VPS, como root, dentro do repositório):**
 
 ```bash
-cd /opt/ipojuca-rmm && git pull origin main && \
-  bash infrastructure/scripts/deploy_rmm_update.sh
+cd /home/ipojuca-rmm
+git pull origin main
+bash infrastructure/scripts/deploy_rmm_update.sh
 ```
 
-O script `deploy_rmm_update.sh` faz `git pull`, `docker compose up -d --build`, aguarda o healthcheck, aplica `02_hardware_identity_upsert.sql` (idempotente) e valida as capacidades publicadas.
+O script detecta a raiz do repositório pelo próprio caminho (`dirname "$0"/../..`), então funciona em `/home/ipojuca-rmm`, `/opt/ipojuca-rmm` ou qualquer outro diretório, inclusive invocado de fora do repo. `REPO_DIR=/caminho` força outra raiz e `DRY_RUN=1` apenas imprime os passos, sem alterar nada.
+
+O script faz `git pull`, `docker compose up -d --build`, aguarda o healthcheck, aplica `02_hardware_identity_upsert.sql` (idempotente) e valida as capacidades publicadas.
 
 **Validação pós-deploy:**
 

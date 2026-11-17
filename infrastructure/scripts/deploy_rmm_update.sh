@@ -1,26 +1,63 @@
 #!/usr/bin/env bash
 # =============================================================================
 # RMM IPOJUCA - ATUALIZACAO DE CONTAINERS E MIGRATIONS (Ciclos #26 a #28)
-# Executar na VPS (root@srv912524), dentro de /opt/ipojuca-rmm
-# Uso: bash infrastructure/scripts/deploy_rmm_update.sh
+# Executar na VPS, de qualquer diretorio: bash <repo>/infrastructure/scripts/deploy_rmm_update.sh
+# A raiz do repositorio e detectada automaticamente a partir do script.
+# Variaveis opcionais: REPO_DIR, FRONTEND_PORT, BACKEND_PORT, MYSQL_EXTERNAL_PORT, DRY_RUN=1
 # =============================================================================
-set -euo pipefail
+set -eu
 
-REPO_DIR="${REPO_DIR:-/opt/ipojuca-rmm}"
+# $0 funciona tanto em bash quanto em sh/ash (BASH_SOURCE nao existe em ash)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DETECTED_REPO_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_DIR="${REPO_DIR:-${DETECTED_REPO_DIR}}"
 FRONTEND_PORT="${FRONTEND_PORT:-8095}"
 BACKEND_PORT="${BACKEND_PORT:-4005}"
 MYSQL_EXTERNAL_PORT="${MYSQL_EXTERNAL_PORT:-3309}"
+MIGRATION_FILE="infrastructure/mysql/02_hardware_identity_upsert.sql"
+DRY_RUN="${DRY_RUN:-0}"
 
-cd "$REPO_DIR"
+run() {
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "  [dry-run] $*"
+  else
+    "$@"
+  fi
+}
+
+echo "[0/5] Repositorio: ${REPO_DIR}"
+if [ ! -d "${REPO_DIR}/.git" ]; then
+  echo "ERRO: ${REPO_DIR} nao e um repositorio git. Informe REPO_DIR=/caminho/do/repo." >&2
+  exit 1
+fi
+cd "${REPO_DIR}"
+
+if [ ! -f "${MIGRATION_FILE}" ]; then
+  echo "ERRO: migration ${MIGRATION_FILE} nao encontrada. Rode 'git pull origin main' antes." >&2
+  exit 1
+fi
+
+if [ "$DRY_RUN" != "1" ] && ! command -v docker >/dev/null 2>&1; then
+  echo "ERRO: docker nao encontrado no PATH." >&2
+  exit 1
+fi
 
 echo "[1/5] Atualizando codigo (git pull)..."
-git pull origin main
+run git pull origin main
 
 echo "[2/5] Rebuild e subida dos containers (mysql, backend, frontend)..."
-docker compose up -d --build
+run docker compose up -d --build
+
+if [ "$DRY_RUN" = "1" ]; then
+  echo "[3/5] [dry-run] aguardaria o backend em http://127.0.0.1:${BACKEND_PORT}/api/health"
+  echo "[4/5] [dry-run] aplicaria ${MIGRATION_FILE} no container mysql"
+  echo "[5/5] [dry-run] validaria healthcheck e painel"
+  echo "Dry-run concluido sem alterar nada."
+  exit 0
+fi
 
 echo "[3/5] Aguardando o backend responder..."
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
     break
   fi
@@ -30,7 +67,7 @@ done
 echo "[4/5] Aplicando migration de identidade de hardware (idempotente)..."
 docker compose exec -T mysql sh -c \
   'mysql -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME"' \
-  < infrastructure/mysql/02_hardware_identity_upsert.sql
+  < "${MIGRATION_FILE}"
 
 echo "[5/5] Verificando capacidades publicadas..."
 curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health"
