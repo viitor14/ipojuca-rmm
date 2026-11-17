@@ -65,9 +65,23 @@ for _ in $(seq 1 30); do
 done
 
 echo "[4/5] Aplicando migration de identidade de hardware (idempotente)..."
-docker compose exec -T mysql sh -c \
-  'mysql -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME"' \
-  < "${MIGRATION_FILE}"
+# O container mysql expoe MYSQL_USER/MYSQL_PASSWORD/MYSQL_DATABASE (nao DB_*).
+DB_USER_RESOLVED="${MYSQL_USER:-${DB_USER:-}}"
+DB_PASSWORD_RESOLVED="${MYSQL_PASSWORD:-${DB_PASSWORD:-}}"
+DB_NAME_RESOLVED="${MYSQL_DATABASE:-${DB_NAME:-}}"
+
+if [ -z "${DB_USER_RESOLVED}" ] || [ -z "${DB_PASSWORD_RESOLVED}" ] || [ -z "${DB_NAME_RESOLVED}" ]; then
+  echo "ERRO: defina MYSQL_USER/MYSQL_PASSWORD/MYSQL_DATABASE (ou DB_USER/DB_PASSWORD/DB_NAME)." >&2
+  exit 1
+fi
+echo "  usuario=${DB_USER_RESOLVED} banco=${DB_NAME_RESOLVED} (senha oculta)"
+
+# Remove o USE fixo da migration: o banco e selecionado por argumento.
+sed '/^USE /d' "${MIGRATION_FILE}" | docker compose exec -T \
+  -e MYSQL_PWD="${DB_PASSWORD_RESOLVED}" \
+  -e MYSQL_USER="${DB_USER_RESOLVED}" \
+  -e MYSQL_DATABASE="${DB_NAME_RESOLVED}" \
+  mysql sh -c 'mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"'
 
 echo "[5/5] Verificando capacidades publicadas..."
 curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health"

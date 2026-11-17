@@ -131,6 +131,8 @@ O script detecta a raiz do repositório pelo próprio caminho (`dirname "$0"/../
 
 O script faz `git pull`, `docker compose up -d --build`, aguarda o healthcheck, aplica `02_hardware_identity_upsert.sql` (idempotente) e valida as capacidades publicadas.
 
+**Credenciais do MySQL:** o container `mysql` expõe `MYSQL_USER`/`MYSQL_PASSWORD`/`MYSQL_DATABASE` (o compose mapeia `DB_USER`/`DB_PASSWORD`/`DB_NAME` para esses nomes). O script usa os `MYSQL_*` e cai para os `DB_*` se preciso, passa a senha por `MYSQL_PWD` (fora da linha de comando) e remove o `USE` fixo da migration, selecionando o banco por argumento. Se as três variáveis estiverem vazias, aborta com mensagem clara em vez de tentar `mysql -u -p`.
+
 **Validação pós-deploy:**
 
 ```bash
