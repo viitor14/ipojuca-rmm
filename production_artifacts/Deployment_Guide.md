@@ -103,3 +103,36 @@ git push origin main
 cd /opt/ipojuca-rmm && git pull origin main && docker compose up -d --build frontend
 ```
 
+
+---
+
+## 6. Atualização da VPS — Ciclos #26 a #28 (`@devops`, Fase 11)
+
+**Diagnóstico em 17/11/2026 (produção `31.97.86.253`):**
+
+| Verificação | Resultado |
+| :--- | :--- |
+| `GET /api/health` | 200, `db_mode: mysql` (backend no ar) |
+| `PUT /api/units/1`, `POST /api/units/1/sectors`, `DELETE /api/sectors/999999` | **404 "Rota não encontrada"** — backend publicado não tem o CRUD do Ciclo #26 |
+| Bundle do painel `:8095` (`index-DhQSi7Tb.js`) | Sem a interface de CRUD |
+| Acesso SSH a `root@31.97.86.253` | **Bloqueado**: `Permission denied (publickey,password)`; não há chave em `~/.ssh` nem CI configurado |
+
+Conclusão: os containers `backend` e `frontend` da VPS estão anteriores ao Ciclo #26. O código local está correto e testado; falta publicar.
+
+**Comando de atualização (na VPS, como root):**
+
+```bash
+cd /opt/ipojuca-rmm && git pull origin main && \
+  bash infrastructure/scripts/deploy_rmm_update.sh
+```
+
+O script `deploy_rmm_update.sh` faz `git pull`, `docker compose up -d --build`, aguarda o healthcheck, aplica `02_hardware_identity_upsert.sql` (idempotente) e valida as capacidades publicadas.
+
+**Validação pós-deploy:**
+
+```bash
+curl -s http://31.97.86.253:4005/api/health   # deve listar units:crud, sectors:crud, hardware:identity-upsert
+curl -s -o /dev/null -w "%{http_code}\n" -X PUT http://31.97.86.253:4005/api/units/1   # 401 (rota existe, sem token)
+```
+
+`/api/health` passou a expor `capabilities`, permitindo detectar container desatualizado sem disparar requisições de escrita.

@@ -127,6 +127,13 @@ router.get("/health", (req, res) => {
     status: "ok",
     service: "ipojuca-rmm-backend",
     db_mode: repository.mode,
+    // Permite detectar container desatualizado sem tentar rotas de escrita
+    capabilities: [
+      "units:crud",
+      "sectors:crud",
+      "hardware:identity-upsert",
+      "inventory:changes",
+    ],
     timestamp: new Date().toISOString(),
   });
 });
