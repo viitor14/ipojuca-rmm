@@ -48,3 +48,21 @@ Foi realizada auditoria estática e dinâmica sobre o código-fonte implementado
 1. **Minimização de Dados e LGPD no Ambiente 3D:** As camadas de mobiliário clínico, malha de fibra óptica e osciloscópio consomem exclusivamente metadados técnicos e coordenadas espaciais das estações e setores, sem exposição de dados pessoais ou clínicos.
 2. **Integridade de Controles RBAC:** A evolução do HUD e da lâmina tática preservou integralmente o bloqueio de tarefas remotas conforme o perfil do operador autenticado (`VIEWER`, `TECH_N1`, `ADMIN_N2`).
 
+
+
+---
+
+## 6. Adendo de Auditoria Final — Ciclo #26 (`@security`)
+
+**Data:** 2026-11-17  
+**Responsável:** `@security`  
+**Escopo:** Endpoints CRUD de Unidades (`POST/PUT/DELETE /api/units`), Endpoints CRUD de Setores (`POST /api/units/:unitId/sectors`, `PUT/DELETE /api/sectors/:id`), Modal `UnitSectorManagerModal.jsx`, migrações MySQL em `repository.js` e adaptador `frameworkCompat.js`.
+
+| Controle Auditado | Evidência Verificada | Status |
+| :--- | :--- | :--- |
+| **RBAC na API** | `requireAuth` + `requireRole(["TECH_N1", "ADMIN_N2"])` ativos em todas as 6 rotas de criação/edição/exclusão; `VIEWER` bloqueado com `403` no Teste #9. | **CONFORME** |
+| **RBAC na Interface** | `canManageStructure` oculta `+ Unidade`, `✎ Unidade`, `+ Setor`, `✎` e `✕` para usuários `VIEWER`. | **CONFORME** |
+| **Proteção contra SQL Injection / Input Malicioso** | Todas as queries MySQL utilizam *prepared statements* (`?`), códigos normalizados por regex `[A-Z0-9-]+` e dimensões numéricas limitadas por *clamp*. | **CONFORME** |
+| **Auditoria Completa** | Eventos `UNIT_CREATED`, `UNIT_UPDATED`, `UNIT_DELETED`, `SECTOR_CREATED`, `SECTOR_UPDATED` e `SECTOR_DELETED` verificados em `audit_logs` via asserção automatizada. | **CONFORME** |
+
+- **Parecer Final do Gate de Segurança (Ciclo #26):** **APROVADO — 0 vulnerabilidades pendentes.**

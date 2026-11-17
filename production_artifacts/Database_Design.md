@@ -171,3 +171,18 @@ erDiagram
 O script SQL completo de criação do banco, tabelas, índices e dados iniciais das unidades de saúde de Ipojuca encontra-se versionado em:
 - `infrastructure/mysql/01_schema_and_seed.sql`
 
+
+
+---
+
+## 5. Evolução de Schema e Preservação de Estrutura Dinâmica — Ciclo #26
+
+**Responsável:** `@dba`  
+**Skills Consultadas:** `.agents/skills/dba/data_modeling.md`, `.agents/skills/dba/database_performance.md`
+
+1. **Ampliação de `health_units.unit_type`:** Alterado de `ENUM('USF', 'POLICLINICA', 'CAPS')` para `VARCHAR(32) NOT NULL DEFAULT 'USF'` em [01_schema_and_seed.sql](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/infrastructure/mysql/01_schema_and_seed.sql) e via auto-migration `ALTER TABLE` no startup em [repository.js](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/src/database/repository.js), habilitando unidades `UPA`, `HOSPITAL`, `CEO` e `SEDE`.
+2. **Persistência de Tema 3D (`sectors.room_theme`):** Adicionada coluna `room_theme VARCHAR(16) DEFAULT NULL` em `sectors` (com auto-migration segura) para vincular explicitamente cada sala criada pelo painel a um dos 5 arquétipos visuais (`REC`, `CONS`, `FARM`, `ADM`, `TI`) independentemente da sigla escolhida.
+3. **Preservação de Edições no Startup (`ensureMysqlSeedData`):**
+   - Seed inicial inserido via `INSERT IGNORE` apenas quando `COUNT(*) = 0` em `health_units`.
+   - Correções de *mojibake* restritas a `WHERE id = ? AND (name LIKE '%Ã%' OR address LIKE '%Ã%')`, preservando 100% das alterações e exclusões realizadas pelo usuário no painel entre reinicializações.
+4. **Provisionamento Seguro em Bancos Dinâmicos:** `enrollNewAgentMachine()` atualizado para consultar `sectors` diretamente no MySQL (com fallback para o primeiro setor ativo) e geração de IDs in-memory baseada em `MAX(id) + 1` imune a lacunas pós-exclusão.

@@ -516,3 +516,23 @@ Para permitir leitura imediata do estado de saúde (`NORMAL`, `WARNING`, `CRITIC
    - `TowerTopBeacon` (`boxGeometry [0.12, 0.010, 0.28]` em `[0.42, 0.354, 0.06]`) sobre o topo do gabinete e `MonitorBaseBeacon` (`[0.18, 0.005, 0.12]` em `[-0.06, 0.014, 0.10]`) sobre a base do monitor, além de sincronização de `StatusLed` e `ActivityLed` via `useEffect`.
 3. **`StatusPerimeterFrame` (Moldura CAD de Estado no Tampo):**
    - Reutiliza geometria estática compartilhada (`_sharedFrameBoxGeometry`) sem alocar buffers por renderização, destacando em azul (`#3B82F6`) quando `isSelected` e em âmbar/vermelho (`#F59E0B` / `#EF4444`) quando em incidente (`WARNING` / `CRITICAL`).
+
+
+---
+
+## 18. Arquitetura CRUD de Unidades, Setores e Diorama 3D Expansível — Ciclo #26
+
+**Responsável:** `@lead`  
+**Skills Consultadas:** `.agents/skills/lead/system_architecture.md`, `.agents/skills/lead/technical_orchestration.md`
+
+### 1. Contratos REST e Real-Time (`backend/src/routes/api.js` & `frontend/src/services/api.js`)
+- Adicionados 6 endpoints protegidos por `requireAuth` e `requireRole(["TECH_N1", "ADMIN_N2"])`:
+  - `POST /api/units`, `PUT /api/units/:id`, `DELETE /api/units/:id`
+  - `POST /api/units/:unitId/sectors`, `PUT /api/sectors/:id`, `DELETE /api/sectors/:id`
+- Emissão imediata do evento Socket.io `units:updated` com o snapshot completo das unidades/setores (`listUnitsWithSummary()`) e emissão de `machine:updated` quando máquinas são realocadas durante exclusão de setor/unidade ou movimentação de coordenadas de um setor.
+- Compatibilização do roteador nativo in-memory em [frameworkCompat.js](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/src/utils/frameworkCompat.js) com os métodos `.put()`, `.patch()` e suporte a body em `DELETE`.
+
+### 2. Alocador Espacial 3D Anti-Colisão e Adaptação Dinâmica do Diorama
+- **`RmmRepository.computeNextFreeSectorSlot()` ([repository.js](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/src/database/repository.js)):** Varre posições candidatas ao norte ($Z = -3.5$) e sul ($Z = +3.5$) do corredor central ao longo do eixo $X$ ($[-4.5, 4.5, 13.5, -13.5, \dots]$) verificando colisão 2D de *bounding boxes* contra todos os setores existentes antes de alocar uma nova sala.
+- **`computeBoardBounds()` & `IsometricBoard` ([DigitalTwin3D.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DigitalTwin3D.jsx)):** Expande dinamicamente a laje estrutural, substrato, gramado, corredor central, soleiras de porta, luz direcional (`directionalLight`) e enquadramento da câmera (`CameraRig`) quando uma unidade ultrapassa a planta padrão de 4 setores.
+- **Paredes Inteligentes (`SectorRoomVoxel`) e Tematização por Arquétipo (`resolveSectorArchetype`):** Renderiza parede lateral Leste/Oeste sem duplicação entre salas adjacentes e fecha automaticamente salas isoladas ou de extremidade, aplicando o arquétipo 3D (`REC`, `CONS`, `FARM`, `ADM`, `TI`) explicitamente via `room_theme`.

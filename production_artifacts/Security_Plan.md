@@ -173,3 +173,19 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
   2. **Prioridade Operacional para Alertas (`WARNING` / `CRITICAL`):** Mesmo quando o operador oculta rótulos informativos na barra superior (`sceneLayers.labels = false`), incidentes críticos continuam visíveis, prevenindo o mascaramento acidental de alertas de infraestrutura hospitalar.
   3. **Geometria CAD Compartilhada (`_sharedFrameBoxGeometry`):** A moldura utiliza instância única compartilhada e apenas propriedades reativas no `useEffect`, prevenindo alocação repetida de `BoxGeometry` na GPU durante atualizações WebSocket.
 - **Parecer `@security`:** **APROVADO PELO `@security`**. Seguro para operadores autenticados e conforme com a LGPD.
+
+
+---
+
+## 14. Parecer de Segurança — Ciclo #26 (RBAC, Integridade Referencial e Auditoria Estrutural)
+
+**Responsável:** `@security`  
+**Skills Consultadas:** `.agents/skills/security/threat_modeling.md`, `.agents/skills/security/endpoint_security.md`, `.agents/skills/security/security_audit.md`
+
+- **Risco Avaliado:** Criação, edição e exclusão dinâmica de unidades de saúde e setores via REST API e painel React (`VIEWER` escalando privilégios, corrupção/órfãos de chaves estrangeiras de máquinas ou perda de trilha administrativa).
+- **Controles Implementados e Auditados:**
+  1. **Controle de Acesso RBAC Estrito no Servidor:** Todos os 6 novos endpoints (`POST/PUT/DELETE` de `/api/units` e `/api/sectors`) exigem JWT válido (`requireAuth`) e papel `TECH_N1` ou `ADMIN_N2` (`requireRole`). Perfis `VIEWER` recebem HTTP `403 Forbidden` (validado no Teste #9) e não exibem botões de mutação no HUD.
+  2. **Sanitização e Unicidade de Códigos:** Siglas (`code`) são normalizadas sem acentos/caracteres especiais (`normalizeCode`), com verificação de unicidade global (unidades) e por unidade (setores), além de *clamping* numérico de dimensões (`width_3d ∈ [4, 24]`, `depth_3d ∈ [3.5, 16]`).
+  3. **Integridade Referencial Segura (Zero Órfãos):** Exclusões de unidades e setores transferem explicitamente eventuais máquinas alocadas para a unidade/setor de destino antes do `DELETE` SQL e bloqueiam a exclusão da última unidade ativa ou do último setor ocupado sem destino alternativo.
+  4. **Trilha de Auditoria Imutável:** Todas as mutações gravam registros `UNIT_CREATED`, `UNIT_UPDATED`, `UNIT_DELETED`, `SECTOR_CREATED`, `SECTOR_UPDATED` e `SECTOR_DELETED` em `audit_logs` com `user_id`, `ip_address` e metadados completos.
+- **Parecer `@security`:** **APROVADO PELO `@security`**. Conformidade integral com a arquitetura de segurança e LGPD.

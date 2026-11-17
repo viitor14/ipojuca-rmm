@@ -1686,3 +1686,118 @@ O pipeline do **Ciclo #25** encontra-se **pausado no Gate de Aprovação da Fase
 > [!IMPORTANT]
 > Nenhuma linha de código-fonte foi alterada ainda, conforme o protocolo de aprovação.
 > Por favor, responda **`Approved`** para que a equipe implemente a identificação visual de status em 3 camadas, atualize os modelos/componentes, execute o build e apresente os renders/evidências de validação.
+
+
+---
+
+## 47. Ciclo #26 — Gerenciamento Dinâmico Completo (CRUD) de Unidades de Saúde e Setores 3D no Painel
+
+### 1. Diagnóstico e Necessidade Operacional (`@pm` + `@lead` + `@dba`)
+
+O usuário solicitou:
+> *"Eu gostaria que tivesse a opção para poder criar novas unidades e criar novos setores para caso quando tivesse alguma unidade nova eu ia la e criava no painel e tambem quando tivesse novo setor criar tambem, podendo ter liberdade total de criacao, edição e exclusao"*
+
+A análise da arquitetura atual revelou 4 limitações que impedem a expansão orgânica da rede de saúde diretamente pelo painel:
+
+1. **Unidades e Setores Estáticos (Apenas Seed Inicial):**
+   - Atualmente, [api.js](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/src/routes/api.js) expõe apenas `GET /api/units`, sem endpoints de criação (`POST`), edição (`PUT`) ou exclusão (`DELETE`) para `health_units` ou `sectors`.
+   - Caso uma nova USF, UPA, Policlínica, CAPS ou sala clínica seja inaugurada em Ipojuca, o operador não consegue cadastrá-la pelo dashboard.
+2. **Sobrescrita no Startup em `ensureMysqlSeedData()`:**
+   - Em [repository.js](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/src/database/repository.js), o método `ensureMysqlSeedData()` executa `UPDATE health_units ...` e `UPDATE sectors ...` incondicionalmente para os IDs iniciais a cada reinício do servidor, o que apagaria alterações feitas pelo usuário nos nomes, códigos, endereços ou coordenadas 3D das unidades/setores base.
+3. **Alocação Manual vs. Automática na Planta 3D (`bounds_x`, `bounds_z`):**
+   - Em [DigitalTwin3D.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DigitalTwin3D.jsx), cada setor é posicionado a partir de `bounds_x`, `bounds_z`, `width_3d` e `depth_3d`, e tem seu tema/mobiliário escolhido por `getSectorTheme(sector)` a partir de `sector.code`.
+   - Ao criar novos setores no painel, o operador precisa de **alocação inteligente automática** (que encontre a próxima posição livre sem sobrepor salas existentes) combinada com **liberdade total** para ajustar nome, código/sigla, tipo visual de ambiente e dimensões/posição caso deseje.
+4. **Laje e Corredor Fixos no Diorama (`IsometricBoard`):**
+   - Atualmente `IsometricBoard` tem largura fixa de `18.4m × 12.4m`. Se o usuário criar o 5º, 6º ou 8º setor em uma unidade, as salas extrapolariam a laje e o corredor se estes não se adaptarem dinamicamente.
+
+---
+
+### 2. Arquitetura Backend, Banco de Dados e Segurança (`@dba` + `@engineer` + `@security`)
+
+#### 2.1. Evolução de Schema e Persistência Dual (MySQL + Memory)
+- **Flexibilização de `unit_type` (`health_units`):** Permitir `USF`, `POLICLINICA`, `CAPS`, `UPA`, `HOSPITAL`, `CEO`, `SEDE` (e tipos administrativos customizados), executando migração segura no `init()` do MySQL:
+  `ALTER TABLE health_units MODIFY COLUMN unit_type VARCHAR(32) NOT NULL DEFAULT 'USF'`.
+- **Preservação do Estado Editado em `ensureMysqlSeedData()`:**
+  - Usar `INSERT IGNORE` apenas quando a tabela `health_units` estiver vazia (ou sem apagar/sobrescrever unidades já criadas/editadas/excluídas pelo usuário em ciclos posteriores).
+  - Aplicar reparo de encoding (`Ã`) apenas quando realmente detectado caractere corrompido, preservando integralmente edições manuais de nomes, endereços e dimensões.
+- **Limpeza de Referências de Máquinas/Alertas na Exclusão:**
+  - Como `machines.unit_id` e `machines.sector_id` possuem chaves estrangeiras sem `ON DELETE CASCADE` em [01_schema_and_seed.sql](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/infrastructure/mysql/01_schema_and_seed.sql), toda exclusão de unidade ou setor tratará explicitamente os equipamentos vinculados antes do `DELETE`, mantendo consistência tanto em MySQL quanto no modo `memory`.
+
+#### 2.2. Novos Endpoints REST em `backend/src/routes/api.js` (RBAC: `TECH_N1` e `ADMIN_N2`)
+
+| Método e Rota | Responsabilidade | Regras e Validações |
+| :--- | :--- | :--- |
+| **`POST /api/units`** | Criar nova Unidade de Saúde | Recebe `name` (obrigatório), `code` (opcional; gera sigla sanitizada única se omitido), `unit_type` (padrão `USF`), `address` e `create_default_sectors` (boolean, padrão `true` para gerar `REC`, `CONS-01`, `FARM`, `ADM` ou `false` se o usuário preferir unidade com 1 setor inicial configurável). |
+| **`PUT /api/units/:id`** | Editar Unidade existente | Atualiza `code`, `name`, `unit_type` e `address`, validando unicidade de `code` e retornando a unidade atualizada com seus setores e `summary`. |
+| **`DELETE /api/units/:id`** | Excluir Unidade de Saúde | Aceita `target_unit_id` e `target_sector_id` opcionais no body/query. Se a unidade possuir máquinas e houver outra unidade com setores disponíveis, permite **realocação segura automática** para o destino selecionado (ou retorna `409 Conflict` pedindo escolha de destino caso o cliente não tenha confirmado/informado transferência). Bloqueia exclusão caso seja a **última unidade do sistema** enquanto existirem máquinas ou impede deixar o sistema sem unidades ativas. |
+| **`POST /api/units/:unitId/sectors`** | Criar Setor na Unidade | Recebe `name` (obrigatório), `code` (sigla única na unidade), `room_theme` (`REC`, `CONS`, `FARM`, `ADM`, `TI`) e dimensões/posição opcionais (`bounds_x`, `bounds_z`, `width_3d`, `depth_3d`). Caso `bounds_x`/`bounds_z` não sejam informados, o **Alocador Espacial 3D** calcula automaticamente o próximo slot livre ao longo dos eixos Norte (`Z = -3.5`) e Sul (`Z = +3.5`) do corredor, alternando colunas (`-4.5`, `+4.5`, `+13.5`, `-13.5`, etc.) sem sobreposição. |
+| **`PUT /api/sectors/:id`** | Editar Setor existente | Atualiza `name`, `code`, `bounds_x`, `bounds_z`, `width_3d`, `depth_3d`. Caso `code` tenha mudado de prefixo ou a posição `bounds_x`/`bounds_z` mude, preserva unicidade `(unit_id, code)` e atualiza automaticamente `pos_x`/`pos_z` das máquinas daquele setor se necessário. |
+| **`DELETE /api/sectors/:id`** | Excluir Setor da Unidade | Aceita `target_sector_id` opcional. Se houver máquinas alocadas no setor: se existir outro setor na unidade (ou `target_sector_id` explícito), transfere as máquinas para o setor de destino recalculando posições `pos_x`/`pos_z`; se for o último setor da unidade e ainda houver máquinas, retorna `409 Conflict` orientando criar outro setor ou transferir as máquinas antes. |
+
+#### 2.3. Auditoria e Atualização em Tempo Real (`Socket.io`)
+- Toda operação de criação, edição ou exclusão grava entrada na trilha de auditoria (`UNIT_CREATED`, `UNIT_UPDATED`, `UNIT_DELETED`, `SECTOR_CREATED`, `SECTOR_UPDATED`, `SECTOR_DELETED`) com `userId`, `ipAddress` e `details`.
+- Emissão imediata do evento `units:updated` via `socketHub.broadcastToDashboard("units:updated", { units })` para atualizar todos os painéis conectados instantaneamente, além de `machine:updated` quando máquinas forem realocadas.
+
+---
+
+### 3. Interface do Painel (UI/UX) e Maquete 3D Adaptativa (`@designer` + `@frontend`)
+
+#### 3.1. Pontos de Acesso Intuitivos em [App.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/App.jsx)
+Sem poluir a barra de navegação nem quebrar o visual editorial clean:
+1. **Na Barra Superior (`UnitSwitcherPod`):**
+   - Botão discreto **`+ Unidade`** ao lado das abas das unidades para criar uma nova unidade de saúde diretamente.
+   - Botão **`✎` / `⚙ Gerenciar`** junto à unidade selecionada (visível para perfis `TECH_N1` e `ADMIN_N2`) para editar ou excluir a unidade ativa.
+2. **No Card Lateral `SETORES DA UNIDADE` (`LeftRadarColumn`):**
+   - Botão **`+ Novo Setor`** no cabeçalho do card.
+   - Ações compactas de **`✎` (Editar)** e **`✕` (Excluir)** em cada item `SectorMiniRow` (visíveis no hover ou ao lado da contagem de PCs, para perfis autorizados), mantendo o clique na linha para focar a câmera no setor.
+
+#### 3.2. Modal Unificado `UnitSectorManagerModal`
+Interface limpa seguindo os tokens de cor e tipografia do `theme.js`:
+- **Modo Unidade (Criar / Editar / Excluir):**
+  - Campos: `Nome da Unidade` (ex: *USF Camela*), `Sigla / Código` (com preenchimento automático inteligente a partir do nome, editável), `Tipo` (`USF`, `Policlínica`, `CAPS`, `UPA`, `Hospital`, `CEO`, `Sede TI`), `Endereço`.
+  - Na criação: toggle **"Criar planta inicial com 4 setores padrão (Recepção, Consultório, Farmácia, Adm)"** ou criar apenas com **Recepção Inicial** (liberdade para montar a planta do zero).
+  - Na exclusão: caixa de confirmação explícita informando quantos setores e computadores estão na unidade, com seletor de unidade/setor de destino caso haja máquinas vinculadas.
+- **Modo Setor (Criar / Editar / Excluir):**
+  - Campos: `Nome do Setor` (ex: *Sala de Vacina*, *Triagem Pediátrica*, *CPD / Servidor*), `Sigla / Código` (ex: `VAC-01`), e **Arquétipo de Ambiente 3D** (`Recepção`, `Consultório`, `Farmácia`, `Administração / Enfermagem`, `Sala Técnica / TI`) que aplica automaticamente o sufixo/prefixo de tema visual na planta 3D sem impedir siglas personalizadas.
+  - Seção retrátil **"Layout e Medidas 3D (Avançado)"**: posicionamento automático por padrão (`bounds_x` / `bounds_z` calculados pelo sistema), mas com liberdade total para o operador ajustar manualmente largura (`width_3d`), profundidade (`depth_3d`), e coordenadas `X`/`Z` se desejar reorganizar a planta baixa.
+  - Na exclusão: confirmação informando quantos PCs existem no setor e dropdown opcional para escolher o setor de destino da realocação.
+
+#### 3.3. Adaptação Dinâmica da Maquete 3D em [DigitalTwin3D.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DigitalTwin3D.jsx)
+- **`IsometricBoard` Responsivo:** Passa a receber os `sectors` da unidade ativa e calcular `minX`, `maxX`, `minZ`, `maxZ` reais das salas (garantindo mínimo padrão de `18.4m × 12.4m`). Se a unidade crescer para 5, 6, 8 ou mais setores (ou salas mais largas), a laje, o gramado, o substrato e o corredor central se expandem proporcionalmente para envolver todas as salas.
+- **Suporte a Tema Explícito sem Hardcode de IDs:** `getSectorTheme(sector)` continuará mapeando por palavras-chave/código (`REC`, `CONS`/`MED`/`PSI`/`ACOLH`/`TRI`, `FARM`/`LAB`/`VAC`, `TI`/`CPD`/`REG`, `ADM`/`ENF`) para que setores recém-criados recebam pisos, paredes e mobiliário condizentes imediatamente ao serem salvos.
+
+---
+
+### 4. Requisitos Funcionais do Ciclo #26 (`@pm`)
+
+- **RF-100 (Criação de Unidades de Saúde):** Permitir criar novas unidades via painel (`POST /api/units`) com nome, sigla única, tipo (`USF`, `POLICLINICA`, `CAPS`, `UPA`, `HOSPITAL`, `CEO`, `SEDE`), endereço e escolha entre planta padrão (4 setores) ou planta enxuta (1 setor inicial).
+- **RF-101 (Edição e Exclusão de Unidades):** Permitir editar todos os metadados da unidade (`PUT /api/units/:id`) e excluir unidades (`DELETE /api/units/:id`) com tratamento seguro de máquinas vinculadas (realocação assistida para outra unidade/setor) e sem perda após reinicialização do servidor.
+- **RF-102 (Criação de Setores com Alocação Inteligente 3D):** Permitir criar setores em qualquer unidade (`POST /api/units/:unitId/sectors`) com nome, sigla, tipo visual 3D (`REC`, `CONS`, `FARM`, `ADM`, `TI`) e cálculo automático de coordenadas livres (`bounds_x`, `bounds_z`, `width_3d`, `depth_3d`) sem sobreposição, além de edição manual avançada.
+- **RF-103 (Edição e Exclusão de Setores):** Permitir editar nome, sigla, dimensões e coordenadas 3D de qualquer setor (`PUT /api/sectors/:id`) e excluir setores (`DELETE /api/sectors/:id`) com realocação automática ou escolhida das máquinas associadas.
+- **RF-104 (Preservação de Edições em Reinicialização MySQL):** Corrigir `ensureMysqlSeedData()` em [repository.js](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/src/database/repository.js) para não sobrescrever edições nem ressuscitar registros removidos intencionalmente pelo operador.
+- **RF-105 (Maquete 3D Expansível e Atualização em Tempo Real):** Adaptar dinamicamente `IsometricBoard`, o corredor central e o enquadramento em [DigitalTwin3D.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DigitalTwin3D.jsx) para unidades de qualquer quantidade de setores, sincronizando todas as alterações via Socket.io (`units:updated`).
+- **RF-106 (Controle de Acesso RBAC e Auditoria):** Restringir operações de escrita (`POST`, `PUT`, `DELETE` de unidades/setores) aos papéis `TECH_N1` e `ADMIN_N2` (bloqueando `VIEWER` tanto na API quanto ocultando ações de mutação na UI) e registrar todas as ações em `audit_logs`.
+
+---
+
+### 5. Critérios de Aceitação do Ciclo #26 (`@pm` + `@qa`)
+
+| ID | Critério de Aceitação | Cenário de Teste | Resultado Esperado |
+| :--- | :--- | :--- | :--- |
+| **CA-107** | **Criar Nova Unidade pelo Painel** | Clicar em `+ Unidade`, preencher nome/tipo/endereço e confirmar. | Nova unidade aparece imediatamente na barra superior (`UnitSwitcherPod`), é selecionada no painel e sua maquete 3D é renderizada com os setores configurados. |
+| **CA-108** | **Editar Unidade e Persistir** | Alterar nome/sigla/endereço de uma unidade existente (inclusive uma das originais) e recarregar/reiniciar. | Alteração reflete instantaneamente na UI e não é revertida no restart. |
+| **CA-109** | **Excluir Unidade com Segurança** | Excluir uma unidade vazia e também testar exclusão de unidade com máquinas selecionando destino. | Unidade vazia é removida; unidade com máquinas realoca os computadores para a unidade/setor de destino antes de ser removida; última unidade ativa não pode ser excluída com máquinas. |
+| **CA-110** | **Criar Novo Setor com Alocação 3D Sem Colisão** | Selecionar uma unidade (com 4 setores), clicar em `+ Novo Setor`, escolher tema (ex: `Sala de Vacina` / `FARM`) e salvar. | O 5º setor aparece na lista lateral e é renderizado imediatamente na maquete 3D sem sobrepor nenhum dos 4 setores existentes, com laje e corredor expandidos automaticamente. |
+| **CA-111** | **Editar e Excluir Setor** | Renomear um setor, ajustar sua sigla ou coordenadas e depois excluir um setor (com ou sem máquinas). | Edição atualiza o rótulo 3D e o seletor de setores; exclusão remove a sala 3D e realoca eventuais máquinas para outro setor da unidade com feedback claro ao usuário. |
+| **CA-112** | **Alocação de PCs nos Novos Setores** | Abrir o `DiagnosticDrawer` de um computador e movê-lo para uma unidade/setor recém-criados. | Novo setor e nova unidade aparecem nos selects de alocação e a miniatura 3D do PC aparece dentro da nova sala. |
+| **CA-113** | **Segurança RBAC & Build Limpo** | Alternar para perfil `VIEWER` e tentar ações de criação/edição/exclusão; validar endpoints API e `npm --prefix frontend run build`. | Perfil `VIEWER` não visualiza botões de mutação e recebe HTTP `403` se tentar chamar a API; fluxo CRUD completo funciona no `ADMIN_N2`/`TECH_N1` e o build Vite finaliza com exit code 0. |
+
+---
+
+## 48. Gate de Aprovação — FASE 1 (Ciclo #26)
+
+O pipeline do **Ciclo #26** encontra-se **pausado no Gate de Aprovação da Fase 1**.
+
+> [!IMPORTANT]
+> Nenhuma linha de código-fonte (`backend/` ou `frontend/`) foi alterada até o momento, em conformidade rigorosa com `.agents/AGENTS.md` e o protocolo `/startcycle`.
+> Por favor, responda **`Approved`** para que a equipe implemente os endpoints REST, a camada de persistência dual, a interface CRUD completa no painel e a adaptação dinâmica da maquete 3D.

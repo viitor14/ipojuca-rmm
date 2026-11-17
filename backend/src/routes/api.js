@@ -355,6 +355,291 @@ router.get("/units", requireAuth, async (req, res) => {
   res.json({ units });
 });
 
+async function broadcastUnitsAndRelocations(relocatedMachines = []) {
+  const units = await repository.listUnitsWithSummary();
+  socketHub.broadcastToDashboard("units:updated", { units });
+  for (const m of relocatedMachines) {
+    socketHub.broadcastToDashboard("machine:updated", m);
+  }
+  return units;
+}
+
+// 4.1. Criação de Nova Unidade de Saúde (TECH_N1 / ADMIN_N2)
+router.post(
+  "/units",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    try {
+      const {
+        name,
+        code,
+        unit_type = "USF",
+        address = "",
+        create_default_sectors = true,
+      } = req.body || {};
+
+      const unit = await repository.createUnit({
+        name,
+        code,
+        unitType: unit_type,
+        address,
+        createDefaultSectors: create_default_sectors !== false,
+      });
+
+      await repository.recordAuditLog({
+        userId: req.user.id,
+        actionType: "UNIT_CREATED",
+        ipAddress: req.ip,
+        details: {
+          unit_id: unit.id,
+          code: unit.code,
+          name: unit.name,
+          unit_type: unit.unit_type,
+          sectors_count: (unit.sectors || []).length,
+        },
+      });
+
+      const units = await broadcastUnitsAndRelocations();
+      return res.status(201).json({ status: "created", unit, units });
+    } catch (err) {
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || "Erro ao criar unidade de saúde." });
+    }
+  },
+);
+
+// 4.2. Edição de Unidade de Saúde (TECH_N1 / ADMIN_N2)
+router.put(
+  "/units/:id",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    try {
+      const { name, code, unit_type, address } = req.body || {};
+      const unit = await repository.updateUnit(req.params.id, {
+        name,
+        code,
+        unitType: unit_type,
+        address,
+      });
+
+      await repository.recordAuditLog({
+        userId: req.user.id,
+        actionType: "UNIT_UPDATED",
+        ipAddress: req.ip,
+        details: {
+          unit_id: unit.id,
+          code: unit.code,
+          name: unit.name,
+          unit_type: unit.unit_type,
+        },
+      });
+
+      const units = await broadcastUnitsAndRelocations();
+      return res.json({ status: "updated", unit, units });
+    } catch (err) {
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || "Erro ao atualizar unidade de saúde." });
+    }
+  },
+);
+
+// 4.3. Exclusão de Unidade de Saúde com Realocação Segura (TECH_N1 / ADMIN_N2)
+router.delete(
+  "/units/:id",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    try {
+      const targetUnitId =
+        req.body?.target_unit_id ?? req.query?.target_unit_id ?? undefined;
+      const targetSectorId =
+        req.body?.target_sector_id ?? req.query?.target_sector_id ?? undefined;
+
+      const result = await repository.deleteUnit(req.params.id, {
+        targetUnitId,
+        targetSectorId,
+      });
+
+      await repository.recordAuditLog({
+        userId: req.user.id,
+        actionType: "UNIT_DELETED",
+        ipAddress: req.ip,
+        details: {
+          deleted_unit_id: result.deletedId,
+          deleted_name: result.deletedName,
+          relocated_machines_count: result.relocatedMachinesCount,
+          target_unit_id: result.targetUnitId,
+        },
+      });
+
+      const units = await broadcastUnitsAndRelocations(result.relocatedMachines);
+      return res.json({
+        status: "deleted",
+        deleted_id: result.deletedId,
+        relocated_machines_count: result.relocatedMachinesCount,
+        target_unit_id: result.targetUnitId,
+        units,
+      });
+    } catch (err) {
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || "Erro ao excluir unidade de saúde." });
+    }
+  },
+);
+
+// 4.4. Criação de Novo Setor na Unidade com Alocador Espacial 3D (TECH_N1 / ADMIN_N2)
+router.post(
+  "/units/:unitId/sectors",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    try {
+      const {
+        name,
+        code,
+        room_theme,
+        bounds_x,
+        bounds_z,
+        width_3d,
+        depth_3d,
+      } = req.body || {};
+
+      const sector = await repository.createSector(req.params.unitId, {
+        name,
+        code,
+        roomTheme: room_theme,
+        boundsX: bounds_x,
+        boundsZ: bounds_z,
+        width3d: width_3d,
+        depth3d: depth_3d,
+      });
+
+      await repository.recordAuditLog({
+        userId: req.user.id,
+        actionType: "SECTOR_CREATED",
+        ipAddress: req.ip,
+        details: {
+          sector_id: sector.id,
+          unit_id: sector.unit_id,
+          code: sector.code,
+          name: sector.name,
+          room_theme: sector.room_theme,
+          bounds: [sector.bounds_x, sector.bounds_z, sector.width_3d, sector.depth_3d],
+        },
+      });
+
+      const units = await broadcastUnitsAndRelocations();
+      return res.status(201).json({ status: "created", sector, units });
+    } catch (err) {
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || "Erro ao criar setor na unidade." });
+    }
+  },
+);
+
+// 4.5. Edição de Setor Existente (TECH_N1 / ADMIN_N2)
+router.put(
+  "/sectors/:id",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    try {
+      const {
+        name,
+        code,
+        room_theme,
+        bounds_x,
+        bounds_z,
+        width_3d,
+        depth_3d,
+      } = req.body || {};
+
+      const sector = await repository.updateSector(req.params.id, {
+        name,
+        code,
+        roomTheme: room_theme,
+        boundsX: bounds_x,
+        boundsZ: bounds_z,
+        width3d: width_3d,
+        depth3d: depth_3d,
+      });
+
+      const updatedMachines = await repository.listMachines({ sectorId: sector.id });
+
+      await repository.recordAuditLog({
+        userId: req.user.id,
+        actionType: "SECTOR_UPDATED",
+        ipAddress: req.ip,
+        details: {
+          sector_id: sector.id,
+          unit_id: sector.unit_id,
+          code: sector.code,
+          name: sector.name,
+          room_theme: sector.room_theme,
+          bounds: [sector.bounds_x, sector.bounds_z, sector.width_3d, sector.depth_3d],
+        },
+      });
+
+      const units = await broadcastUnitsAndRelocations(updatedMachines);
+      return res.json({ status: "updated", sector, units });
+    } catch (err) {
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || "Erro ao atualizar setor." });
+    }
+  },
+);
+
+// 4.6. Exclusão de Setor com Realocação de Máquinas (TECH_N1 / ADMIN_N2)
+router.delete(
+  "/sectors/:id",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  async (req, res) => {
+    try {
+      const targetSectorId =
+        req.body?.target_sector_id ?? req.query?.target_sector_id ?? undefined;
+
+      const result = await repository.deleteSector(req.params.id, {
+        targetSectorId,
+      });
+
+      await repository.recordAuditLog({
+        userId: req.user.id,
+        actionType: "SECTOR_DELETED",
+        ipAddress: req.ip,
+        details: {
+          deleted_sector_id: result.deletedId,
+          unit_id: result.unitId,
+          deleted_name: result.deletedName,
+          relocated_machines_count: result.relocatedMachinesCount,
+          target_sector_id: result.targetSectorId,
+        },
+      });
+
+      const units = await broadcastUnitsAndRelocations(result.relocatedMachines);
+      return res.json({
+        status: "deleted",
+        deleted_id: result.deletedId,
+        unit_id: result.unitId,
+        relocated_machines_count: result.relocatedMachinesCount,
+        target_sector_id: result.targetSectorId,
+        units,
+      });
+    } catch (err) {
+      return res
+        .status(err.statusCode || 500)
+        .json({ error: err.message || "Erro ao excluir setor." });
+    }
+  },
+);
+
 // 5. Listagem de Máquinas (com coordenadas 3D e métricas atuais)
 router.get("/machines", requireAuth, async (req, res) => {
   const { unit_id, sector_id, status } = req.query;

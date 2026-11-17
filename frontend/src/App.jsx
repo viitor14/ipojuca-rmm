@@ -5,6 +5,7 @@ import { GlobalStyles } from './styles/GlobalStyles';
 import { rmmApi, connectDashboardSocket } from './services/api';
 import { DigitalTwin3D } from './components/DigitalTwin3D';
 import { DiagnosticDrawer } from './components/DiagnosticDrawer';
+import { UnitSectorManagerModal } from './components/UnitSectorManagerModal';
 
 const pulseDot = keyframes`
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -76,12 +77,37 @@ const LiveBeacon = styled.span`
 const UnitSwitcherPod = styled.div`
   pointer-events: auto;
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   background: #ffffff;
   border: 1px solid #e4e8e3;
   border-radius: 8px;
   padding: 4px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  max-width: 100%;
+`;
+
+const UnitActionBtn = styled.button`
+  background: ${({ $tone }) =>
+    $tone === 'primary' ? 'rgba(82, 121, 107, 0.12)' : '#f4f5f2'};
+  color: ${({ $tone }) => ($tone === 'primary' ? '#2D6A4F' : '#52796B')};
+  border: 1px solid
+    ${({ $tone }) => ($tone === 'primary' ? 'rgba(82, 121, 107, 0.35)' : '#e4e8e3')};
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${({ $tone }) =>
+      $tone === 'primary' ? 'rgba(82, 121, 107, 0.2)' : '#ecefeb'};
+    color: #242925;
+  }
 `;
 
 const UnitSwitchBtn = styled.button`
@@ -273,6 +299,7 @@ const SectorMiniRow = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
   padding: 6px 8px;
   background: ${({ $selected }) => ($selected ? '#ECEFEB' : '#f8faf8')};
   border: 1px solid ${({ $selected }) => ($selected ? '#52796B' : '#e4e8e3')};
@@ -295,6 +322,53 @@ const SectorMiniRow = styled.div`
   .s-meta {
     color: #737b75;
     font-size: 0.64rem;
+  }
+  .s-right {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+`;
+
+const InlineMiniBtn = styled.button`
+  background: #ffffff;
+  border: 1px solid #d6dcd6;
+  color: ${({ $danger }) => ($danger ? '#DC2626' : '#52796B')};
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.12s ease;
+
+  &:hover {
+    background: ${({ $danger }) => ($danger ? '#FEF2F2' : '#ECEFEB')};
+    border-color: ${({ $danger }) => ($danger ? '#DC2626' : '#52796B')};
+  }
+`;
+
+const CardAddChipBtn = styled.button`
+  background: rgba(82, 121, 107, 0.12);
+  border: 1px solid rgba(82, 121, 107, 0.35);
+  color: #2d6a4f;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  font-size: 0.62rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+
+  &:hover {
+    background: rgba(82, 121, 107, 0.22);
   }
 `;
 
@@ -519,6 +593,22 @@ export default function App() {
     furniture: true,
     labels: true,
   });
+  const [managerModal, setManagerModal] = useState({
+    isOpen: false,
+    mode: 'CREATE_UNIT',
+    targetSector: null,
+  });
+
+  const canManageStructure =
+    auth.user?.role === 'ADMIN_N2' || auth.user?.role === 'TECH_N1';
+
+  const openManagerModal = (mode, targetSector = null) => {
+    setManagerModal({ isOpen: true, mode, targetSector });
+  };
+
+  const closeManagerModal = () => {
+    setManagerModal((prev) => ({ ...prev, isOpen: false }));
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setNowTimestamp(Date.now()), 1000);
@@ -646,6 +736,11 @@ export default function App() {
           onAgentMessage: (newMsg) => {
             setChatMessages((prev) => [...prev, newMsg]);
           },
+          onUnitsUpdated: (payload) => {
+            if (Array.isArray(payload?.units)) {
+              setUnits(payload.units);
+            }
+          },
         });
       })
       .catch((err) => console.error('Falha de autenticação:', err));
@@ -663,6 +758,15 @@ export default function App() {
     }, 12000);
     return () => clearInterval(syncTimer);
   }, [auth.token, selectedUnitId, selectedMachineId, loadAllData]);
+
+  useEffect(() => {
+    if (units.length > 0 && !units.some((u) => u.id === Number(selectedUnitId))) {
+      setSelectedUnitId(units[0].id);
+      setSelectedSectorId(null);
+      setSelectedMachineId(null);
+      setDiagnostics(null);
+    }
+  }, [units, selectedUnitId]);
 
   const activeUnit =
     units.find((u) => u.id === Number(selectedUnitId)) || units[0];
@@ -739,6 +843,69 @@ export default function App() {
     await loadAllData(auth.token, selectedUnitId, null);
   }
 
+  async function handleCreateUnit(payload) {
+    const res = await rmmApi.createUnit(auth.token, payload);
+    if (Array.isArray(res.units)) setUnits(res.units);
+    const nextUnitId = res.unit?.id || selectedUnitId;
+    setSelectedUnitId(nextUnitId);
+    setSelectedMachineId(null);
+    setSelectedSectorId(null);
+    setDiagnostics(null);
+    setCameraMode('ISO');
+    await loadAllData(auth.token, nextUnitId, null);
+    return res;
+  }
+
+  async function handleUpdateUnit(unitId, payload) {
+    const res = await rmmApi.updateUnit(auth.token, unitId, payload);
+    if (Array.isArray(res.units)) setUnits(res.units);
+    await loadAllData(auth.token, selectedUnitId, selectedMachineId);
+    return res;
+  }
+
+  async function handleDeleteUnit(unitId, payload) {
+    const res = await rmmApi.deleteUnit(auth.token, unitId, payload);
+    const remainingUnits = Array.isArray(res.units) ? res.units : [];
+    setUnits(remainingUnits);
+    const fallbackUnitId = res.target_unit_id || remainingUnits[0]?.id || 1;
+    setSelectedUnitId(fallbackUnitId);
+    setSelectedMachineId(null);
+    setSelectedSectorId(null);
+    setDiagnostics(null);
+    setCameraMode('ISO');
+    await loadAllData(auth.token, fallbackUnitId, null);
+    return res;
+  }
+
+  async function handleCreateSector(unitId, payload) {
+    const res = await rmmApi.createSector(auth.token, unitId, payload);
+    if (Array.isArray(res.units)) setUnits(res.units);
+    if (res.sector?.id) {
+      setSelectedSectorId(res.sector.id);
+      setCameraMode('SECTOR');
+    }
+    await loadAllData(auth.token, selectedUnitId, selectedMachineId);
+    return res;
+  }
+
+  async function handleUpdateSector(sectorId, payload) {
+    const res = await rmmApi.updateSector(auth.token, sectorId, payload);
+    if (Array.isArray(res.units)) setUnits(res.units);
+    await loadAllData(auth.token, selectedUnitId, selectedMachineId);
+    return res;
+  }
+
+  async function handleDeleteSector(sectorId, payload) {
+    const res = await rmmApi.deleteSector(auth.token, sectorId, payload);
+    if (Array.isArray(res.units)) setUnits(res.units);
+    if (Number(selectedSectorId) === Number(sectorId)) {
+      setSelectedSectorId(null);
+      setCameraMode('ISO');
+    }
+    await loadAllData(auth.token, selectedUnitId, selectedMachineId);
+    return res;
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <GlobalStyles />
@@ -791,6 +958,27 @@ export default function App() {
                 <span className="u-name">{fixTextEncoding(u.name)}</span>
               </UnitSwitchBtn>
             ))}
+            {canManageStructure && (
+              <>
+                <UnitActionBtn
+                  type="button"
+                  $tone="primary"
+                  onClick={() => openManagerModal('CREATE_UNIT')}
+                  title="Cadastrar nova Unidade de Saúde"
+                >
+                  + Unidade
+                </UnitActionBtn>
+                {activeUnit && (
+                  <UnitActionBtn
+                    type="button"
+                    onClick={() => openManagerModal('EDIT_UNIT')}
+                    title="Editar ou excluir unidade selecionada"
+                  >
+                    ✎ Unidade
+                  </UnitActionBtn>
+                )}
+              </>
+            )}
           </UnitSwitcherPod>
 
           <RightControlPod>
@@ -918,31 +1106,46 @@ export default function App() {
 
             <RadarCard>
               <div className="card-tag">
-                <span>SETORES DA UNIDADE</span>
-                {selectedSectorId ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedSectorId(null);
-                      setCameraMode('ISO');
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#52796B',
-                      fontSize: '0.64rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      padding: 0,
-                    }}
-                    title="Voltar para a visão geral da maquete"
-                  >
-                    ↺ Visão Geral
-                  </button>
-                ) : (
-                  <span>{(activeUnit?.sectors || []).length}</span>
-                )}
+                <span>SETORES ({(activeUnit?.sectors || []).length})</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {selectedSectorId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSectorId(null);
+                        setCameraMode('ISO');
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#52796B',
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                      title="Voltar para a visão geral da maquete"
+                    >
+                      ↺ Geral
+                    </button>
+                  )}
+                  {canManageStructure && activeUnit && (
+                    <CardAddChipBtn
+                      type="button"
+                      onClick={() => openManagerModal('CREATE_SECTOR')}
+                      title="Criar novo setor nesta unidade"
+                    >
+                      + Setor
+                    </CardAddChipBtn>
+                  )}
+                </div>
               </div>
+              {(activeUnit?.sectors || []).length === 0 && (
+                <div style={{ fontSize: '0.69rem', color: '#737B75', padding: '4px 0' }}>
+                  Nenhum setor cadastrado.{' '}
+                  {canManageStructure && 'Clique em "+ Setor" para criar uma sala 3D.'}
+                </div>
+              )}
               {(activeUnit?.sectors || []).map((sec) => {
                 const secNodes = machines.filter(
                   (m) => Number(m.sector_id) === Number(sec.id)
@@ -967,7 +1170,34 @@ export default function App() {
                       <div className="s-name">{fixTextEncoding(sec.name)}</div>
                       <div className="s-meta">[{sec.code}]</div>
                     </div>
-                    <span className="s-meta">{secNodes.length} PC(S)</span>
+                    <div className="s-right">
+                      <span className="s-meta">{secNodes.length} PC(S)</span>
+                      {canManageStructure && (
+                        <>
+                          <InlineMiniBtn
+                            type="button"
+                            title={`Editar setor ${fixTextEncoding(sec.name)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openManagerModal('EDIT_SECTOR', sec);
+                            }}
+                          >
+                            ✎
+                          </InlineMiniBtn>
+                          <InlineMiniBtn
+                            type="button"
+                            $danger
+                            title={`Excluir setor ${fixTextEncoding(sec.name)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openManagerModal('DELETE_SECTOR', sec);
+                            }}
+                          >
+                            ✕
+                          </InlineMiniBtn>
+                        </>
+                      )}
+                    </div>
                   </SectorMiniRow>
                 );
               })}
@@ -1138,6 +1368,22 @@ export default function App() {
           </BottomMatrixDock>
         </DockShell>
       </HudOverlay>
+
+      <UnitSectorManagerModal
+        isOpen={managerModal.isOpen}
+        initialMode={managerModal.mode}
+        units={units}
+        activeUnit={activeUnit}
+        targetSector={managerModal.targetSector}
+        machines={machines}
+        onClose={closeManagerModal}
+        onCreateUnit={handleCreateUnit}
+        onUpdateUnit={handleUpdateUnit}
+        onDeleteUnit={handleDeleteUnit}
+        onCreateSector={handleCreateSector}
+        onUpdateSector={handleUpdateSector}
+        onDeleteSector={handleDeleteSector}
+      />
     </ThemeProvider>
   );
 }

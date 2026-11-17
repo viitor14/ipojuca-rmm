@@ -38,6 +38,12 @@ function loadExpressAndCors() {
         post(path, ...handlers) {
           routes.push({ method: 'POST', path, handlers });
         },
+        put(path, ...handlers) {
+          routes.push({ method: 'PUT', path, handlers });
+        },
+        patch(path, ...handlers) {
+          routes.push({ method: 'PATCH', path, handlers });
+        },
         delete(path, ...handlers) {
           routes.push({ method: 'DELETE', path, handlers });
         },
@@ -78,7 +84,7 @@ function loadExpressAndCors() {
 
         // Parse JSON body (suporta stream HTTP ou req.body pre-injetado em testes in-memory)
         if (req.body === undefined) {
-          if (['POST', 'PUT', 'PATCH'].includes(req.method) && req[Symbol.asyncIterator]) {
+          if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req[Symbol.asyncIterator]) {
             const chunks = [];
             for await (const chunk of req) chunks.push(chunk);
             const raw = Buffer.concat(chunks).toString('utf8');

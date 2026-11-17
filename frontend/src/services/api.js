@@ -30,6 +30,55 @@ export const rmmApi = {
   getUnits(token) {
     return request('/api/units', { token });
   },
+  createUnit(token, payload) {
+    return request('/api/units', {
+      method: 'POST',
+      token,
+      body: payload,
+    });
+  },
+  updateUnit(token, unitId, payload) {
+    return request(`/api/units/${unitId}`, {
+      method: 'PUT',
+      token,
+      body: payload,
+    });
+  },
+  deleteUnit(token, unitId, payload = {}) {
+    const params = new URLSearchParams();
+    if (payload.target_unit_id) params.set('target_unit_id', payload.target_unit_id);
+    if (payload.target_sector_id) params.set('target_sector_id', payload.target_sector_id);
+    const qs = params.toString();
+    return request(`/api/units/${unitId}${qs ? `?${qs}` : ''}`, {
+      method: 'DELETE',
+      token,
+      body: payload,
+    });
+  },
+  createSector(token, unitId, payload) {
+    return request(`/api/units/${unitId}/sectors`, {
+      method: 'POST',
+      token,
+      body: payload,
+    });
+  },
+  updateSector(token, sectorId, payload) {
+    return request(`/api/sectors/${sectorId}`, {
+      method: 'PUT',
+      token,
+      body: payload,
+    });
+  },
+  deleteSector(token, sectorId, payload = {}) {
+    const params = new URLSearchParams();
+    if (payload.target_sector_id) params.set('target_sector_id', payload.target_sector_id);
+    const qs = params.toString();
+    return request(`/api/sectors/${sectorId}${qs ? `?${qs}` : ''}`, {
+      method: 'DELETE',
+      token,
+      body: payload,
+    });
+  },
   getMachines(token, { unitId, status } = {}) {
     const params = new URLSearchParams();
     if (unitId) params.set('unit_id', unitId);
@@ -139,6 +188,9 @@ export function connectDashboardSocket(token, handlers = {}) {
   }
   if (handlers.onAgentMessage) {
     socket.on('agent:message', handlers.onAgentMessage);
+  }
+  if (handlers.onUnitsUpdated) {
+    socket.on('units:updated', handlers.onUnitsUpdated);
   }
   if (handlers.onConnect) {
     socket.on('connect', handlers.onConnect);

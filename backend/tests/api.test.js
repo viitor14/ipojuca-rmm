@@ -352,3 +352,166 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
   assert.equal(diagRes.status, 200);
   assert.equal(diagRes.data.machine.idle_seconds, 420);
 });
+
+
+test('9. Ciclo #26 (CA-107 a CA-113): CRUD Completo de Unidades e Setores, Alocação 3D Anti-Colisão e RBAC', async () => {
+  const m = await enrollTestMachine();
+
+  const viewerLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'gestao@ipojuca.pe.gov.br', password: 'Gestao@Rmm2026' },
+  });
+  const adminLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+  });
+
+  // 1. RBAC (CA-113): VIEWER não pode criar/editar/excluir unidades ou setores
+  const viewerCreateUnit = await requestJson('POST', '/api/units', {
+    headers: { Authorization: `Bearer ${viewerLogin.data.token}` },
+    body: { name: 'USF Não Autorizada', unit_type: 'USF' },
+  });
+  assert.equal(viewerCreateUnit.status, 403);
+
+  const viewerCreateSector = await requestJson('POST', '/api/units/1/sectors', {
+    headers: { Authorization: `Bearer ${viewerLogin.data.token}` },
+    body: { name: 'Setor Não Autorizado', room_theme: 'CONS' },
+  });
+  assert.equal(viewerCreateSector.status, 403);
+
+  // 2. Criar Nova Unidade (CA-107)
+  const createUnitRes = await requestJson('POST', '/api/units', {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: {
+      name: 'USF Camela',
+      code: 'USF-CAM',
+      unit_type: 'UPA',
+      address: 'Distrito de Camela, Ipojuca - PE',
+      create_default_sectors: true,
+    },
+  });
+  assert.equal(createUnitRes.status, 201);
+  assert.equal(createUnitRes.data.unit.code, 'USF-CAM');
+  assert.equal(createUnitRes.data.unit.unit_type, 'UPA');
+  assert.equal(createUnitRes.data.unit.sectors.length, 4);
+  const createdUnitId = createUnitRes.data.unit.id;
+  const createdUnitFirstSectorId = createUnitRes.data.unit.sectors[0].id;
+
+  // 3. Editar Unidade (CA-108)
+  const editUnitRes = await requestJson('PUT', `/api/units/${createdUnitId}`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: {
+      name: 'UPA Camela 24h',
+      code: 'UPA-CAM',
+      unit_type: 'UPA',
+      address: 'Rodovia PE-60, Camela, Ipojuca - PE',
+    },
+  });
+  assert.equal(editUnitRes.status, 200);
+  assert.equal(editUnitRes.data.unit.name, 'UPA Camela 24h');
+  assert.equal(editUnitRes.data.unit.code, 'UPA-CAM');
+
+  // 4. Criar 5º e 6º Setores na Unidade 1 com Alocação Automática Sem Colisão (CA-110)
+  const sec5Res = await requestJson('POST', '/api/units/1/sectors', {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: {
+      name: 'Sala de Vacinação Especial',
+      code: 'VAC-01',
+      room_theme: 'FARM',
+    },
+  });
+  assert.equal(sec5Res.status, 201);
+  assert.equal(sec5Res.data.sector.bounds_x, 13.5);
+  assert.equal(sec5Res.data.sector.bounds_z, -3.5);
+
+  const sec6Res = await requestJson('POST', '/api/units/1/sectors', {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: {
+      name: 'CPD / Sala Técnica',
+      code: 'CPD-01',
+      room_theme: 'TI',
+    },
+  });
+  assert.equal(sec6Res.status, 201);
+  assert.equal(sec6Res.data.sector.bounds_x, 13.5);
+  assert.equal(sec6Res.data.sector.bounds_z, 3.5);
+
+  // Bloqueio de sigla duplicada na mesma unidade
+  const dupSecRes = await requestJson('POST', '/api/units/1/sectors', {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: { name: 'Duplicado', code: 'VAC-01', room_theme: 'FARM' },
+  });
+  assert.equal(dupSecRes.status, 409);
+
+  // 5. Editar Setor (CA-111)
+  const editSec5Res = await requestJson('PUT', `/api/sectors/${sec5Res.data.sector.id}`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: {
+      name: 'Imunização & Vacinas',
+      code: 'VAC-01',
+      room_theme: 'FARM',
+      width_3d: 9.0,
+      depth_3d: 5.0,
+    },
+  });
+  assert.equal(editSec5Res.status, 200);
+  assert.equal(editSec5Res.data.sector.name, 'Imunização & Vacinas');
+
+  // 6. Alocar PC no novo setor e Excluir Setor com Realocação Segura (CA-111 / CA-112)
+  const moveToSec5 = await requestJson('POST', `/api/machines/${m.id}/location`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: { unit_id: 1, sector_id: sec5Res.data.sector.id },
+  });
+  assert.equal(moveToSec5.status, 200);
+  assert.equal(moveToSec5.data.machine.sector_id, sec5Res.data.sector.id);
+
+  const delSec5Res = await requestJson(
+    'DELETE',
+    `/api/sectors/${sec5Res.data.sector.id}`,
+    {
+      headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+      body: { target_sector_id: 1 },
+    }
+  );
+  assert.equal(delSec5Res.status, 200);
+  assert.equal(delSec5Res.data.relocated_machines_count, 1);
+
+  const relocatedCheck = await repository.findMachineById(m.id);
+  assert.equal(relocatedCheck.sector_id, 1);
+
+  // Excluir setor vazio 6
+  const delSec6Res = await requestJson('DELETE', `/api/sectors/${sec6Res.data.sector.id}`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+  });
+  assert.equal(delSec6Res.status, 200);
+
+  // 7. Alocar PC na Nova Unidade e Excluir Unidade com Realocação (CA-109)
+  const moveToNewUnit = await requestJson('POST', `/api/machines/${m.id}/location`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: { unit_id: createdUnitId, sector_id: createdUnitFirstSectorId },
+  });
+  assert.equal(moveToNewUnit.status, 200);
+  assert.equal(moveToNewUnit.data.machine.unit_id, createdUnitId);
+
+  const delUnitRes = await requestJson('DELETE', `/api/units/${createdUnitId}`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: { target_unit_id: 1 },
+  });
+  assert.equal(delUnitRes.status, 200);
+  assert.equal(delUnitRes.data.relocated_machines_count, 1);
+
+  const finalMachineState = await repository.findMachineById(m.id);
+  assert.equal(finalMachineState.unit_id, 1);
+
+  // 8. Verificar Trilha de Auditoria Completa (RF-106)
+  const logs = await repository.listAuditLogs(20);
+  const actions = logs.map((l) => l.action_type);
+  for (const expected of [
+    'UNIT_CREATED',
+    'UNIT_UPDATED',
+    'UNIT_DELETED',
+    'SECTOR_CREATED',
+    'SECTOR_UPDATED',
+    'SECTOR_DELETED',
+  ]) {
+    assert.ok(actions.includes(expected), `Audit log deve conter ${expected}`);
+  }
+});

@@ -260,3 +260,18 @@ Para assegurar credibilidade visual de maquete arquitetônica premium (estética
   - `CRITICAL` (`CRÍTICO`): Vermelho crítico (`#EF4444`), pulso acelerado (`1.1s`), fundo coral suave (`rgba(254,242,242,0.97)`) + moldura CAD vermelha no tampo.
   - `OFFLINE` (`OFFLINE`): Ardósia neutra (`#64748B`), emissividade zerada (`0.0`), sem animação de pulso e tela em modo standby.
 - **Equilíbrio com Estética Habblaude:** O monitor mantém sua tela corporativa realista (sem blocos sólidos neon cobrindo o display), enquanto a leitura de estado é imediatamente óbvia tanto pelo *pill badge* flutuante quanto pelo friso LED no topo do gabinete visível em 360°.
+
+
+---
+
+## 13. Experiência do Gerenciador de Unidades e Setores e Planta 3D Adaptativa — Ciclo #26
+
+**Responsável:** `@designer`  
+**Skills Consultadas:** `.agents/skills/designer/design_system.md`, `.agents/skills/designer/ux_dashboard.md`
+
+- **Acesso Contextual Sem Poluição Visual ([App.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/App.jsx)):**
+  - Barra superior (`UnitSwitcherPod`) ganhou os botões `+ Unidade` e `✎ Unidade` com `flex-wrap` natural para escalar de 1 a múltiplas unidades sem quebrar o layout.
+  - Card lateral `SETORES` recebeu o botão `+ Setor` e micro-ações `✎` (editar) e `✕` (excluir) em cada `SectorMiniRow` para perfis autorizados.
+- **Modal Unificado `UnitSectorManagerModal` ([UnitSectorManagerModal.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/UnitSectorManagerModal.jsx)):**
+  - Segue rigorosamente o Design System (`Plus Jakarta Sans`, `JetBrains Mono`, superfícies `#FFFFFF`/`#F8FAF8`, acento institucional `#52796B` e alertas `#DC2626`/`#D97706`).
+  - Sugestão automática de sigla editável ao digitar o nome, seletor visual em 5 cartões de estilo 3D (`Recepção`, `Consultório`, `Farmácia / Vacina`, `Admin / Enfermagem`, `Sala Técnica / TI`), seção avançada retrátil de medidas/coordenadas 3D e painel de confirmação com escolha de destino ao excluir unidades ou setores que contenham computadores.

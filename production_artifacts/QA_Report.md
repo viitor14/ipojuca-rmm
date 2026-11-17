@@ -1136,3 +1136,44 @@ O Ciclo #25 implementou um sistema de sinalização visual de status em 3 camada
 - **Status:** **100% APROVADO PELO `@qa` E `@lead`**
 - Todas as 3 camadas complementares implementadas de forma modular e reativa sem alocações redundantes de GPU.
 - Pronto para build final de produção, commit e sincronização Git.
+
+
+---
+
+## Ciclo #26 — Gerenciamento Dinâmico Completo (CRUD) de Unidades de Saúde e Setores 3D (`@qa`)
+
+**Data:** 2026-11-17  
+**Fase:** FASE 9 — Testes e Auditoria  
+**Responsável:** `@qa`  
+**Skills Consultadas:** `.agents/skills/qa/test_strategy.md`, `.agents/skills/qa/quality_audit.md`  
+**Status do Ciclo:** **100% APROVADO**
+
+---
+
+### 1. Resumo Executivo da Validação
+
+O Ciclo #26 habilitou criação, edição e exclusão completas de **Unidades de Saúde** e **Setores 3D** diretamente pelo painel administrativo, com persistência dual (`mysql` / `memory`), alocação espacial automática anti-colisão (`computeNextFreeSectorSlot`), realocação segura de computadores vinculados na exclusão, atualização em tempo real (`units:updated` via Socket.io) e expansão dinâmica da maquete 3D (`computeBoardBounds`, `IsometricBoard`, `CameraRig` e `SectorRoomVoxel`).
+
+---
+
+### 2. Matriz de Verificação dos Critérios de Aceitação (`CA-107` a `CA-113`)
+
+| ID | Critério de Aceitação | Verificação Realizada | Resultado Obtido | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **CA-107** | **Criar Nova Unidade pelo Painel** | Teste #9 (`POST /api/units` via `ADMIN_N2`) + inspeção de [UnitSectorManagerModal.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/UnitSectorManagerModal.jsx) e [App.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/App.jsx). | Retorno HTTP `201` com criação automática dos 4 setores iniciais (`REC`, `CONS-01`, `FARM`, `ADM`) e seleção automática da nova unidade na interface. | **APROVADO** |
+| **CA-108** | **Editar Unidade e Persistir** | Teste #9 (`PUT /api/units/:id`) + inspeção de `ensureMysqlSeedData()` em [repository.js](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/src/database/repository.js). | Alteração de nome, código e endereço retornando HTTP `200`; *startup* MySQL condicionado a `LIKE '%Ã%'` e `COUNT(*) = 0`, preservando edições. | **APROVADO** |
+| **CA-109** | **Excluir Unidade com Segurança** | Teste #9 (`DELETE /api/units/:id` com máquina vinculada e `target_unit_id: 1`). | Retorno HTTP `200`, máquina realocada automaticamente para a unidade de destino (`relocated_machines_count: 1`) antes do `DELETE`; proteção contra exclusão da última unidade ativa. | **APROVADO** |
+| **CA-110** | **Criar Novo Setor com Alocação 3D Sem Colisão** | Teste #9 (`POST /api/units/1/sectors` para 5º e 6º setores sem coordenadas manuais) + inspeção de `IsometricBoard` em [DigitalTwin3D.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DigitalTwin3D.jsx). | Slots calculados em `(13.5, -3.5)` e `(13.5, 3.5)` sem sobreposição; sigla duplicada rejeitada com `409`; laje e corredor expandem via `computeBoardBounds()`. | **APROVADO** |
+| **CA-111** | **Editar e Excluir Setor** | Teste #9 (`PUT /api/sectors/:id` e `DELETE /api/sectors/:id` com máquina alocada e `target_sector_id: 1`). | Renomeação e ajuste aplicados (`200`); exclusão removeu o setor e transferiu a máquina com segurança para o setor de destino (`relocated_machines_count: 1`). | **APROVADO** |
+| **CA-112** | **Alocação de PCs nos Novos Setores** | Teste #9 (`POST /api/machines/:id/location` movendo estação para setor e unidade recém-criados) + verificação em [DiagnosticDrawer.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DiagnosticDrawer.jsx). | Alocação confirmada com HTTP `200`; `DiagnosticDrawer` itera dinamicamente `units` e `sectors`. | **APROVADO** |
+| **CA-113** | **Segurança RBAC & Build Limpo** | Teste #9 (`VIEWER` recebendo `403`), execução completa `npm --prefix backend test` (9/9 aprovados) e `npm --prefix frontend run build` (`9.79s`). | Suíte backend aprovada (`pass 9, fail 0, skipped 0`); build Vite transformou `672` módulos gerando `dist/assets/index-BFLoRAEo.js` (`1,249.57 kB`) sem erros. | **APROVADO** |
+
+---
+
+### 3. Parecer do Gate de Qualidade — Ciclo #26 (`@qa` + `@lead`)
+
+- **Status:** **100% APROVADO PELO `@qa` E `@lead`**
+- **Comandos Executados Após a Edição Final:**
+  - `npm --prefix backend test`: exit code `0` (`tests 9`, `pass 9`, `fail 0`, em `1842.1ms`, modo `memory` e `FORCE_NATIVE_ROUTER=1`).
+  - `npm --prefix frontend run build`: exit code `0` (`672 modules transformed`, `dist/index.html` `0.72 kB`, `dist/assets/index-BFLoRAEo.js` `1,249.57 kB`, em `9.79s`).
+- Sistema pronto para commit e push no repositório Git.

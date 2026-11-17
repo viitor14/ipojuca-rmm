@@ -90,12 +90,48 @@ const SectorTag3D = styled.div`
   white-space: nowrap;
 `;
 
+function computeBoardBounds(sectors = []) {
+  let minX = -9.0;
+  let maxX = 9.0;
+  let minZ = -6.0;
+  let maxZ = 6.0;
+
+  for (const s of sectors) {
+    const bx = Number(s.bounds_x || 0);
+    const bz = Number(s.bounds_z || 0);
+    const hw = Number(s.width_3d || 9.0) / 2;
+    const hd = Number(s.depth_3d || 5.0) / 2;
+    minX = Math.min(minX, bx - hw);
+    maxX = Math.max(maxX, bx + hw);
+    minZ = Math.min(minZ, bz - hd);
+    maxZ = Math.max(maxZ, bz + hd);
+  }
+
+  const spanX = Math.max(18.0, maxX - minX);
+  const spanZ = Math.max(12.0, maxZ - minZ);
+  const centerX = (minX + maxX) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  const scale = Math.max(1, spanX / 18.0, spanZ / 12.0);
+
+  return { minX, maxX, minZ, maxZ, spanX, spanZ, centerX, centerZ, scale };
+}
+
 /* Rig de Câmera Isométrica com interpolação suave e foco detalhado */
-function CameraRig({ cameraMode, selectedMachine, selectedSector, controlsRef }) {
+function CameraRig({
+  cameraMode,
+  selectedMachine,
+  selectedSector,
+  controlsRef,
+  boardBounds,
+}) {
   const targetLookAt = useRef(new THREE.Vector3(0, 0.4, 0));
   const targetCamPos = useRef(new THREE.Vector3(-11.2, 10.0, 11.2));
 
   useFrame(({ camera }) => {
+    const cx = boardBounds?.centerX || 0;
+    const cz = boardBounds?.centerZ || 0;
+    const scale = boardBounds?.scale || 1;
+
     if (cameraMode === 'FOCUS' && selectedMachine) {
       const posX = Number(selectedMachine.pos_x || 0);
       const posZ = Number(selectedMachine.pos_z || 0);
@@ -107,21 +143,25 @@ function CameraRig({ cameraMode, selectedMachine, selectedSector, controlsRef })
       targetLookAt.current.set(secX, 0.65, secZ);
       targetCamPos.current.set(secX - 4.8, 5.8, secZ + 4.8);
     } else if (cameraMode === 'TOP') {
-      targetLookAt.current.set(0, 0, 0);
-      targetCamPos.current.set(0, 18.0, 0.01);
+      targetLookAt.current.set(cx, 0, cz);
+      targetCamPos.current.set(cx, 18.0 * scale, cz + 0.01);
     } else if (cameraMode === 'ORBIT') {
       const time = Date.now() * 0.00035;
-      const radius = 15.0;
-      targetLookAt.current.set(0, 0.4, 0);
+      const radius = 15.0 * scale;
+      targetLookAt.current.set(cx, 0.4, cz);
       targetCamPos.current.set(
-        Math.cos(time) * radius,
-        10.5,
-        Math.sin(time) * radius
+        cx + Math.cos(time) * radius,
+        10.5 * Math.min(1.6, scale),
+        cz + Math.sin(time) * radius
       );
     } else {
       // ISO Padrão Habblaude Premium equilibrado e centrado na edificação
-      targetLookAt.current.set(0, 0.4, 0);
-      targetCamPos.current.set(-11.2, 10.0, 11.2);
+      targetLookAt.current.set(cx, 0.4, cz);
+      targetCamPos.current.set(
+        cx - 11.2 * scale,
+        10.0 * Math.min(1.65, scale),
+        cz + 11.2 * scale
+      );
     }
 
     if (cameraMode !== 'FREE') {
@@ -248,18 +288,21 @@ function getHabblaudeTexture(type, p1, p2) {
   return texture;
 }
 
-/* Base de Diorama Isométrico com Proporção Otimizada (Edificação Ocupa 80%+) */
-function IsometricBoard() {
+/* Base de Diorama Isométrico Adaptativa ao Tamanho da Unidade */
+function IsometricBoard({ sectors = [], boardBounds }) {
+  const bounds = boardBounds || computeBoardBounds(sectors);
+  const { minX, maxX, minZ, maxZ, spanX, spanZ, centerX, centerZ } = bounds;
+
   const grassTex = useMemo(() => {
     const tex = getHabblaudeTexture('grass');
     if (tex) {
       const cloned = tex.clone();
-      cloned.repeat.set(12, 9);
+      cloned.repeat.set(Math.round((spanX / 18) * 12), Math.round((spanZ / 12) * 9));
       cloned.needsUpdate = true;
       return cloned;
     }
     return null;
-  }, []);
+  }, [spanX, spanZ]);
 
   const deckTex = useMemo(() => {
     const tex = getHabblaudeTexture('deck');
@@ -272,17 +315,29 @@ function IsometricBoard() {
     return null;
   }, []);
 
+  const doorwayThresholds = useMemo(() => {
+    return (sectors || [])
+      .filter((s) => Number(s.bounds_z || 0) !== 0)
+      .map((s) => {
+        const bx = Number(s.bounds_x || 0);
+        const bz = Number(s.bounds_z || 0);
+        const hd = Number(s.depth_3d || 5.0) / 2;
+        const thresholdZ = bz < 0 ? bz + hd + 0.01 : bz - hd - 0.01;
+        return { id: s.id, x: bx, z: thresholdZ };
+      });
+  }, [sectors]);
+
   return (
     <group position={[0, 0, 0]}>
-      {/* 1. Substrato de sustentação do diorama (Reduzido para enquadramento perfeito) */}
-      <mesh receiveShadow position={[0, -0.42, 0]}>
-        <boxGeometry args={[20.6, 0.50, 14.6]} />
+      {/* 1. Substrato de sustentação do diorama */}
+      <mesh receiveShadow position={[centerX, -0.42, centerZ]}>
+        <boxGeometry args={[spanX + 2.6, 0.50, spanZ + 2.6]} />
         <meshStandardMaterial color="#3A2515" roughness={0.9} />
       </mesh>
 
-      {/* 2. Gramado Verde Vivo do Perímetro Externo (Margem discreta de jardim) */}
-      <mesh receiveShadow position={[0, -0.16, 0]}>
-        <boxGeometry args={[20.1, 0.14, 14.1]} />
+      {/* 2. Gramado Verde Vivo do Perímetro Externo */}
+      <mesh receiveShadow position={[centerX, -0.16, centerZ]}>
+        <boxGeometry args={[spanX + 2.1, 0.14, spanZ + 2.1]} />
         {grassTex ? (
           <meshStandardMaterial map={grassTex} roughness={0.75} />
         ) : (
@@ -290,21 +345,21 @@ function IsometricBoard() {
         )}
       </mesh>
 
-      {/* 3. Laje Estrutural Contígua da Edificação (100% da área sob salas e corredor) */}
-      <group position={[0, -0.05, 0]}>
+      {/* 3. Laje Estrutural Contígua da Edificação */}
+      <group position={[centerX, -0.05, centerZ]}>
         <mesh receiveShadow position={[0, 0, 0]}>
-          <boxGeometry args={[18.4, 0.14, 12.4]} />
+          <boxGeometry args={[spanX + 0.4, 0.14, spanZ + 0.4]} />
           <meshStandardMaterial color="#D7DDD5" roughness={0.65} />
         </mesh>
         {/* Rodapé externo de pedra */}
         <mesh position={[0, -0.05, 0]}>
-          <boxGeometry args={[18.5, 0.04, 12.5]} />
+          <boxGeometry args={[spanX + 0.5, 0.04, spanZ + 0.5]} />
           <meshStandardMaterial color="#86958B" roughness={0.8} />
         </mesh>
       </group>
 
-      {/* 4. Deck de madeira na entrada frontal da fachada oeste (acesso à recepção) */}
-      <mesh receiveShadow position={[-9.8, -0.04, 0]}>
+      {/* 4. Deck de madeira na entrada frontal da fachada oeste */}
+      <mesh receiveShadow position={[minX - 0.8, -0.04, 0]}>
         <boxGeometry args={[1.6, 0.08, 3.2]} />
         {deckTex ? (
           <meshStandardMaterial map={deckTex} roughness={0.55} />
@@ -313,12 +368,12 @@ function IsometricBoard() {
         )}
       </mesh>
       {/* Rampa suave de acessibilidade */}
-      <mesh receiveShadow position={[-10.75, -0.07, 0]} rotation={[0, 0, 0.12]}>
+      <mesh receiveShadow position={[minX - 1.75, -0.07, 0]} rotation={[0, 0, 0.12]}>
         <boxGeometry args={[0.5, 0.04, 3.0]} />
         <meshStandardMaterial color="#A57D5C" roughness={0.65} />
       </mesh>
       {/* Capacho de boas-vindas hospitalar */}
-      <mesh receiveShadow position={[-8.4, 0.021, 0]}>
+      <mesh receiveShadow position={[minX + 0.6, 0.021, 0]}>
         <boxGeometry args={[1.0, 0.006, 1.8]} />
         <meshStandardMaterial color="#1E3A8A" roughness={0.85} />
       </mesh>
@@ -326,41 +381,31 @@ function IsometricBoard() {
       {/* 5. Corredor Central Interno de Circulação Hospitalar com Passadeira */}
       <group position={[0, 0, 0]}>
         {/* Piso de circulação em porcelanato polido claro */}
-        <mesh receiveShadow position={[0, 0.01, 0]}>
-          <boxGeometry args={[18.0, 0.02, 2.0]} />
+        <mesh receiveShadow position={[centerX, 0.01, 0]}>
+          <boxGeometry args={[spanX, 0.02, 2.0]} />
           <meshStandardMaterial color="#F3EFEB" roughness={0.4} />
         </mesh>
         {/* Passadeira central cinza-azulada com bordas (Sem Z-fighting) */}
-        <mesh receiveShadow position={[0, 0.023, 0]}>
-          <boxGeometry args={[17.8, 0.004, 1.1]} />
+        <mesh receiveShadow position={[centerX, 0.023, 0]}>
+          <boxGeometry args={[spanX - 0.2, 0.004, 1.1]} />
           <meshStandardMaterial color="#557385" roughness={0.65} />
         </mesh>
-        <mesh position={[0, 0.026, -0.53]}>
-          <boxGeometry args={[17.8, 0.003, 0.04]} />
+        <mesh position={[centerX, 0.026, -0.53]}>
+          <boxGeometry args={[spanX - 0.2, 0.003, 0.04]} />
           <meshStandardMaterial color="#304757" />
         </mesh>
-        <mesh position={[0, 0.026, 0.53]}>
-          <boxGeometry args={[17.8, 0.003, 0.04]} />
+        <mesh position={[centerX, 0.026, 0.53]}>
+          <boxGeometry args={[spanX - 0.2, 0.003, 0.04]} />
           <meshStandardMaterial color="#304757" />
         </mesh>
 
-        {/* Soleiras em madeira nobre nos 4 vãos de porta */}
-        <mesh position={[-4.5, 0.023, -0.99]}>
-          <boxGeometry args={[1.3, 0.006, 0.16]} />
-          <meshStandardMaterial color="#6B472B" roughness={0.45} />
-        </mesh>
-        <mesh position={[4.5, 0.023, -0.99]}>
-          <boxGeometry args={[1.3, 0.006, 0.16]} />
-          <meshStandardMaterial color="#6B472B" roughness={0.45} />
-        </mesh>
-        <mesh position={[-4.5, 0.023, 0.99]}>
-          <boxGeometry args={[1.3, 0.006, 0.16]} />
-          <meshStandardMaterial color="#6B472B" roughness={0.45} />
-        </mesh>
-        <mesh position={[4.5, 0.023, 0.99]}>
-          <boxGeometry args={[1.3, 0.006, 0.16]} />
-          <meshStandardMaterial color="#6B472B" roughness={0.45} />
-        </mesh>
+        {/* Soleiras em madeira nobre dinâmicas nos vãos de porta */}
+        {doorwayThresholds.map((th) => (
+          <mesh key={`thresh-${th.id}`} position={[th.x, 0.023, th.z]}>
+            <boxGeometry args={[1.3, 0.006, 0.16]} />
+            <meshStandardMaterial color="#6B472B" roughness={0.45} />
+          </mesh>
+        ))}
 
         {/* Longarinas no corredor */}
         <group position={[2.0, 0.02, -0.74]}>
@@ -404,25 +449,25 @@ function IsometricBoard() {
       </group>
 
       {/* 6. Cercas Vivas Discretas no Perímetro Externo */}
-      <group position={[-9.6, 0.22, -6.6]}>
+      <group position={[minX - 0.6, 0.22, minZ - 0.6]}>
         <mesh castShadow position={[0, 0.15, 0]}>
           <boxGeometry args={[1.0, 0.35, 1.0]} />
           <meshStandardMaterial color="#345E3B" roughness={0.8} />
         </mesh>
       </group>
-      <group position={[-9.6, 0.22, 6.6]}>
+      <group position={[minX - 0.6, 0.22, maxZ + 0.6]}>
         <mesh castShadow position={[0, 0.15, 0]}>
           <boxGeometry args={[1.0, 0.35, 1.0]} />
           <meshStandardMaterial color="#345E3B" roughness={0.8} />
         </mesh>
       </group>
-      <group position={[9.4, 0.22, -6.6]}>
+      <group position={[maxX + 0.4, 0.22, minZ - 0.6]}>
         <mesh castShadow position={[0, 0.15, 0]}>
           <boxGeometry args={[1.0, 0.35, 1.0]} />
           <meshStandardMaterial color="#345E3B" roughness={0.8} />
         </mesh>
       </group>
-      <group position={[9.4, 0.22, 6.6]}>
+      <group position={[maxX + 0.4, 0.22, maxZ + 0.6]}>
         <mesh castShadow position={[0, 0.15, 0]}>
           <boxGeometry args={[1.0, 0.35, 1.0]} />
           <meshStandardMaterial color="#345E3B" roughness={0.8} />
@@ -503,17 +548,34 @@ const SECTOR_THEMES = {
   },
 };
 
+const VALID_SECTOR_ARCHETYPES = new Set(['REC', 'CONS', 'FARM', 'ADM', 'TI']);
+
+function resolveSectorArchetype(sector) {
+  const explicit = String(sector?.room_theme || '').trim().toUpperCase();
+  if (VALID_SECTOR_ARCHETYPES.has(explicit)) return explicit;
+
+  const combined = `${sector?.code || ''} ${sector?.name || ''}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+
+  if (combined.includes('REC') || sector?.id === 1) return 'REC';
+  if (combined.includes('MED') || combined.includes('CONS') || combined.includes('PSI') || sector?.id === 2) {
+    return 'CONS';
+  }
+  if (combined.includes('FAR') || combined.includes('VAC') || combined.includes('MEDIC') || sector?.id === 3) {
+    return 'FARM';
+  }
+  if (combined.includes('TI') || combined.includes('CPD') || sector?.id === 8) return 'TI';
+  return 'ADM';
+}
+
 function getSectorTheme(sector) {
-  const code = String(sector?.code || '').toUpperCase();
-  if (code.includes('REC') || sector?.id === 1) return SECTOR_THEMES.REC;
-  if (code.includes('MED') || code.includes('CONS') || sector?.id === 2) return SECTOR_THEMES.CONS;
-  if (code.includes('FAR') || sector?.id === 3) return SECTOR_THEMES.FARM;
-  if (code.includes('TI') || sector?.id === 8) return SECTOR_THEMES.TI;
-  return SECTOR_THEMES.ADM;
+  return SECTOR_THEMES[resolveSectorArchetype(sector)] || SECTOR_THEMES.ADM;
 }
 
 /* Paredes arquitetônicas com vãos de portas, rodapés nobres e janelas translúcidas */
-function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
+function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLabels = true }) {
   const baseX = Number(sector.bounds_x || 0);
   const baseZ = Number(sector.bounds_z || 0);
   const width = Number(sector.width_3d || 9.0);
@@ -524,9 +586,24 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
   const wallThickness = 0.18;
 
   const isNorth = baseZ < 0;
-  const isSouth = baseZ > 0;
-  const isWest = baseX < 0;
-  const isEast = baseX > 0;
+  const hasWestNeighbor = allSectors.some((other) => {
+    if (Number(other.id) === Number(sector.id)) return false;
+    const ox = Number(other.bounds_x || 0);
+    const oz = Number(other.bounds_z || 0);
+    const ohw = Number(other.width_3d || 9.0) / 2;
+    const ohd = Number(other.depth_3d || 5.0) / 2;
+    const sameZBand = Math.abs(oz - baseZ) < depth / 2 + ohd - 0.5;
+    return sameZBand && Math.abs(ox + ohw - (baseX - width / 2)) < 0.35;
+  });
+  const hasEastNeighbor = allSectors.some((other) => {
+    if (Number(other.id) === Number(sector.id)) return false;
+    const ox = Number(other.bounds_x || 0);
+    const oz = Number(other.bounds_z || 0);
+    const ohw = Number(other.width_3d || 9.0) / 2;
+    const ohd = Number(other.depth_3d || 5.0) / 2;
+    const sameZBand = Math.abs(oz - baseZ) < depth / 2 + ohd - 0.5;
+    return sameZBand && Math.abs(ox - ohw - (baseX + width / 2)) < 0.35;
+  });
 
   // Textura suave e refinada sem ruído
   const floorTexture = useMemo(() => {
@@ -864,8 +941,8 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
           <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
         </mesh>
 
-        {/* Janela lateral oeste com vidros duplos */}
-        {isWest && (
+        {/* Janela lateral oeste com vidros duplos (apenas fachada externa) */}
+        {!hasWestNeighbor && (
           <group position={[0, 0.22, 0]}>
             <mesh position={[wallThickness / 2 + 0.015, 0, 0]}>
               <boxGeometry args={[0.03, 0.75, 1.2]} />
@@ -887,8 +964,8 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
         )}
       </group>
 
-      {/* 6. PAREDE LATERAL LESTE (X+) */}
-      {isEast && (
+      {/* 6. PAREDE LATERAL LESTE (X+) — fechada quando não há sala vizinha colada à direita */}
+      {!hasEastNeighbor && (
         <group position={[width / 2 - wallThickness / 2, wallHeight / 2, 0]}>
           <mesh receiveShadow>
             <boxGeometry args={[wallThickness, wallHeight, depth]} />
@@ -902,16 +979,18 @@ function SectorRoomVoxel({ sector, sectorMachines = [], showLabels = true }) {
             <boxGeometry args={[wallThickness + 0.02, 0.05, depth + 0.02]} />
             <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
           </mesh>
-          <group position={[0, 0.22, 0]}>
-            <mesh position={[-wallThickness / 2 - 0.015, 0, 0]}>
-              <boxGeometry args={[0.03, 0.75, 1.2]} />
-              <meshStandardMaterial color="#5C4033" roughness={0.55} />
-            </mesh>
-            <mesh position={[-wallThickness / 2 - 0.02, 0, 0]}>
-              <boxGeometry args={[0.01, 0.61, 1.06]} />
-              <meshStandardMaterial color="#D1E8FA" transparent opacity={0.65} roughness={0.1} />
-            </mesh>
-          </group>
+          {baseX > 0 && (
+            <group position={[0, 0.22, 0]}>
+              <mesh position={[-wallThickness / 2 - 0.015, 0, 0]}>
+                <boxGeometry args={[0.03, 0.75, 1.2]} />
+                <meshStandardMaterial color="#5C4033" roughness={0.55} />
+              </mesh>
+              <mesh position={[-wallThickness / 2 - 0.02, 0, 0]}>
+                <boxGeometry args={[0.01, 0.61, 1.06]} />
+                <meshStandardMaterial color="#D1E8FA" transparent opacity={0.65} roughness={0.1} />
+              </mesh>
+            </group>
+          )}
         </group>
       )}
 
@@ -1022,11 +1101,12 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ }) {
 function ClinicalFurnitureVoxel({ sector }) {
   const baseX = Number(sector.bounds_x || 0);
   const baseZ = Number(sector.bounds_z || 0);
-  const isReception = sector.code === 'REC' || sector.id === 1;
-  const isConsult = sector.code === 'MED' || sector.code === 'CONS-01' || sector.id === 2;
-  const isPharma = sector.code === 'FAR' || sector.code === 'FARM' || sector.id === 3;
-  const isNurse = sector.code === 'ENF' || sector.code === 'ADM' || sector.id === 4 || sector.id === 6;
-  const isServer = sector.code === 'TI' || sector.id === 8;
+  const archetype = resolveSectorArchetype(sector);
+  const isReception = archetype === 'REC' && Number(sector.width_3d || 9.0) >= 7.5;
+  const isConsult = archetype === 'CONS';
+  const isPharma = archetype === 'FARM';
+  const isNurse = archetype === 'ADM';
+  const isServer = archetype === 'TI';
   const halfW = Number(sector.width_3d || 9.0) / 2;
   const halfD = Number(sector.depth_3d || 5.0) / 2;
   const isNorth = baseZ < 0;
@@ -1223,7 +1303,8 @@ function computeMachineLayout(machines, sectors) {
     });
     const bx = Number(sector.bounds_x || 0);
     const bz = Number(sector.bounds_z || 0);
-    const isReception = sector.code === 'REC' || Number(sector.id) === 1;
+    const isReception =
+      resolveSectorArchetype(sector) === 'REC' && Number(sector.width_3d || 9.0) >= 7.5;
 
     if (isReception) {
       // Layout ergonômico e 100% livre de colisões da Recepção (Ciclo #24)
@@ -1317,6 +1398,8 @@ export function DigitalTwin3D({
   const sectors = activeUnit?.sectors || [];
   const controlsRef = useRef();
 
+  const boardBounds = useMemo(() => computeBoardBounds(sectors), [sectors]);
+
   const validSectorIds = useMemo(
     () => new Set(sectors.map((s) => Number(s.id))),
     [sectors]
@@ -1363,16 +1446,20 @@ export function DigitalTwin3D({
 
         {/* 3. Luz direcional principal com sombras suaves (Soft Contact Shadows) */}
         <directionalLight
-          position={[12, 22, 12]}
+          position={[
+            (boardBounds?.centerX || 0) + 12 * (boardBounds?.scale || 1),
+            22 * Math.min(1.6, boardBounds?.scale || 1),
+            (boardBounds?.centerZ || 0) + 12 * (boardBounds?.scale || 1),
+          ]}
           intensity={1.15}
           castShadow
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
-          shadow-camera-far={50}
-          shadow-camera-left={-12}
-          shadow-camera-right={12}
-          shadow-camera-top={12}
-          shadow-camera-bottom={-12}
+          shadow-camera-far={Math.max(50, Math.round(50 * (boardBounds?.scale || 1)))}
+          shadow-camera-left={-12 * (boardBounds?.scale || 1)}
+          shadow-camera-right={12 * (boardBounds?.scale || 1)}
+          shadow-camera-top={12 * (boardBounds?.scale || 1)}
+          shadow-camera-bottom={-12 * (boardBounds?.scale || 1)}
           shadow-bias={-0.00004}
           shadow-normalBias={0.025}
           shadow-radius={2.5}
@@ -1387,10 +1474,11 @@ export function DigitalTwin3D({
           selectedMachine={focusMachine}
           selectedSector={selectedSector}
           controlsRef={controlsRef}
+          boardBounds={boardBounds}
         />
 
-        {/* Base da Maquete */}
-        <IsometricBoard />
+        {/* Base da Maquete (Adaptativa à quantidade e largura dos setores) */}
+        <IsometricBoard sectors={sectors} boardBounds={boardBounds} />
 
         {/* Salas e Setores da Unidade com Paredes Cutaway */}
         {sectors.map((sector) => {
@@ -1401,6 +1489,7 @@ export function DigitalTwin3D({
             <group key={`sector-${sector.id}`}>
               <SectorRoomVoxel
                 sector={sector}
+                allSectors={sectors}
                 sectorMachines={sectorMachines}
                 showLabels={sceneLayers.labels !== false}
               />
@@ -1434,7 +1523,7 @@ export function DigitalTwin3D({
           }}
           maxPolarAngle={Math.PI / 2.15}
           minDistance={3.5}
-          maxDistance={28}
+          maxDistance={Math.max(28, Math.round(28 * (boardBounds.scale || 1)))}
         />
       </Canvas>
     </StageContainer>
