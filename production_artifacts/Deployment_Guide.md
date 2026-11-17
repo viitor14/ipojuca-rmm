@@ -100,7 +100,7 @@ git commit -m "feat(frontend): evolve 3D architectural digital twin, clinical fu
 git push origin main
 
 # Na VPS (root@srv912524):
-cd /opt/ipojuca-rmm && git pull origin main && docker compose up -d --build frontend
+cd /home/ipojuca-rmm && git pull origin main && docker compose up -d --build frontend
 ```
 
 
