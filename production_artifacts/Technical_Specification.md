@@ -1960,3 +1960,35 @@ Campos novos são opcionais no backend: agentes antigos (incluindo o C# atual) c
 O pipeline do **Ciclo #27** está **pausado no Gate de Aprovação da Fase 1**. Nenhum código-fonte (`agent/`, `backend/`, `infrastructure/`) foi alterado.
 
 Responda **`Approved`** (aceitando os padrões propostos para P1 e P2) ou indique alterações. Após a aprovação, a sequência será: Fase 2 (`@lead`, arquitetura) → Fase 3 (`@security`, rebind/spoofing) → Fase 4 (`@dba`, migration) → Fase 6 (`@engineer`, coletor + upsert) → Fase 9 (`@qa`) → Fase 10 (`@security`). As fases 5, 7, 8 e 11 (design, frontend, n8n, deploy) não se aplicam a este ciclo.
+
+---
+
+# CICLO #28 — CORREÇÃO DO CRUD DE UNIDADES E SETORES
+
+## 51. Diagnóstico e Correção (`@lead` + `@engineer`)
+
+**Sintoma relatado:** não era possível criar, editar e excluir unidades e setores pelo painel.
+
+**Diagnóstico (evidências coletadas):**
+1. O bundle publicado em `http://31.97.86.253:8095/assets/index-DhQSi7Tb.js` **não contém** a interface de CRUD (nenhuma ocorrência de "Cadastrar Nova Unidade", "Novo Setor" ou "Excluir Setor"). O `frontend/dist` local (`index-BFLoRAEo.js`) contém. Ou seja, o painel em produção roda um build anterior ao Ciclo #26 — a interface de gestão simplesmente não existe lá.
+2. A API responde corretamente em modo memória: criação (201), edição (200) e exclusão (200) de unidade e setor, com RBAC bloqueando VIEWER (403) e sigla duplicada retornando 409.
+3. Dois defeitos reais no backend foram encontrados por leitura e corrigidos:
+   - `deleteUnit` podia deixar computadores apontando para setores já excluídos (violação de `fk_machines_sector`, erro 500) quando a realocação individual falhava;
+   - `deleteSector` aceitava `target_sector_id` de **outra unidade**, movendo os computadores para fora da unidade sem aviso.
+
+**Correções aplicadas:**
+- `repository.deleteUnit`: realocação em lote de segurança (`UPDATE machines SET unit_id=?, sector_id=? WHERE unit_id=?`) antes de excluir os setores, nos modos MySQL e memória.
+- `repository.deleteSector`: destino precisa pertencer à mesma unidade, senão HTTP 400 com mensagem clara.
+- `frontend/dist` regerado a partir do código atual (build Vite concluído).
+
+**Critérios de aceitação:**
+
+| ID | Critério | Evidência |
+| :--- | :--- | :--- |
+| CA-131 | Excluir unidade com computadores realoca todos e remove unidade e setores | Teste 11: `relocated_machines_count = 1`, unidade e setores ausentes, máquina no setor de destino |
+| CA-132 | Setor de destino de outra unidade é rejeitado | Teste 11: HTTP 400 e setor original preservado |
+| CA-133 | Exclusão de setor com realocação | Teste 11: HTTP 200 e setor removido |
+| CA-134 | Painel contém a interface de CRUD | `frontend/dist/assets/index-BFLoRAEo.js` contém "Cadastrar Nova Unidade" |
+| CA-135 | Regressão | `npm --prefix backend test`: 11 de 11 |
+
+**Pendência de implantação:** o painel em produção continua com o build antigo até o redeploy do container `frontend` na VPS (Fase 11, exige autorização).

@@ -1200,3 +1200,18 @@ O Ciclo #26 habilitou criação, edição e exclusão completas de **Unidades de
 Também testado: smbios divergente retorna 409 e audita `HARDWARE_KEY_CONFLICT`; heartbeat com serial genérico não apaga o serial já guardado.
 
 **Pendência de QA:** executar a migration e o teste de upsert em um MySQL real (ver Deployment_Guide) antes de qualquer implantação.
+
+
+---
+
+## Ciclo #28 — QA do CRUD de Unidades e Setores
+
+| Verificação | Resultado |
+| :--- | :--- |
+| Suíte backend (`npm --prefix backend test`) | 11 de 11 passando, incluindo o teste 11 novo |
+| Fluxo HTTP completo em modo memória (criar, editar, excluir unidade e setor) | 201 / 200 / 201 / 200 / 200 / 200 |
+| RBAC | VIEWER recebe 403 em criar unidade e criar setor |
+| Sigla duplicada | 409 |
+| Build do frontend | `vite build` concluído; bundle com a interface de CRUD |
+| Painel publicado (:8095) | **Falha confirmada**: bundle antigo sem a interface de CRUD; depende de redeploy |
+| Verificação visual no navegador | Não realizada: a ferramenta de navegador não alcança `localhost` nesta máquina |

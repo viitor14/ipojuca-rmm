@@ -1626,6 +1626,20 @@ class RmmRepository {
         });
         if (updated) relocatedMachines.push(updated);
       }
+
+      if (this.mode === 'mysql') {
+        await this.pool.execute(
+          'UPDATE machines SET unit_id = ?, sector_id = ?, updated_at = NOW() WHERE unit_id = ?',
+          [destUnit.id, destSector.id, id]
+        );
+      } else {
+        for (const m of this.machines) {
+          if (m.unit_id === id) {
+            m.unit_id = destUnit.id;
+            m.sector_id = destSector.id;
+          }
+        }
+      }
     }
 
     if (this.mode === 'mysql') {
@@ -1822,8 +1836,15 @@ class RmmRepository {
     if (sectorMachines.length > 0) {
       if (targetSectorId) {
         destSector = await this.findSectorById(targetSectorId);
-        if (!destSector || destSector.id === id) {
-          throw createDomainError('Setor de destino inválido para realocação.', 400);
+        if (
+          !destSector ||
+          Number(destSector.id) === id ||
+          Number(destSector.unit_id) !== Number(existing.unit_id)
+        ) {
+          throw createDomainError(
+            'Setor de destino inválido: escolha um setor da mesma unidade.',
+            400
+          );
         }
       } else if (siblings.length > 0) {
         destSector = siblings[0];

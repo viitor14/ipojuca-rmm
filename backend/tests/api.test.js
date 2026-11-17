@@ -618,3 +618,66 @@ test('10. Ciclo #27 (CA-124 a CA-128): identidade de hardware, Upsert por serial
   assert.equal(kept.ip_address, '10.20.1.16');
   assert.equal(kept.unit_id, 2);
 });
+
+test('11. Ciclo #28 (CA-131 a CA-133): exclusão de unidade/setor não deixa vínculo órfão e valida setor de destino', async () => {
+  const adminLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+  });
+  const token = adminLogin.data.token;
+  const auth = { Authorization: `Bearer ${token}` };
+
+  const unitA = await requestJson('POST', '/api/units', {
+    headers: auth,
+    body: { name: 'USF Origem Teste', code: 'USF-ORIG-T', unit_type: 'USF', create_default_sectors: true },
+  });
+  assert.equal(unitA.status, 201);
+  const unitB = await requestJson('POST', '/api/units', {
+    headers: auth,
+    body: { name: 'USF Destino Teste', code: 'USF-DEST-T', unit_type: 'USF', create_default_sectors: true },
+  });
+  assert.equal(unitB.status, 201);
+  const sectorA = unitA.data.unit.sectors[0];
+  const sectorB = unitB.data.unit.sectors[0];
+
+  const machine = await repository.enrollNewAgentMachine({
+    agentUuid: 'agt-crud-28',
+    agentToken: 'tok-crud-28',
+    unitId: unitA.data.unit.id,
+    sectorId: sectorA.id,
+    inventory: { hostname: 'PC-CRUD-28', serial_number: 'CRUD28SN', ram_total_mb: 4096, disk_total_gb: 120 },
+  });
+  assert.ok(machine.id);
+
+  const crossUnit = await requestJson('DELETE', `/api/sectors/${sectorA.id}?target_sector_id=${sectorB.id}`, {
+    headers: auth,
+  });
+  assert.equal(crossUnit.status, 400);
+  assert.ok(await repository.findSectorById(sectorA.id));
+
+  const deleteUnit = await requestJson(
+    `DELETE`,
+    `/api/units/${unitA.data.unit.id}?target_unit_id=${unitB.data.unit.id}&target_sector_id=${sectorB.id}`,
+    { headers: auth }
+  );
+  assert.equal(deleteUnit.status, 200);
+  assert.equal(deleteUnit.data.relocated_machines_count, 1);
+  assert.equal(await repository.findUnitById(unitA.data.unit.id), null);
+  assert.equal((await repository.listSectorsByUnit(unitA.data.unit.id)).length, 0);
+
+  const relocated = await repository.findMachineById(machine.id);
+  assert.equal(relocated.unit_id, unitB.data.unit.id);
+  assert.equal(relocated.sector_id, sectorB.id);
+
+  const sectorC = await requestJson('POST', `/api/units/${unitB.data.unit.id}/sectors`, {
+    headers: auth,
+    body: { name: 'Sala Exclusão', code: 'DEL-T', room_theme: 'CONS' },
+  });
+  assert.equal(sectorC.status, 201);
+  const delSector = await requestJson(
+    'DELETE',
+    `/api/sectors/${sectorC.data.sector.id}?target_sector_id=${sectorB.id}`,
+    { headers: auth }
+  );
+  assert.equal(delSector.status, 200);
+  assert.equal(await repository.findSectorById(sectorC.data.sector.id), null);
+});
