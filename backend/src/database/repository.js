@@ -1,5 +1,12 @@
 const env = require('../config/env');
 const { hashPassword, hashAgentToken } = require('../middlewares/auth');
+const {
+  computeHardwareIdentity,
+  normalizeSerial,
+  normalizeMac,
+  normalizeSmbiosUuid,
+  diffInventory,
+} = require('../services/hardwareIdentity');
 
 const ALLOWED_UNIT_TYPES = new Set([
   'USF',
@@ -12,6 +19,19 @@ const ALLOWED_UNIT_TYPES = new Set([
 ]);
 
 const ALLOWED_ROOM_THEMES = new Set(['REC', 'CONS', 'FARM', 'ADM', 'TI']);
+
+function toSmallInt(value, max) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < 1 || n > max) return null;
+  return n;
+}
+
+function toMysqlDatetime(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 19).replace('T', ' ');
+}
 
 function createDomainError(message, statusCode = 400) {
   const err = new Error(message);
@@ -113,6 +133,7 @@ class RmmRepository {
     this.telemetryHistory = [];
     this.remoteTasks = [];
     this.auditLogs = [];
+    this.inventoryChanges = [];
     this.lastBroadcastedIdleByMachine = new Map();
 
     this.users = [
@@ -203,6 +224,48 @@ class RmmRepository {
       // Coluna já existe
     }
 
+    // Ciclo #27: identidade de hardware (espelha infrastructure/mysql/02_hardware_identity_upsert.sql)
+    const identityMigrations = [
+      'ALTER TABLE machines MODIFY COLUMN serial_number VARCHAR(100) NULL DEFAULT NULL',
+      'ALTER TABLE machines MODIFY COLUMN mac_address VARCHAR(32) NULL DEFAULT NULL',
+      'ALTER TABLE machines ADD COLUMN smbios_uuid CHAR(36) NULL DEFAULT NULL',
+      'ALTER TABLE machines ADD COLUMN cpu_cores TINYINT UNSIGNED NULL DEFAULT NULL',
+      'ALTER TABLE machines ADD COLUMN cpu_threads SMALLINT UNSIGNED NULL DEFAULT NULL',
+      'ALTER TABLE machines ADD COLUMN hardware_key CHAR(64) NULL DEFAULT NULL',
+      "ALTER TABLE machines ADD COLUMN identity_confidence ENUM('HIGH','MEDIUM','LOW') NOT NULL DEFAULT 'LOW'",
+      'ALTER TABLE machines ADD COLUMN inventory_collected_at DATETIME NULL DEFAULT NULL',
+      'ALTER TABLE machines ADD UNIQUE KEY uk_machines_hardware_key (hardware_key)',
+      'ALTER TABLE machines ADD INDEX idx_machines_serial (serial_number)',
+      'ALTER TABLE machines ADD INDEX idx_machines_mac (mac_address)',
+      `CREATE TABLE IF NOT EXISTS machine_inventory_changes (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        machine_id INT NOT NULL,
+        field_name VARCHAR(32) NOT NULL,
+        old_value VARCHAR(255) DEFAULT NULL,
+        new_value VARCHAR(255) DEFAULT NULL,
+        changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_inv_changes_machine FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+        INDEX idx_inv_changes_machine_time (machine_id, changed_at)
+      ) ENGINE=InnoDB`,
+    ];
+    for (const ddl of identityMigrations) {
+      try {
+        await this.pool.query(ddl);
+      } catch {
+        // Coluna/indice ja existe
+      }
+    }
+    try {
+      await this.pool.query(
+        "UPDATE machines SET serial_number = NULL WHERE serial_number IN ('N/A', 'SN-AUTO') OR serial_number LIKE 'SN-%'"
+      );
+      await this.pool.query(
+        "UPDATE machines SET mac_address = NULL WHERE mac_address = '00:00:00:00:00:00'"
+      );
+    } catch {
+      // Segue sem limpeza de placeholders
+    }
+
     // Semeia unidades/setores iniciais somente se o banco ainda estiver vazio
     try {
       const [[countRow]] = await this.pool.query('SELECT COUNT(*) AS cnt FROM health_units');
@@ -289,9 +352,24 @@ class RmmRepository {
     unitId = 1,
     sectorId = 1,
     inventory = {},
+    ipAddress = '0.0.0.0',
   }) {
     const tokenHash = hashAgentToken(agentToken);
     const nowIso = new Date().toISOString();
+    const identity = computeHardwareIdentity(inventory);
+
+    if (identity.hardware_key) {
+      const existing = await this.findMachineByHardwareKey(identity.hardware_key);
+      if (existing) {
+        return this.rebindAgentToMachine(existing, {
+          agentUuid,
+          tokenHash,
+          inventory,
+          identity,
+          ipAddress,
+        });
+      }
+    }
 
     let resolvedUnitId = Number(unitId);
     let sector = null;
@@ -350,8 +428,25 @@ class RmmRepository {
           (agent_uuid, agent_token_hash, is_revoked, unit_id, sector_id, hostname,
            manufacturer, model, serial_number, mac_address, ip_address, cpu_model,
            ram_total_mb, disk_type, disk_total_gb, os_version, agent_version,
-           health_status, pos_x, pos_y, pos_z, last_seen_at)
-         VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1.0.0', 'NORMAL', ?, 0.65, ?, NOW())`,
+           health_status, pos_x, pos_y, pos_z, last_seen_at,
+           smbios_uuid, cpu_cores, cpu_threads, hardware_key, identity_confidence, inventory_collected_at)
+         VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1.0.0', 'NORMAL', ?, 0.65, ?, NOW(),
+                 ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           agent_uuid = VALUES(agent_uuid),
+           agent_token_hash = VALUES(agent_token_hash),
+           hostname = VALUES(hostname),
+           manufacturer = VALUES(manufacturer),
+           model = VALUES(model),
+           serial_number = VALUES(serial_number),
+           mac_address = VALUES(mac_address),
+           ip_address = VALUES(ip_address),
+           cpu_model = VALUES(cpu_model),
+           ram_total_mb = VALUES(ram_total_mb),
+           disk_type = VALUES(disk_type),
+           disk_total_gb = VALUES(disk_total_gb),
+           os_version = VALUES(os_version),
+           last_seen_at = NOW()`,
         [
           agentUuid,
           tokenHash,
@@ -360,8 +455,8 @@ class RmmRepository {
           inventory.hostname || agentUuid,
           inventory.manufacturer || 'Windows PC',
           inventory.model || 'Workstation',
-          inventory.serial_number || 'SN-AUTO',
-          inventory.mac_address || '00:00:00:00:00:00',
+          identity.serial_number,
+          identity.mac_address,
           inventory.ip_address || '0.0.0.0',
           resolvedCpuModel,
           resolvedRamMb,
@@ -370,6 +465,12 @@ class RmmRepository {
           resolvedOsVersion,
           posX,
           posZ,
+          identity.smbios_uuid,
+          toSmallInt(inventory.cpu_cores, 255),
+          toSmallInt(inventory.cpu_threads, 65535),
+          identity.hardware_key,
+          identity.identity_confidence,
+          toMysqlDatetime(inventory.inventory_collected_at),
         ]
       );
       return this.findMachineByAgentUuid(agentUuid);
@@ -387,8 +488,14 @@ class RmmRepository {
       hostname: inventory.hostname || agentUuid,
       manufacturer: inventory.manufacturer || 'Windows PC',
       model: inventory.model || 'Workstation',
-      serial_number: inventory.serial_number || 'SN-AUTO',
-      mac_address: inventory.mac_address || '00:00:00:00:00:00',
+      serial_number: identity.serial_number,
+      mac_address: identity.mac_address,
+      smbios_uuid: identity.smbios_uuid,
+      hardware_key: identity.hardware_key,
+      identity_confidence: identity.identity_confidence,
+      cpu_cores: toSmallInt(inventory.cpu_cores, 255),
+      cpu_threads: toSmallInt(inventory.cpu_threads, 65535),
+      inventory_collected_at: toMysqlDatetime(inventory.inventory_collected_at),
       ip_address: inventory.ip_address || '0.0.0.0',
       cpu_model: resolvedCpuModel,
       ram_total_mb: resolvedRamMb,
@@ -411,6 +518,133 @@ class RmmRepository {
     };
     this.machines.push(newMachine);
     return newMachine;
+  }
+
+  async findMachineByHardwareKey(hardwareKey) {
+    if (!hardwareKey) return null;
+    if (this.mode === 'mysql') {
+      const [rows] = await this.pool.execute(
+        'SELECT * FROM machines WHERE hardware_key = ? LIMIT 1',
+        [hardwareKey]
+      );
+      return rows[0] || null;
+    }
+    return this.machines.find((m) => m.hardware_key === hardwareKey) || null;
+  }
+
+  async rebindAgentToMachine(existing, { agentUuid, tokenHash, inventory, identity, ipAddress }) {
+    if (existing.is_revoked) {
+      throw createDomainError('Equipamento com credencial revogada não pode ser reassociado.', 403);
+    }
+    if (
+      existing.smbios_uuid &&
+      identity.smbios_uuid &&
+      existing.smbios_uuid !== identity.smbios_uuid
+    ) {
+      await this.recordAuditLog({
+        machineId: existing.id,
+        actionType: 'HARDWARE_KEY_CONFLICT',
+        ipAddress,
+        details: { agentUuid, reason: 'smbios_uuid divergente para o mesmo serial/MAC' },
+      });
+      throw createDomainError('Conflito de identidade de hardware.', 409);
+    }
+
+    const previousAgentUuid = existing.agent_uuid;
+    const ramMb = Number(inventory.ram_total_mb || 0) || existing.ram_total_mb;
+    const diskGb = Math.round(Number(inventory.disk_total_gb || 0)) || existing.disk_total_gb;
+    const fields = {
+      hostname: inventory.hostname || existing.hostname,
+      manufacturer: inventory.manufacturer || existing.manufacturer,
+      model: inventory.model || existing.model,
+      serial_number: identity.serial_number || existing.serial_number,
+      mac_address: identity.mac_address || existing.mac_address,
+      ip_address: inventory.ip_address || existing.ip_address,
+      cpu_model: inventory.cpu_model || existing.cpu_model,
+      ram_total_mb: ramMb,
+      disk_type: inventory.disk_type || existing.disk_type,
+      disk_total_gb: diskGb,
+      os_version: inventory.os_version || existing.os_version,
+    };
+
+    const inventoryDiff = diffInventory(existing, fields);
+
+    if (this.mode === 'mysql') {
+      await this.pool.execute(
+        `UPDATE machines SET agent_uuid=?, agent_token_hash=?, hostname=?, manufacturer=?, model=?,
+          serial_number=?, mac_address=?, ip_address=?, cpu_model=?, ram_total_mb=?, disk_type=?,
+          disk_total_gb=?, os_version=?, last_seen_at=NOW()
+         WHERE id=?`,
+        [
+          agentUuid,
+          tokenHash,
+          fields.hostname,
+          fields.manufacturer,
+          fields.model,
+          fields.serial_number,
+          fields.mac_address,
+          fields.ip_address,
+          fields.cpu_model,
+          fields.ram_total_mb,
+          fields.disk_type,
+          fields.disk_total_gb,
+          fields.os_version,
+          existing.id,
+        ]
+      );
+    } else {
+      Object.assign(existing, fields, {
+        agent_uuid: agentUuid,
+        agent_token_hash: tokenHash,
+        last_seen_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    await this.recordInventoryChanges(existing.id, inventoryDiff);
+    await this.recordAuditLog({
+      machineId: existing.id,
+      actionType: 'AGENT_REBOUND',
+      ipAddress,
+      details: { previousAgentUuid, newAgentUuid: agentUuid, identity: identity.identity_confidence },
+    });
+    return this.findMachineById(existing.id);
+  }
+
+  async recordInventoryChanges(machineId, changes = []) {
+    if (!changes.length) return;
+    if (this.mode === 'mysql') {
+      for (const c of changes) {
+        await this.pool.execute(
+          `INSERT INTO machine_inventory_changes (machine_id, field_name, old_value, new_value)
+           VALUES (?, ?, ?, ?)`,
+          [machineId, c.field_name, c.old_value, c.new_value]
+        );
+      }
+      return;
+    }
+    for (const c of changes) {
+      this.inventoryChanges.push({
+        id: this.inventoryChanges.length + 1,
+        machine_id: Number(machineId),
+        ...c,
+        changed_at: new Date().toISOString(),
+      });
+    }
+  }
+
+  async listInventoryChanges(machineId, limit = 50) {
+    if (this.mode === 'mysql') {
+      const [rows] = await this.pool.query(
+        `SELECT * FROM machine_inventory_changes WHERE machine_id = ? ORDER BY changed_at DESC, id DESC LIMIT ${Number(limit) || 50}`,
+        [Number(machineId)]
+      );
+      return rows;
+    }
+    return this.inventoryChanges
+      .filter((c) => c.machine_id === Number(machineId))
+      .slice(-limit)
+      .reverse();
   }
 
   async findUserByEmail(email) {
@@ -571,12 +805,44 @@ class RmmRepository {
       inventory.ram_total_mb ||
       (inventory.ram_total_gb ? Math.round(Number(inventory.ram_total_gb) * 1024) : 0);
 
+    const incomingIdentity = computeHardwareIdentity(inventory);
+    let identity = computeHardwareIdentity({
+      serial_number: incomingIdentity.serial_number || normalizeSerial(machine.serial_number),
+      mac_address: incomingIdentity.mac_address || normalizeMac(machine.mac_address),
+      smbios_uuid: incomingIdentity.smbios_uuid || normalizeSmbiosUuid(machine.smbios_uuid),
+    });
+    if (identity.hardware_key && identity.hardware_key !== machine.hardware_key) {
+      const holder = await this.findMachineByHardwareKey(identity.hardware_key);
+      if (holder && Number(holder.id) !== Number(machine.id)) {
+        await this.recordAuditLog({
+          machineId: machine.id,
+          actionType: 'HARDWARE_KEY_CONFLICT',
+          ipAddress: '0.0.0.0',
+          details: { agentUuid, conflictingMachineId: holder.id },
+        });
+        identity = {
+          serial_number: normalizeSerial(machine.serial_number),
+          mac_address: normalizeMac(machine.mac_address),
+          smbios_uuid: normalizeSmbiosUuid(machine.smbios_uuid),
+          hardware_key: machine.hardware_key || null,
+          identity_confidence: machine.identity_confidence || 'LOW',
+        };
+      }
+    }
+
     const updatedFields = {
       hostname: inventory.hostname || machine.hostname,
       manufacturer: inventory.manufacturer || machine.manufacturer,
       model: inventory.model || machine.model,
-      serial_number: inventory.serial_number || machine.serial_number,
-      mac_address: inventory.mac_address || machine.mac_address,
+      serial_number: identity.serial_number,
+      mac_address: identity.mac_address,
+      smbios_uuid: identity.smbios_uuid,
+      hardware_key: identity.hardware_key,
+      identity_confidence: identity.identity_confidence,
+      cpu_cores: toSmallInt(inventory.cpu_cores, 255) ?? machine.cpu_cores ?? null,
+      cpu_threads: toSmallInt(inventory.cpu_threads, 65535) ?? machine.cpu_threads ?? null,
+      inventory_collected_at:
+        toMysqlDatetime(inventory.inventory_collected_at) ?? machine.inventory_collected_at ?? null,
       ip_address: inventory.ip_address || machine.ip_address,
       cpu_model: inventory.cpu_model || inventory.processor || machine.cpu_model,
       ram_total_mb: Number(incomingRamMb || machine.ram_total_mb),
@@ -604,15 +870,25 @@ class RmmRepository {
       updated_at: nowIso,
     };
 
+    const inventoryDiff = diffInventory(machine, updatedFields);
+
     if (this.mode === 'mysql') {
       await this.pool.execute(
         `UPDATE machines SET
+          smbios_uuid=?, hardware_key=?, identity_confidence=?, cpu_cores=?, cpu_threads=?,
+          inventory_collected_at=?,
           hostname=?, manufacturer=?, model=?, serial_number=?, mac_address=?, ip_address=?,
           cpu_model=?, ram_total_mb=?, disk_type=?, disk_total_gb=?, os_version=?, agent_version=?,
           health_status=?, cpu_usage_pct=?, ram_usage_pct=?, disk_usage_pct=?, temperature_c=?,
           uptime_seconds=?, idle_seconds=?, spooler_running=?, last_seen_at=NOW()
         WHERE id=?`,
         [
+          updatedFields.smbios_uuid,
+          updatedFields.hardware_key,
+          updatedFields.identity_confidence,
+          updatedFields.cpu_cores,
+          updatedFields.cpu_threads,
+          updatedFields.inventory_collected_at,
           updatedFields.hostname,
           updatedFields.manufacturer,
           updatedFields.model,
@@ -670,6 +946,7 @@ class RmmRepository {
       }
     }
 
+    await this.recordInventoryChanges(machine.id, inventoryDiff);
     return this.findMachineById(machine.id);
   }
 

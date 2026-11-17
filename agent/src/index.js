@@ -192,7 +192,17 @@ async function startAgentService() {
 }
 
 if (require.main === module) {
-  if (process.argv.includes('--once')) {
+  if (process.argv.includes('--inventory')) {
+    collectTelemetrySnapshot()
+      .then((snap) => {
+        console.log(JSON.stringify(snap, null, 2));
+        process.exit(0);
+      })
+      .catch((err) => {
+        console.error('[IpojucaRMMService] Erro na coleta de inventário:', err.message);
+        process.exit(1);
+      });
+  } else if (process.argv.includes('--once')) {
     sendHeartbeatOnce({ skipNativeQueries: process.argv.includes('--fast') })
       .then((res) => {
         console.log('[IpojucaRMMService] Heartbeat único enviado com sucesso:', res);

@@ -189,3 +189,19 @@ Como os computadores monitorados estão em **Unidades de Saúde (USFs, Policlín
   3. **Integridade Referencial Segura (Zero Órfãos):** Exclusões de unidades e setores transferem explicitamente eventuais máquinas alocadas para a unidade/setor de destino antes do `DELETE` SQL e bloqueiam a exclusão da última unidade ativa ou do último setor ocupado sem destino alternativo.
   4. **Trilha de Auditoria Imutável:** Todas as mutações gravam registros `UNIT_CREATED`, `UNIT_UPDATED`, `UNIT_DELETED`, `SECTOR_CREATED`, `SECTOR_UPDATED` e `SECTOR_DELETED` em `audit_logs` com `user_id`, `ip_address` e metadados completos.
 - **Parecer `@security`:** **APROVADO PELO `@security`**. Conformidade integral com a arquitetura de segurança e LGPD.
+
+
+---
+
+## Ciclo #27 — Análise de Ameaças da Identidade de Hardware (`@security`, Fase 3)
+
+| # | Ameaça (STRIDE) | Risco | Controle implementado | Risco residual |
+| :--- | :--- | :--- | :--- | :--- |
+| S1 | Agente falso informa serial/MAC de outro PC para assumir o registro (Spoofing) | Alto | Rebind exige `AGENT_ENROLLMENT_KEY`; `smbios_uuid` divergente bloqueia (409); toda troca gera `AGENT_REBOUND` em `audit_logs`; máquina revogada não pode ser reassociada | Quem tiver a chave de cadastro e copiar também o `smbios_uuid` ainda consegue o rebind. A chave é única e está embutida no agente C#. Recomendação: chave por unidade ou aprovação manual do rebind |
+| T1 | Agente envia chave de identidade forjada (Tampering) | Médio | `hardware_key` é calculada no backend; o agente só envia serial/MAC | — |
+| T2 | Serial OEM genérico faz PCs diferentes colidirem | Médio | Lista de seriais genéricos descartados; sem serial válido, usa MAC; sem ambos, não há chave | Lote de fábrica com serial válido repetido gera 409 e exige tratamento manual |
+| I1 | Excesso de dados coletados (LGPD) | Baixo | Somente dados do equipamento; sem usuário logado, arquivos ou navegação | — |
+| E1 | Injeção via inventário | Médio | SQL parametrizado; texto do PowerShell fixo, sem entrada externa; campos truncados | — |
+| D1 | Flapping de rebind entre agente antigo e novo | Baixo | Auditado e limitado pelo rate limit do heartbeat | Ruído nos logs |
+
+Gate de segurança da fase: nenhum risco crítico aberto neste ciclo; S1 permanece como risco alto residual documentado.

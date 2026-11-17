@@ -515,3 +515,106 @@ test('9. Ciclo #26 (CA-107 a CA-113): CRUD Completo de Unidades e Setores, Aloca
     assert.ok(actions.includes(expected), `Audit log deve conter ${expected}`);
   }
 });
+
+test('10. Ciclo #27 (CA-124 a CA-128): identidade de hardware, Upsert por serial/MAC, rebind auditado e histórico', async () => {
+  const {
+    normalizeSerial,
+    normalizeMac,
+    computeHardwareIdentity,
+  } = require('../src/services/hardwareIdentity');
+  const { parseInventoryJson } = require('../../agent/src/collectors/hardwareInventory');
+
+  assert.equal(normalizeSerial('To be filled by O.E.M.'), null);
+  assert.equal(normalizeSerial('Default string'), null);
+  assert.equal(normalizeSerial('0'), null);
+  assert.equal(normalizeSerial('SN-DESKTOP01'), null);
+  assert.equal(normalizeSerial(' PE03KB4C '), 'PE03KB4C');
+  assert.equal(normalizeMac('a4-bb-6d-12-34-56'), 'A4:BB:6D:12:34:56');
+  assert.equal(normalizeMac('00:00:00:00:00:00'), null);
+
+  const byMac = computeHardwareIdentity({ serial_number: 'Default string', mac_address: 'A4:BB:6D:12:34:56' });
+  assert.equal(byMac.identity_confidence, 'MEDIUM');
+  assert.equal(byMac.serial_number, null);
+  const none = computeHardwareIdentity({});
+  assert.equal(none.hardware_key, null);
+  assert.equal(none.identity_confidence, 'LOW');
+
+  const parsed = parseInventoryJson(
+    JSON.stringify({ serial: 'ABC1234', manufacturer: 'Dell Inc.', model: 'OptiPlex', ram_bytes: 8589934592, disk_media: 4, cpu_cores: 4 })
+  );
+  assert.equal(parsed.ram_total_mb, 8192);
+  assert.equal(parsed.disk_type, 'SSD');
+  assert.equal(parsed.cpu_model, null);
+  assert.equal(parsed.os_version, null);
+
+  repository.resetMemoryStore();
+  const send = (uuid, token, inventory, extra = {}) =>
+    requestJson('POST', '/api/heartbeat', {
+      headers: {
+        'X-Agent-Uuid': uuid,
+        'X-Agent-Token': token,
+        'X-Enrollment-Key': env.agentEnrollmentKey,
+      },
+      body: {
+        agent_version: '2.2.0',
+        unit_id: 1,
+        sector_id: 1,
+        inventory,
+        metrics: { cpu_usage_pct: 10, ram_usage_pct: 20, disk_usage_pct: 30, uptime_seconds: 60 },
+        ...extra,
+      },
+    });
+
+  const inv = {
+    hostname: 'USF-REC01',
+    serial_number: 'ABC1234',
+    smbios_uuid: '4C4C4544-0042-3510-8051-B8C04F373232',
+    mac_address: 'A4:BB:6D:12:34:56',
+    ip_address: '10.20.1.15',
+    cpu_model: 'Intel i5',
+    ram_total_mb: 8192,
+    disk_type: 'SSD',
+    disk_total_gb: 238,
+  };
+
+  const first = await send('agt-a', 'tok-a', inv);
+  assert.equal(first.status, 200);
+  const machineId = first.data.machine_id;
+
+  const stored = await repository.findMachineById(machineId);
+  assert.equal(stored.identity_confidence, 'HIGH');
+  assert.equal(stored.serial_number, 'ABC1234');
+
+  const moved = await repository.updateMachineLocation(machineId, { unitId: 2, sectorId: 6 });
+  assert.ok(moved);
+
+  const reinstall = await send('agt-b', 'tok-b', { ...inv, hostname: 'USF-REC01-NEW', ram_total_mb: 16384 });
+  assert.equal(reinstall.status, 200);
+  assert.equal(reinstall.data.machine_id, machineId);
+  assert.equal((await repository.listMachines()).length, 1);
+
+  const rebound = await repository.findMachineById(machineId);
+  assert.equal(rebound.agent_uuid, 'agt-b');
+  assert.equal(rebound.unit_id, 2);
+  assert.equal(rebound.sector_id, 6);
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'AGENT_REBOUND'));
+
+  const oldAgent = await send('agt-a', 'tok-a', inv, {});
+  assert.equal(oldAgent.status, 200);
+  assert.equal((await repository.listMachines()).length, 1, 'agente antigo reenvia com serial já existente: rebind, sem duplicata');
+
+  const changes = await repository.listInventoryChanges(machineId);
+  assert.ok(changes.some((c) => c.field_name === 'ram_total_mb' && c.old_value === '8192' && c.new_value === '16384'));
+
+  const spoof = await send('agt-evil', 'tok-evil', { ...inv, smbios_uuid: '11111111-2222-3333-4444-555555555555' });
+  assert.equal(spoof.status, 409);
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'HARDWARE_KEY_CONFLICT'));
+  assert.equal((await repository.listMachines()).length, 1);
+
+  const refresh = await send('agt-a', 'tok-a', { hostname: 'USF-REC01-NEW', serial_number: 'To be filled by O.E.M.', ip_address: '10.20.1.16' });
+  assert.equal(refresh.status, 200);
+  const kept = await repository.findMachineById(machineId);
+  assert.equal(kept.serial_number, 'ABC1234');
+  assert.equal(kept.ip_address, '10.20.1.16');
+  assert.equal(kept.unit_id, 2);
+});

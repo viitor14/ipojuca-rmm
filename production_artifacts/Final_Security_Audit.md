@@ -66,3 +66,19 @@ Foi realizada auditoria estática e dinâmica sobre o código-fonte implementado
 | **Auditoria Completa** | Eventos `UNIT_CREATED`, `UNIT_UPDATED`, `UNIT_DELETED`, `SECTOR_CREATED`, `SECTOR_UPDATED` e `SECTOR_DELETED` verificados em `audit_logs` via asserção automatizada. | **CONFORME** |
 
 - **Parecer Final do Gate de Segurança (Ciclo #26):** **APROVADO — 0 vulnerabilidades pendentes.**
+
+
+---
+
+## Ciclo #27 — Auditoria de Segurança (`@security`, Fase 10)
+
+Revisão do diff (`repository.js`, `api.js`, `hardwareIdentity.js`, `hardwareInventory.js`, SQL).
+
+- **SQL:** todas as consultas novas são parametrizadas. O único valor interpolado é o `LIMIT` de `listInventoryChanges`, convertido com `Number()`.
+- **PowerShell:** script fixo, enviado por `-EncodedCommand`, sem nenhum dado externo. Somente leitura (`Get-CimInstance`, `Get-Partition`).
+- **Dados:** só dados do equipamento, sem usuário logado, arquivos ou navegação. Conforme RNF-34.
+- **Identidade:** `hardware_key` calculada no servidor; conflito de `smbios_uuid` bloqueado e auditado; máquina revogada não é reassociada.
+- **ALTO (aberto, herdado e agravado):** `AGENT_ENROLLMENT_KEY` única, com valor padrão no repositório e embutida no agente C#. Com o rebind, quem a possuir e souber serial e `smbios_uuid` de um PC pode assumir o registro dele (o agente legítimo perde o token até reenviar). Mitigação recomendada: chave por unidade, rotação, ou aprovação manual do rebind.
+- **MÉDIO (herdado, fora do escopo):** valores padrão de segredos no `docker-compose.yml` e sal fixo no hash de senhas.
+
+Parecer: sem vulnerabilidade crítica nova. O risco alto de S1 exige decisão do usuário antes da implantação.

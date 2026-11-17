@@ -214,6 +214,7 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
           unitId: Number(req.body?.unit_id || 1),
           sectorId: Number(req.body?.sector_id || 1),
           inventory: req.body?.inventory || {},
+          ipAddress: req.ip || "0.0.0.0",
         });
         await repository.recordAuditLog({
           machineId: machine.id,
@@ -345,6 +346,9 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
       server_time: new Date().toISOString(),
     });
   } catch (err) {
+    if (err && err.statusCode) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
     return res.status(500).json({ error: "Falha ao processar heartbeat." });
   }
 });

@@ -186,3 +186,22 @@ O script SQL completo de criação do banco, tabelas, índices e dados iniciais 
    - Seed inicial inserido via `INSERT IGNORE` apenas quando `COUNT(*) = 0` em `health_units`.
    - Correções de *mojibake* restritas a `WHERE id = ? AND (name LIKE '%Ã%' OR address LIKE '%Ã%')`, preservando 100% das alterações e exclusões realizadas pelo usuário no painel entre reinicializações.
 4. **Provisionamento Seguro em Bancos Dinâmicos:** `enrollNewAgentMachine()` atualizado para consultar `sectors` diretamente no MySQL (com fallback para o primeiro setor ativo) e geração de IDs in-memory baseada em `MAX(id) + 1` imune a lacunas pós-exclusão.
+
+
+---
+
+## 6. Ciclo #27 — Identidade de Hardware e Upsert (`@dba`, Fase 4)
+
+**Migration:** `infrastructure/mysql/02_hardware_identity_upsert.sql` (idempotente, não destrutiva). O mesmo conjunto de alterações roda no startup em `repository.js` (`ensureMysqlSeedData`) e está refletido no `01_schema_and_seed.sql` para bancos novos.
+
+**`machines` (novas colunas):** `smbios_uuid CHAR(36)`, `cpu_cores TINYINT UNSIGNED`, `cpu_threads SMALLINT UNSIGNED`, `hardware_key CHAR(64)`, `identity_confidence ENUM('HIGH','MEDIUM','LOW')`, `inventory_collected_at DATETIME`. `serial_number` e `mac_address` passam a aceitar `NULL`.
+
+**Índices:** `UNIQUE uk_machines_hardware_key (hardware_key)` (vários `NULL` permitidos), `idx_machines_serial`, `idx_machines_mac`.
+
+**Nova tabela `machine_inventory_changes`:** `id`, `machine_id` (FK, `ON DELETE CASCADE`), `field_name`, `old_value`, `new_value`, `changed_at`; índice `(machine_id, changed_at)`.
+
+**Upsert:** `INSERT ... ON DUPLICATE KEY UPDATE` sobre `hardware_key`/`agent_uuid`. A cláusula de update não inclui `unit_id`, `sector_id`, `pos_x/y/z` nem `id`, então alocação e histórico são preservados.
+
+**Limpeza:** `serial_number` em (`N/A`, `SN-AUTO`, `SN-%`) e `mac_address` `00:00:00:00:00:00` viram `NULL`. A migration termina com um `SELECT` de possíveis duplicatas (hostname + MAC) e não apaga nada.
+
+**Retenção sugerida:** `machine_inventory_changes` pode ser mantida por 2 anos, pois cresce só quando o hardware muda.

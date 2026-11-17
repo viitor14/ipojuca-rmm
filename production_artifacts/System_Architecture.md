@@ -536,3 +536,21 @@ Para permitir leitura imediata do estado de saúde (`NORMAL`, `WARNING`, `CRITIC
 - **`RmmRepository.computeNextFreeSectorSlot()` ([repository.js](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/src/database/repository.js)):** Varre posições candidatas ao norte ($Z = -3.5$) e sul ($Z = +3.5$) do corredor central ao longo do eixo $X$ ($[-4.5, 4.5, 13.5, -13.5, \dots]$) verificando colisão 2D de *bounding boxes* contra todos os setores existentes antes de alocar uma nova sala.
 - **`computeBoardBounds()` & `IsometricBoard` ([DigitalTwin3D.jsx](file:///c:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DigitalTwin3D.jsx)):** Expande dinamicamente a laje estrutural, substrato, gramado, corredor central, soleiras de porta, luz direcional (`directionalLight`) e enquadramento da câmera (`CameraRig`) quando uma unidade ultrapassa a planta padrão de 4 setores.
 - **Paredes Inteligentes (`SectorRoomVoxel`) e Tematização por Arquétipo (`resolveSectorArchetype`):** Renderiza parede lateral Leste/Oeste sem duplicação entre salas adjacentes e fecha automaticamente salas isoladas ou de extremidade, aplicando o arquétipo 3D (`REC`, `CONS`, `FARM`, `ADM`, `TI`) explicitamente via `room_theme`.
+
+
+---
+
+## Ciclo #27 — Inventário de Hardware e Upsert por Identidade (`@lead`, Fase 2)
+
+**Fluxo:** `agent/src/collectors/hardwareInventory.js` (1 chamada PowerShell oculta, `Get-CimInstance`, saída JSON, timeout 10 s, cache de 24 h) → `systemCollector.js` (monta o payload, sem valores fictícios) → `POST /api/heartbeat` → `backend/src/services/hardwareIdentity.js` (normaliza serial/MAC e calcula `hardware_key` no servidor) → `repository.js` (`enrollNewAgentMachine` / `rebindAgentToMachine` / `upsertHeartbeat`) → MySQL.
+
+**Decisões:**
+- P1 (aprovada): somente o agente Node.js foi atualizado; o agente C# (`IpojucaRMM-Setup.exe`) continua enviando o contrato antigo, que o backend aceita (serial e MAC são normalizados no servidor).
+- P2 (aprovada): `hardware_key = SHA-256("SN:"+serial)` quando o serial é válido (confiança HIGH); senão `SHA-256("MAC:"+mac)` (MEDIUM); sem ambos, fica sem chave (LOW) e a identificação continua só por `agent_uuid`.
+- Agente desconhecido + `X-Enrollment-Key` válida + `hardware_key` já existente = **rebind**: mantém `id`, unidade, setor e posição 3D; troca `agent_uuid`/token; grava `AGENT_REBOUND`.
+- `smbios_uuid` divergente para o mesmo serial/MAC = `HARDWARE_KEY_CONFLICT` e HTTP 409, sem rebind. Máquina revogada não é reassociada (403).
+- Heartbeat de máquina conhecida: recalcula a chave (backfill dos PCs já cadastrados); se outro registro já possui a chave, mantém a identidade anterior e audita o conflito.
+- Mudanças em `hostname`, `cpu_model`, `ram_total_mb`, `disk_total_gb`, `disk_type` e `mac_address` vão para `machine_inventory_changes`.
+- A coluna `temperature_c` continua com o padrão do backend (45); o agente Node passou a enviar `null` em vez de um valor calculado. Tornar a coluna anulável fica para outro ciclo (afeta avaliador e painel).
+
+**Contrato:** payload compatível com o anterior, com campos opcionais novos em `inventory` (`smbios_uuid`, `cpu_cores`, `cpu_threads`, `inventory_collected_at`) e `collection_errors` no corpo. Novo modo de diagnóstico: `node agent/src/index.js --inventory`.

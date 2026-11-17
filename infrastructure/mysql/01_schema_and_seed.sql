@@ -50,10 +50,16 @@ CREATE TABLE IF NOT EXISTS machines (
   hostname VARCHAR(100) NOT NULL,
   manufacturer VARCHAR(100) DEFAULT 'Generic',
   model VARCHAR(100) DEFAULT 'Desktop PC',
-  serial_number VARCHAR(100) DEFAULT 'N/A',
-  mac_address VARCHAR(32) DEFAULT '00:00:00:00:00:00',
+  serial_number VARCHAR(100) NULL DEFAULT NULL,
+  mac_address VARCHAR(32) NULL DEFAULT NULL,
+  smbios_uuid CHAR(36) NULL DEFAULT NULL,
+  hardware_key CHAR(64) NULL DEFAULT NULL,
+  identity_confidence ENUM('HIGH', 'MEDIUM', 'LOW') NOT NULL DEFAULT 'LOW',
+  inventory_collected_at DATETIME NULL DEFAULT NULL,
   ip_address VARCHAR(45) DEFAULT '0.0.0.0',
   cpu_model VARCHAR(120) DEFAULT 'Intel Core i5',
+  cpu_cores TINYINT UNSIGNED NULL DEFAULT NULL,
+  cpu_threads SMALLINT UNSIGNED NULL DEFAULT NULL,
   ram_total_mb INT NOT NULL DEFAULT 8192,
   disk_type VARCHAR(32) NOT NULL DEFAULT 'SSD',
   disk_total_gb INT NOT NULL DEFAULT 240,
@@ -74,8 +80,23 @@ CREATE TABLE IF NOT EXISTS machines (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_machines_unit FOREIGN KEY (unit_id) REFERENCES health_units(id),
   CONSTRAINT fk_machines_sector FOREIGN KEY (sector_id) REFERENCES sectors(id),
+  UNIQUE KEY uk_machines_hardware_key (hardware_key),
+  INDEX idx_machines_serial (serial_number),
+  INDEX idx_machines_mac (mac_address),
   INDEX idx_machines_unit_status (unit_id, health_status),
   INDEX idx_machines_last_seen (health_status, last_seen_at)
+) ENGINE=InnoDB;
+
+-- 3.1 Historico de mudancas de hardware (Ciclo #27)
+CREATE TABLE IF NOT EXISTS machine_inventory_changes (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  machine_id INT NOT NULL,
+  field_name VARCHAR(32) NOT NULL,
+  old_value VARCHAR(255) DEFAULT NULL,
+  new_value VARCHAR(255) DEFAULT NULL,
+  changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_inv_changes_machine FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+  INDEX idx_inv_changes_machine_time (machine_id, changed_at)
 ) ENGINE=InnoDB;
 
 -- 4. Historico de Telemetria (Serie Temporal)

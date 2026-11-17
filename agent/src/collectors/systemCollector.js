@@ -1,17 +1,7 @@
 const os = require('os');
 const fs = require('fs');
 const dgram = require('dgram');
-const { execFile } = require('child_process');
-
-function runExecFile(bin, args, timeoutMs = 3000) {
-  return new Promise((resolve) => {
-    if (process.platform !== 'win32') return resolve(null);
-    execFile(bin, args, { timeout: timeoutMs, windowsHide: true }, (err, stdout) => {
-      if (err || !stdout) return resolve(null);
-      return resolve(String(stdout).trim());
-    });
-  });
-}
+const { collectHardwareInventory } = require('./hardwareInventory');
 
 function isVirtualAdapterName(name = '') {
   return /vethernet|wsl|hyper-v|docker|virtualbox|vmware|vbox|loopback|tunnel|tap|tun|vpn|radmin|zerotier|tailscale|bluetooth|npcap/i.test(
@@ -141,13 +131,6 @@ async function measureLiveCpuUsagePct(fastMode = false) {
   return Number((((start.total - start.idle) / start.total) * 100).toFixed(1));
 }
 
-function parseRegValue(regOutput, keyName) {
-  if (!regOutput) return null;
-  const regex = new RegExp(`^\\s*${keyName}\\s+REG_\\w+\\s+(.+)$`, 'im');
-  const match = regOutput.match(regex);
-  return match ? match[1].trim() : null;
-}
-
 function resolveWindowsOsLabel() {
   const rel = os.release(); // ex: 10.0.26200 ou 10.0.19045
   const parts = rel.split('.');
@@ -172,16 +155,8 @@ async function collectTelemetrySnapshot({ skipNativeQueries = false } = {}) {
     measureLiveCpuUsagePct(skipNativeQueries),
   ]);
 
-  const cpus = os.cpus() || [];
-  const totalRamMb = Math.round(os.totalmem() / (1024 * 1024));
-  const freeRamMb = Math.round(os.freemem() / (1024 * 1024));
-  const ramUsagePct = Number(
-    (((totalRamMb - freeRamMb) / Math.max(1, totalRamMb)) * 100).toFixed(1)
-  );
-
-  // Coleta nativa ultra-rápida (1ms) do Disco C: via fs.statfsSync
-  let diskTotalGb = 256;
-  let diskUsagePct = 48.0;
+  let diskTotalGb = null;
+  let diskUsagePct = null;
   try {
     const driveRoot = process.platform === 'win32' ? 'C:\\' : '/';
     if (typeof fs.statfsSync === 'function') {
@@ -196,69 +171,51 @@ async function collectTelemetrySnapshot({ skipNativeQueries = false } = {}) {
       }
     }
   } catch {
-    // fallback padrão
+    diskTotalGb = null;
+    diskUsagePct = null;
   }
 
-  let manufacturer = 'OEM Workstation';
-  let model = 'Desktop PC';
-  let serialNumber = `SN-${os.hostname()}`;
-  const cpuModel = cpus[0]?.model ? String(cpus[0].model).trim() : 'x64 Processor';
-  const osVersion = resolveWindowsOsLabel();
-  const diskType = 'SSD';
-  let spoolerRunning = true;
+  const hw = await collectHardwareInventory({ cacheOnly: skipNativeQueries });
+  const f = hw.fields || {};
+  const collectionErrors = [...(hw.errors || [])];
+  if (diskTotalGb === null) collectionErrors.push('disco: statfs indisponivel');
 
-  if (!skipNativeQueries && process.platform === 'win32') {
-    const biosReg = await runExecFile('reg.exe', [
-      'query',
-      'HKLM\\HARDWARE\\Description\\System\\BIOS',
-    ]);
-    if (biosReg) {
-      const mfg =
-        parseRegValue(biosReg, 'SystemManufacturer') ||
-        parseRegValue(biosReg, 'BaseBoardManufacturer') ||
-        parseRegValue(biosReg, 'BIOSVendor');
-      const family = parseRegValue(biosReg, 'SystemFamily');
-      const prod =
-        parseRegValue(biosReg, 'SystemProductName') ||
-        parseRegValue(biosReg, 'BaseBoardProduct');
-      const biosVer = parseRegValue(biosReg, 'BIOSVersion');
-
-      if (mfg) manufacturer = mfg;
-      if (family && prod && !family.includes(prod)) {
-        model = `${family} (${prod})`;
-      } else if (family || prod) {
-        model = family || prod;
-      }
-      if (biosVer) {
-        serialNumber = `${prod || 'SN'}-${biosVer}`;
-      }
-    }
-  }
+  const cpus = os.cpus() || [];
+  const totalRamMb = f.ram_total_mb || Math.round(os.totalmem() / (1024 * 1024));
+  const freeRamMb = Math.round(os.freemem() / (1024 * 1024));
+  const ramUsagePct = Number(
+    (((os.totalmem() / (1024 * 1024) - freeRamMb) / Math.max(1, os.totalmem() / (1024 * 1024))) * 100).toFixed(1)
+  );
 
   return {
-    agent_version: '2.1.0',
+    agent_version: '2.2.0',
     collected_at: new Date().toISOString(),
     inventory: {
       hostname: os.hostname(),
-      manufacturer,
-      model,
-      serial_number: serialNumber,
+      manufacturer: f.manufacturer || null,
+      model: f.model || null,
+      serial_number: f.serial_number || null,
+      smbios_uuid: f.smbios_uuid || null,
       mac_address: netInfo.mac_address,
       ip_address: netInfo.ip_address,
-      cpu_model: cpuModel,
+      cpu_model: f.cpu_model || (cpus[0]?.model ? String(cpus[0].model).trim() : null),
+      cpu_cores: f.cpu_cores || null,
+      cpu_threads: f.cpu_threads || cpus.length || null,
       ram_total_mb: totalRamMb,
-      disk_type: diskType,
+      disk_type: f.disk_type || 'UNKNOWN',
       disk_total_gb: diskTotalGb,
-      os_version: osVersion,
+      os_version: f.os_version || resolveWindowsOsLabel(),
+      inventory_collected_at: hw.collected_at || null,
     },
     metrics: {
       cpu_usage_pct: cpuUsagePct,
       ram_usage_pct: ramUsagePct,
       disk_usage_pct: diskUsagePct,
-      temperature_c: Number((42 + cpuUsagePct * 0.31).toFixed(1)),
+      temperature_c: null,
       uptime_seconds: Math.round(os.uptime()),
-      spooler_running: spoolerRunning,
+      spooler_running: true,
     },
+    collection_errors: collectionErrors,
   };
 }
 

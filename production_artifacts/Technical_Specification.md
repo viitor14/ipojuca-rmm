@@ -1801,3 +1801,162 @@ O pipeline do **Ciclo #26** encontra-se **pausado no Gate de Aprovação da Fase
 > [!IMPORTANT]
 > Nenhuma linha de código-fonte (`backend/` ou `frontend/`) foi alterada até o momento, em conformidade rigorosa com `.agents/AGENTS.md` e o protocolo `/startcycle`.
 > Por favor, responda **`Approved`** para que a equipe implemente os endpoints REST, a camada de persistência dual, a interface CRUD completa no painel e a adaptação dinâmica da maquete 3D.
+
+---
+
+# CICLO #27 — SISTEMA BASE DE INVENTÁRIO: COLETOR NODE.JS INVISÍVEL + UPSERT MYSQL POR IDENTIDADE DE HARDWARE
+
+## 49. Especificação Técnica (`@pm` + `@lead`)
+
+### 1. Pedido do Usuário
+
+> *"Desenvolver o sistema base do RMM contendo: 1) O script otimizado em Node.js para extração de hardware local no Windows (serial, modelo, CPU, RAM, disco e IP) de forma invisível. 2) A estrutura da base de dados MySQL para receber e atualizar estes dados via Upsert (baseado no MAC/Serial) para o parque tecnológico das unidades de saúde."*
+
+### 2. Diagnóstico do Estado Atual (análise do código existente)
+
+| # | Arquivo | Problema identificado | Impacto |
+| :--- | :--- | :--- | :--- |
+| D1 | `agent/src/collectors/systemCollector.js` | `serial_number` é **sintético** (`SystemProductName-BIOSVersion` ou `SN-<hostname>`); o serial real de `Win32_BIOS` nunca é lido no coletor Node. | Impossível usar o serial como chave de patrimônio; colisões entre máquinas do mesmo modelo/BIOS. |
+| D2 | `systemCollector.js` | `disk_type` fixo em `'SSD'`; `temperature_c` é **calculada a partir da CPU** (valor fictício). | Inventário não confiável. |
+| D3 | `systemCollector.js` | Valores-padrão inventados quando a coleta falha (`diskTotalGb = 256`, `diskUsagePct = 48`, `model = 'Desktop PC'`). | Dados falsos entram no banco como se fossem reais. |
+| D4 | `infrastructure/mysql/01_schema_and_seed.sql` | `machines` só tem `UNIQUE(agent_uuid)`; **não há chave única por hardware** (serial/MAC). | Reinstalar o agente (novo `.agent-identity.json`) gera **registro duplicado** do mesmo PC. |
+| D5 | `backend/src/database/repository.js` (`enrollNewAgentMachine`) | `INSERT` simples identificado por `agent_uuid`; sem `ON DUPLICATE KEY UPDATE`. | Mesmo problema de D4; o parque fica com "máquinas fantasmas". |
+| D6 | Agente nativo C# (`agent/native/IpojucaAgent.cs`) | Já lê `Win32_BIOS.SerialNumber`, mas é outro coletor, com lógica divergente do Node. | Duas fontes de verdade para o mesmo payload. |
+
+### 3. Objetivo do Ciclo
+
+1. Entregar um **coletor de inventário Node.js** otimizado, sem nenhuma janela visível, que extraia dados **reais** de serial, fabricante/modelo, CPU, RAM, disco (tipo, capacidade, uso) e IP/MAC.
+2. Entregar a **estrutura MySQL** (migration idempotente) que receba esses dados e faça **Upsert por identidade de hardware** (Serial + MAC), eliminando duplicatas, mantendo o vínculo do PC com unidade/setor do parque das unidades de saúde.
+
+### 4. Usuários
+
+| Perfil | Necessidade |
+| :--- | :--- |
+| Técnico de TI (`TECH_N1`) / Admin (`ADMIN_N2`) | Inventário fiel e sem duplicatas de cada PC das USFs, Policlínica e CAPS. |
+| Usuário final da estação (recepcionista, médico) | **Não perceber** o agente: sem janela, sem piscar de console, sem lentidão. |
+| Gestão / Patrimônio | Localizar equipamentos por número de série. |
+
+### 5. Escopo
+
+**Dentro do escopo**
+- Novo módulo `agent/src/collectors/hardwareInventory.js` (inventário estático) usado por `systemCollector.js`.
+- Ajuste de `systemCollector.js` para usar o novo módulo e **parar de inventar valores**.
+- Migration MySQL `infrastructure/mysql/02_hardware_identity_upsert.sql` (idempotente) + atualização do `01_schema_and_seed.sql` para instalações novas.
+- Upsert no `repository.js` (modos `mysql` e `memory`) pela identidade de hardware.
+- Testes automatizados do parser/normalizador e do upsert.
+- Atualização de `Database_Design.md` e `System_Architecture.md` (seções do ciclo).
+
+**Fora do escopo (não será feito neste ciclo)**
+- Alterar o agente nativo C# / `IpojucaRMM-Setup.exe` (ver Decisão Pendente P1).
+- Alterações no frontend/Digital Twin, n8n ou implantação na VPS.
+- Temperatura real de CPU (exige driver/privilégio; o campo passará a ser `NULL` quando não houver leitura real).
+- Inventário de software instalado, periféricos ou impressoras.
+
+### 6. Requisitos Funcionais
+
+- **RF-110 — Coleta de identidade de hardware:** obter `Win32_BIOS.SerialNumber`, `Win32_ComputerSystem.Manufacturer/Model`, `Win32_ComputerSystemProduct.UUID` (SMBIOS UUID, auxiliar) e o MAC físico da interface com rota padrão.
+- **RF-111 — Coleta de CPU:** `Win32_Processor.Name`, núcleos físicos e lógicos.
+- **RF-112 — Coleta de RAM:** total físico (`Win32_ComputerSystem.TotalPhysicalMemory`) em MB.
+- **RF-113 — Coleta de disco:** volume do sistema (`C:`) — capacidade e uso; tipo físico (`SSD`/`HDD`/`UNKNOWN`) via `MSFT_PhysicalDisk.MediaType` (namespace `root/Microsoft/Windows/Storage`).
+- **RF-114 — Coleta de rede:** IPv4 e MAC da interface que possui a rota padrão, ignorando adaptadores virtuais (já existente em `getPrimaryNetworkAddress`, será reaproveitado).
+- **RF-115 — Execução invisível:** toda consulta nativa deve rodar com `windowsHide: true`, PowerShell com `-NoProfile -NonInteractive -WindowStyle Hidden`, **uma única** invocação por coleta (todas as classes CIM em um só processo, saída JSON). Proibido `wmic` (removido no Windows 11 24H2 / build 26100+, e a máquina de referência é build 26200).
+- **RF-116 — Otimização:** o inventário estático é coletado no boot e **cacheado em memória**; só é recoletado a cada 24 h ou quando o painel solicitar coleta manual. Telemetria dinâmica (uso de CPU/RAM/disco, IP) continua no ciclo atual (boot + 4 h + sob demanda).
+- **RF-117 — Normalização e validação do serial:** descartar seriais genéricos de OEM (`To be filled by O.E.M.`, `Default string`, `System Serial Number`, `0`, `None`, `N/A`, `123456789`, só zeros/espaços). Serial inválido ⇒ `serial_number = NULL` (nunca valor inventado).
+- **RF-118 — Normalização do MAC:** formato `AA:BB:CC:DD:EE:FF` maiúsculo; descartar `00:00:00:00:00:00` e MACs localmente administrados de adaptadores virtuais ⇒ `NULL`.
+- **RF-119 — Chave de identidade de hardware (`hardware_key`):** calculada no backend (não confiar no agente): `SHA-256("SN:" + serial)` se o serial for válido; senão `SHA-256("MAC:" + mac)`; se ambos inválidos, a máquina é identificada apenas por `agent_uuid` (comportamento atual) e marcada `identity_confidence = 'LOW'`.
+- **RF-120 — Upsert MySQL:** `INSERT ... ON DUPLICATE KEY UPDATE` sobre `UNIQUE(hardware_key)`. Se o PC já existe: atualiza inventário, IP, `agent_uuid`/token (reinstalação), `last_seen_at`, `agent_version`; **preserva** `unit_id`, `sector_id`, `pos_x/y/z` e `id` (alocação manual no painel e histórico de telemetria/alertas continuam vinculados).
+- **RF-121 — Histórico de mudanças de hardware:** quando `cpu_model`, `ram_total_mb`, `disk_total_gb`, `disk_type`, `mac_address` ou `hostname` mudarem, gravar uma linha em `machine_inventory_changes` (campo, valor antigo, valor novo, data). Permite detectar troca de peças/desvio de patrimônio.
+- **RF-122 — Rebind auditado:** sempre que um `hardware_key` existente for reassociado a um novo `agent_uuid`, registrar `AGENT_REBOUND` em `audit_logs` (o fluxo exige `AGENT_ENROLLMENT_KEY` válida, como hoje).
+- **RF-123 — Falha parcial tolerada:** se uma classe CIM falhar ou o PowerShell estourar o timeout (10 s), o coletor envia os campos obtidos e `null` nos demais, com `collection_errors: [...]` no payload — nunca valores fictícios.
+
+### 7. Requisitos Não Funcionais
+
+| ID | Requisito |
+| :--- | :--- |
+| RNF-30 | Zero janelas/consoles visíveis durante toda a execução (inclusive no boot via Agendador/Run). |
+| RNF-31 | Coleta completa de inventário ≤ 3 s em máquina típica (meta), timeout rígido de 10 s; consumo de CPU desprezível fora da coleta. |
+| RNF-32 | Sem novas dependências npm no agente (somente módulos nativos do Node + PowerShell já presente no Windows 10/11). |
+| RNF-33 | Migration MySQL idempotente e não destrutiva: pode ser executada várias vezes na VPS; não apaga dados existentes. |
+| RNF-34 | LGPD / minimização: coleta somente dados do equipamento. Proibido coletar usuário logado, arquivos, histórico de navegação ou dados de pacientes. |
+| RNF-35 | Compatível com Windows 10 (1809+) e Windows 11; Node ≥ 18 (uso de `fetch` e `fs.statfsSync` já existente). |
+| RNF-36 | Execução sem privilégio de administrador para todas as classes listadas (as consultas CIM escolhidas são legíveis por usuário comum). |
+
+### 8. Estrutura de Dados Proposta (resumo — detalhamento pelo `@dba` na Fase 4)
+
+Alterações em `machines`:
+- `serial_number VARCHAR(100) NULL` (deixa de ter default `'N/A'`), `mac_address VARCHAR(17) NULL`.
+- `smbios_uuid CHAR(36) NULL`, `cpu_cores TINYINT UNSIGNED NULL`, `cpu_threads SMALLINT UNSIGNED NULL`.
+- `hardware_key CHAR(64) NULL` + `UNIQUE KEY uk_machines_hardware_key (hardware_key)` (MySQL permite vários `NULL` em UNIQUE ⇒ máquinas de baixa confiança não colidem).
+- `identity_confidence ENUM('HIGH','MEDIUM','LOW')` — HIGH = serial válido; MEDIUM = só MAC; LOW = nenhum.
+- `inventory_collected_at DATETIME NULL`, `temperature_c DECIMAL(5,2) NULL`, `disk_type` aceitando `'UNKNOWN'`.
+- Índices: `idx_machines_serial (serial_number)`, `idx_machines_mac (mac_address)`.
+
+Nova tabela `machine_inventory_changes` (`id`, `machine_id` FK CASCADE, `field_name`, `old_value`, `new_value`, `changed_at`, índice `(machine_id, changed_at)`).
+
+**Migração dos dados existentes:** registros atuais com serial sintético (`SN-*`, `*-<BIOSVersion>`, `SN-AUTO`, `N/A`) recebem `serial_number = NULL`; `hardware_key` é recalculado no próximo heartbeat real. Duplicatas já existentes **não** são apagadas automaticamente — a migration gera um relatório (`SELECT`) para o operador decidir.
+
+### 9. Contrato do Payload (agente → `POST /api/heartbeat`) — compatível com o atual
+
+```json
+{
+  "agent_version": "2.2.0",
+  "collected_at": "2026-11-17T12:00:00.000Z",
+  "inventory": {
+    "hostname": "USF-NSO-REC01",
+    "manufacturer": "Dell Inc.",
+    "model": "OptiPlex 3080",
+    "serial_number": "ABC1234",
+    "smbios_uuid": "4C4C4544-0042-...",
+    "mac_address": "A4:BB:6D:12:34:56",
+    "ip_address": "10.20.1.15",
+    "cpu_model": "Intel(R) Core(TM) i5-10500 CPU @ 3.10GHz",
+    "cpu_cores": 6,
+    "cpu_threads": 12,
+    "ram_total_mb": 16231,
+    "disk_type": "SSD",
+    "disk_total_gb": 238,
+    "os_version": "Windows 11 Pro (Build 26200)",
+    "inventory_collected_at": "2026-11-17T08:01:12.000Z"
+  },
+  "metrics": { "cpu_usage_pct": 7.4, "ram_usage_pct": 61.2, "disk_usage_pct": 54.0, "temperature_c": null, "uptime_seconds": 5400, "spooler_running": true },
+  "collection_errors": []
+}
+```
+Campos novos são opcionais no backend: agentes antigos (incluindo o C# atual) continuam funcionando.
+
+### 10. Critérios de Aceitação
+
+| ID | Critério | Cenário de teste | Resultado esperado |
+| :--- | :--- | :--- | :--- |
+| CA-120 | Serial real | Executar `node agent/src/index.js --inventory` (novo modo que só imprime o JSON) nesta máquina. | `serial_number` igual ao retornado por `Get-CimInstance Win32_BIOS`; nunca `SN-<hostname>`. |
+| CA-121 | Dados completos | Mesmo comando. | Modelo, fabricante, CPU, RAM, tipo/capacidade de disco, IP e MAC preenchidos com valores reais e coerentes com o sistema. |
+| CA-122 | Invisibilidade | Executar o agente via atalho/Agendador de Tarefas e observar a tela durante a coleta. | Nenhuma janela de console ou PowerShell aparece. |
+| CA-123 | Desempenho | Medir tempo da coleta de inventário. | ≤ 3 s (meta) e nunca > 10 s (timeout com envio parcial). |
+| CA-124 | Serial OEM genérico | Teste unitário com `To be filled by O.E.M.`, `Default string`, `0`. | Serial normalizado para `NULL`; `hardware_key` cai para o MAC; `identity_confidence = MEDIUM`. |
+| CA-125 | Upsert sem duplicata | Enviar 2 heartbeats do mesmo serial com `agent_uuid` diferentes (simula reinstalação). | Uma única linha em `machines`, mesmo `id`, `agent_uuid` atualizado, `AGENT_REBOUND` em `audit_logs`. |
+| CA-126 | Preservação de alocação | Mover o PC para outro setor no painel e enviar novo heartbeat. | `unit_id`, `sector_id`, `pos_*` não são sobrescritos. |
+| CA-127 | Histórico de hardware | Enviar heartbeat com `ram_total_mb` alterado. | Linha criada em `machine_inventory_changes` com valor antigo e novo. |
+| CA-128 | Falha parcial | Simular falha/timeout do PowerShell. | Heartbeat enviado com campos de rede/RAM do Node, demais `null`, `collection_errors` preenchido; nenhum valor fictício. |
+| CA-129 | Migration idempotente | Rodar `02_hardware_identity_upsert.sql` duas vezes sobre o banco atual. | Sem erros, sem perda de dados; seriais sintéticos convertidos em `NULL`. |
+| CA-130 | Regressão | `npm --prefix backend test`. | Testes existentes e novos passam (exit code 0). |
+
+### 11. Dependências e Riscos
+
+| Risco | Mitigação |
+| :--- | :--- |
+| Seriais duplicados de fábrica (lotes OEM com mesmo serial válido) | Detectado quando o mesmo `hardware_key` chega com `smbios_uuid` diferente: registrar alerta de conflito em `audit_logs` (`HARDWARE_KEY_CONFLICT`) e não fazer rebind — `@security` valida na Fase 3. |
+| Spoofing: agente malicioso envia serial de outro PC para "sequestrar" o registro | Rebind só com `AGENT_ENROLLMENT_KEY` válida + auditoria; `@security` avalia endurecimento (ex.: exigir que o token antigo esteja revogado ou aprovação manual). |
+| MAC muda ao trocar de cabo para Wi‑Fi (máquinas sem serial válido) | Aceito para `MEDIUM`; documentado. Notebooks/desktops de marca normalmente têm serial válido (`HIGH`). |
+| PowerShell bloqueado por GPO (`ConstrainedLanguage`) | As chamadas usam somente `Get-CimInstance` e `ConvertTo-Json` (permitidos em ConstrainedLanguage); falha cai em RF-123. |
+| Duas implementações de agente (Node e C#) | Ver Decisão Pendente P1. |
+
+### 12. Decisões Pendentes para o Usuário
+
+- **P1 — Agente nativo C#:** o instalador em produção (`IpojucaRMM-Setup.exe`) usa o agente C#, não o Node. Proposta padrão: **neste ciclo, apenas o agente Node.js** (como pedido); o backend aceitará os dois, e o alinhamento do C# ao novo contrato fica para um ciclo futuro, se você quiser.
+- **P2 — Chave do Upsert:** proposta padrão: **Serial válido como chave principal, MAC como fallback** (Seção 6, RF-119). Alternativa: chave composta Serial+MAC obrigatória (mais rígida, mas gera duplicata sempre que o PC trocar de placa de rede).
+
+## 50. Gate de Aprovação — FASE 1 (Ciclo #27)
+
+O pipeline do **Ciclo #27** está **pausado no Gate de Aprovação da Fase 1**. Nenhum código-fonte (`agent/`, `backend/`, `infrastructure/`) foi alterado.
+
+Responda **`Approved`** (aceitando os padrões propostos para P1 e P2) ou indique alterações. Após a aprovação, a sequência será: Fase 2 (`@lead`, arquitetura) → Fase 3 (`@security`, rebind/spoofing) → Fase 4 (`@dba`, migration) → Fase 6 (`@engineer`, coletor + upsert) → Fase 9 (`@qa`) → Fase 10 (`@security`). As fases 5, 7, 8 e 11 (design, frontend, n8n, deploy) não se aplicam a este ciclo.

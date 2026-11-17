@@ -1177,3 +1177,26 @@ O Ciclo #26 habilitou criação, edição e exclusão completas de **Unidades de
   - `npm --prefix backend test`: exit code `0` (`tests 9`, `pass 9`, `fail 0`, em `1842.1ms`, modo `memory` e `FORCE_NATIVE_ROUTER=1`).
   - `npm --prefix frontend run build`: exit code `0` (`672 modules transformed`, `dist/index.html` `0.72 kB`, `dist/assets/index-BFLoRAEo.js` `1,249.57 kB`, em `9.79s`).
 - Sistema pronto para commit e push no repositório Git.
+
+
+---
+
+## Ciclo #27 — Relatório de QA (`@qa`, Fase 9)
+
+| CA | Resultado | Evidência |
+| :--- | :--- | :--- |
+| CA-120 serial real | Aprovado | `node agent/src/index.js --inventory` retornou o serial real da BIOS (8 caracteres) e não mais `SN-<hostname>` |
+| CA-121 dados completos | Aprovado | Fabricante, modelo, CPU (4 núcleos), RAM (8099 MB), disco SSD de 118 GB, IP e MAC reais |
+| CA-122 invisibilidade | **Não verificado** | Há `windowsHide:true` e `-WindowStyle Hidden`, mas a ausência de janela precisa ser conferida visualmente via Agendador/boot |
+| CA-123 desempenho | Parcial | Coleta completa em cerca de 2,3 s (meta 3 s). A primeira medição, antes de remover `Get-Partition`, foi de 6 s |
+| CA-124 serial genérico | Aprovado | Teste 10: "To be filled by O.E.M.", "Default string", "0" e "SN-*" viram `NULL`; cai para MAC (MEDIUM) |
+| CA-125 upsert sem duplicata | Aprovado (modo memória) | Teste 10: mesmo serial com `agent_uuid` novo mantém 1 registro, mesmo `id`, e grava `AGENT_REBOUND` |
+| CA-126 preservação de alocação | Aprovado (modo memória) | Teste 10: unidade/setor movidos manualmente permanecem após o rebind e o heartbeat |
+| CA-127 histórico | Aprovado (modo memória) | Teste 10: `ram_total_mb` 8192 para 16384 registrado |
+| CA-128 falha parcial | Aprovado | Com PowerShell indisponível: `collection_errors` preenchido, serial/modelo `null`, RAM, IP e disco vindos do Node, sem valores fictícios |
+| CA-129 migration idempotente | **Não verificado** | Sem acesso ao MySQL local (root exige senha que não tenho) e Docker desligado. O SQL e o upsert MySQL só foram revisados por leitura |
+| CA-130 regressão | Aprovado | `npm --prefix backend test`: 10 de 10 passando |
+
+Também testado: smbios divergente retorna 409 e audita `HARDWARE_KEY_CONFLICT`; heartbeat com serial genérico não apaga o serial já guardado.
+
+**Pendência de QA:** executar a migration e o teste de upsert em um MySQL real (ver Deployment_Guide) antes de qualquer implantação.
