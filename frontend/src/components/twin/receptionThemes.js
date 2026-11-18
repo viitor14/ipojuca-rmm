@@ -82,7 +82,7 @@ export const RECEPTION_VARIANTS = {
   },
 };
 
-export const DEFAULT_VARIANT = 'A';
+export const DEFAULT_VARIANT = 'B';
 
 export function getReceptionVariant(id) {
   return RECEPTION_VARIANTS[id] || RECEPTION_VARIANTS[DEFAULT_VARIANT];

@@ -12,6 +12,9 @@ import styled from 'styled-components';
 
 const LOGICAL_W = 480;
 const LOGICAL_H = 300;
+// Supersampling: o buffer é rasterizado em 3x e reduzido com suavização,
+// eliminando o aspecto pixelado sem alterar as coordenadas de desenho.
+const SS = 3;
 const TW = 30; // largura do tile isométrico (px lógicos)
 const TH = 15; // altura do tile isométrico (2:1)
 const OX = LOGICAL_W / 2;
@@ -22,41 +25,41 @@ const ROOM_D = 9;
 const WALL_H = 2.2;
 
 const PALETTE = {
-  floorA: '#E8DCC8',
-  floorB: '#DFD0B8',
-  floorEdge: '#C9B79A',
-  wallTop: '#F3EAD9',
-  wallSouth: '#E3D5BE',
-  wallEast: '#D3C3A8',
-  wallCap: '#8D6E63',
+  floorA: '#F2E4CC',
+  floorB: '#E7D5B6',
+  floorEdge: '#C9AE86',
+  wallTop: '#FFF6E6',
+  wallSouth: '#F0DFC4',
+  wallEast: '#DCC7A6',
+  wallCap: '#9C6B4A',
   baseboard: '#6B4F3A',
-  rug: '#A3B18A',
-  rugBorder: '#DAD7CD',
-  woodTop: '#B08968',
-  woodSouth: '#96714F',
-  woodEast: '#7E5C3E',
-  deskTop: '#C89F72',
-  deskSouth: '#A9835A',
-  deskEast: '#8E6C48',
-  metal: '#9AA5AD',
-  metalDark: '#6B7780',
-  plastic: '#E9EDF0',
-  plasticDark: '#C3CBD2',
-  paper: '#FBF8F1',
-  plant: '#4F7A4A',
-  plantDark: '#3A5C37',
-  pot: '#A9714B',
-  glass: '#CFE3EA',
-  glassFrame: '#7C8B93',
-  ink: '#2B2B2B',
-  inkSoft: '#5C5C5C',
+  rug: '#7FB069',
+  rugBorder: '#F2C14E',
+  woodTop: '#C98A4B',
+  woodSouth: '#A96C33',
+  woodEast: '#8A5526',
+  deskTop: '#E0A458',
+  deskSouth: '#BE8038',
+  deskEast: '#9C6628',
+  metal: '#B7C4CE',
+  metalDark: '#7C8B96',
+  plastic: '#F4F8FB',
+  plasticDark: '#CBD6DE',
+  paper: '#FFFDF7',
+  plant: '#3E9B4F',
+  plantDark: '#2C7A3B',
+  pot: '#C4693F',
+  glass: '#BFE6F5',
+  glassFrame: '#6E8A96',
+  ink: '#1F2933',
+  inkSoft: '#52606D',
 };
 
 const STATUS_COLORS = {
-  NORMAL: '#2D6A4F',
-  WARNING: '#D97706',
-  CRITICAL: '#DC2626',
-  OFFLINE: '#718096',
+  NORMAL: '#12B76A',
+  WARNING: '#F79009',
+  CRITICAL: '#F04438',
+  OFFLINE: '#98A2B3',
 };
 
 const STATUS_LABELS = {
@@ -281,15 +284,26 @@ function drawComputer(ctx, slot, machine, isSelected, blinkOn) {
   }
 }
 
-function drawMachineLabel(ctx, slot, machine, isSelected) {
+function drawMachineLabel(ctx, slot, machine, isSelected, occupied = []) {
   const status = machine?.health_status || 'OFFLINE';
   const anchor = iso(slot.x + 0.45, slot.y + 0.2, 2.15);
   const full = machine?.hostname || 'SEM AGENTE';
-  const short = full.length > 9 ? full.slice(-8) : full;
+  // Nome real completo: sem truncar o hostname no rótulo
+  const short = full;
   ctx.font = '8px "Courier New", monospace';
   const w = Math.max(ctx.measureText(short).width + 18, 46);
   const x = Math.round(anchor.sx - w / 2);
-  const y = Math.round(anchor.sy - 13 + (slot.labelOffset || 0));
+  let y = Math.round(anchor.sy - 13 + (slot.labelOffset || 0));
+
+  // Evita sobreposição entre rótulos: desloca para baixo até achar espaço livre
+  const overlaps = (top) =>
+    occupied.some((b) => x < b.x + b.w && x + w > b.x && top < b.y + b.h && top + 12 > b.y);
+  let guard = 0;
+  while (overlaps(y) && guard < 8) {
+    y += 14;
+    guard += 1;
+  }
+  occupied.push({ x, y, w, h: 12 });
 
   ctx.fillStyle = isSelected ? '#1F2937' : 'rgba(255,255,255,0.96)';
   ctx.fillRect(x, y, w, 12);
@@ -366,7 +380,7 @@ const CanvasEl = styled.canvas`
   height: 100%;
   display: block;
   cursor: ${({ $dragging }) => ($dragging ? 'grabbing' : 'grab')};
-  image-rendering: pixelated;
+  image-rendering: auto;
 `;
 
 const Legend = styled.div`
@@ -471,13 +485,14 @@ export function PixelArtTwin({
 
     if (!bufferRef.current) {
       const buffer = document.createElement('canvas');
-      buffer.width = LOGICAL_W;
-      buffer.height = LOGICAL_H;
+      buffer.width = LOGICAL_W * SS;
+      buffer.height = LOGICAL_H * SS;
       bufferRef.current = buffer;
     }
     const buffer = bufferRef.current;
     const ctx = buffer.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(SS, 0, 0, SS, 0, 0);
+    ctx.imageSmoothingEnabled = true;
     ctx.clearRect(0, 0, LOGICAL_W, LOGICAL_H);
 
     drawFloor(ctx);
@@ -505,9 +520,16 @@ export function PixelArtTwin({
     });
 
     // etiquetas por último para ficarem legíveis
+    const labelBoxes = [];
     slots.forEach((slot) => {
       if (!slot.machine) return;
-      drawMachineLabel(ctx, slot, slot.machine, selectedMachine?.id === slot.machine.id);
+      drawMachineLabel(
+        ctx,
+        slot,
+        slot.machine,
+        selectedMachine?.id === slot.machine.id,
+        labelBoxes
+      );
     });
 
     drawSelectedCard(ctx, selectedMachine);
@@ -528,7 +550,8 @@ export function PixelArtTwin({
       canvas.height = targetH;
     }
     const out = canvas.getContext('2d');
-    out.imageSmoothingEnabled = false;
+    out.imageSmoothingEnabled = true;
+    out.imageSmoothingQuality = 'high';
     out.setTransform(1, 0, 0, 1, 0, 0);
     out.clearRect(0, 0, targetW, targetH);
 
@@ -538,7 +561,17 @@ export function PixelArtTwin({
     const drawH = LOGICAL_H * scale;
     const dx = (targetW - drawW) / 2 + view.panX * dpr;
     const dy = (targetH - drawH) / 2 + view.panY * dpr;
-    out.drawImage(buffer, 0, 0, LOGICAL_W, LOGICAL_H, dx, dy, drawW, drawH);
+    out.drawImage(
+      buffer,
+      0,
+      0,
+      LOGICAL_W * SS,
+      LOGICAL_H * SS,
+      dx,
+      dy,
+      drawW,
+      drawH
+    );
 
     // HUD fixo em coordenadas CSS
     out.setTransform(dpr, 0, 0, dpr, 0, 0);
