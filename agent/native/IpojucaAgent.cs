@@ -21,13 +21,13 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.3.1.0")]
+[assembly: AssemblyVersion("2.3.2.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.3.1-native-exe";
+        public const string CURRENT_VERSION = "2.3.2-native-exe";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -671,7 +671,12 @@ namespace IpojucaRMM
                                 {
                                     string taskId = t["task_id"].ToString();
                                     string taskCode = t["task_code"].ToString();
-                                    ExecuteAndReportTask(taskId, taskCode);
+                                    Dictionary<string, object> taskParams = null;
+                                    if (t.ContainsKey("parameters") && t["parameters"] is Dictionary<string, object>)
+                                    {
+                                        taskParams = (Dictionary<string, object>)t["parameters"];
+                                    }
+                                    ExecuteAndReportTask(taskId, taskCode, taskParams);
                                 }
                             }
                         }
@@ -710,7 +715,7 @@ namespace IpojucaRMM
             });
         }
 
-        private void ExecuteAndReportTask(string taskId, string taskCode)
+        private void ExecuteAndReportTask(string taskId, string taskCode, Dictionary<string, object> taskParams)
         {
             try
             {
@@ -722,15 +727,15 @@ namespace IpojucaRMM
                     ToolTipIcon.Info
                 );
 
-                string outputSummary = RemoteTaskExecutor.RunTask(taskCode, _config, () => TriggerHeartbeatAsync("TASK_" + taskCode), () => TriggerSelfUpdateGui(false));
+                RemoteTaskExecutor.TaskResult outcome = RemoteTaskExecutor.RunTask(taskCode, taskParams, _config, () => TriggerHeartbeatAsync("TASK_" + taskCode), () => TriggerSelfUpdateGui(false));
 
                 JavaScriptSerializer serializer = new JavaScriptSerializer();
                 string jsonBody = serializer.Serialize(new Dictionary<string, object>
                 {
                     { "task_id", taskId },
-                    { "status", "COMPLETED" },
-                    { "exit_code", 0 },
-                    { "output_summary", outputSummary }
+                    { "status", outcome.Success ? "COMPLETED" : "FAILED" },
+                    { "exit_code", outcome.Success ? 0 : 1 },
+                    { "output_summary", outcome.Summary }
                 });
 
                 string url = _config.BackendUrl.TrimEnd('/') + "/api/agent/task-result";
@@ -748,7 +753,7 @@ namespace IpojucaRMM
                     reqStream.Write(bytes, 0, bytes.Length);
                 }
                 using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) { }
-                AppendLog("[TASK OK] " + taskCode + " -> " + outputSummary);
+                AppendLog("[TASK OK] " + taskCode + " -> " + outcome.Summary);
             }
             catch (Exception ex)
             {
@@ -791,41 +796,170 @@ namespace IpojucaRMM
 
     public static class RemoteTaskExecutor
     {
-        public static string RunTask(string taskCode, AgentConfig cfg, Action onTriggerHeartbeat, Action onTriggerUpdate)
+        public class TaskResult
+        {
+            public bool Success;
+            public string Summary;
+
+            public TaskResult(bool success, string summary)
+            {
+                Success = success;
+                Summary = summary;
+            }
+        }
+
+        public static TaskResult RunTask(string taskCode, Dictionary<string, object> parameters, AgentConfig cfg, Action onTriggerHeartbeat, Action onTriggerUpdate)
         {
             switch (taskCode)
             {
                 case "SYNC_TELEMETRY_NOW":
                     if (onTriggerHeartbeat != null) onTriggerHeartbeat();
-                    return "Telemetria em tempo real coletada e enviada por " + Environment.MachineName + ".";
+                    return new TaskResult(true, "Telemetria em tempo real coletada e enviada por " + Environment.MachineName + ".");
 
                 case "CLEAR_TEMP_CACHE":
-                    return ClearUserAndSystemTemp();
+                    return new TaskResult(true, ClearUserAndSystemTemp());
 
                 case "RESTART_SPOOLER":
-                    return RestartPrintSpooler(onTriggerHeartbeat);
+                    return new TaskResult(true, RestartPrintSpooler(onTriggerHeartbeat));
 
                 case "FLUSH_DNS_WINSOCK":
-                    return FlushDnsAndArp();
+                    return new TaskResult(true, FlushDnsAndArp());
 
                 case "COLLECT_NETWORK_DIAG":
-                    return CollectLiveNetworkDiagnostics(cfg);
+                    return new TaskResult(true, CollectLiveNetworkDiagnostics(cfg));
 
                 case "CHECK_DISK_HEALTH":
-                    return CheckLiveDiskHealth();
+                    return new TaskResult(true, CheckLiveDiskHealth());
 
                 case "LIST_TOP_PROCESSES":
-                    return ListTopProcessesByMemory();
+                    return new TaskResult(true, ListTopProcessesByMemory());
 
                 case "REBOOT_WORKSTATION":
-                    return ScheduleSafeReboot();
+                    return new TaskResult(true, ScheduleSafeReboot());
+
+                case "INSTALL_APPROVED_PRINTER":
+                    return InstallApprovedPrinter(parameters, onTriggerHeartbeat);
 
                 case "UPDATE_AGENT":
                     if (onTriggerUpdate != null) onTriggerUpdate();
-                    return "Atualização automática iniciada na tela de " + Environment.MachineName + ".";
+                    return new TaskResult(true, "Atualização automática iniciada na tela de " + Environment.MachineName + ".");
 
                 default:
-                    return "Tarefa homologada (" + taskCode + ") processada pelo Agente em " + Environment.MachineName + ".";
+                    return new TaskResult(false, "Tarefa '" + taskCode + "' não é suportada por este agente em " + Environment.MachineName + ".");
+            }
+        }
+
+        private static TaskResult InstallApprovedPrinter(Dictionary<string, object> parameters, Action onTriggerHeartbeat)
+        {
+            string printerIp = parameters != null && parameters.ContainsKey("printer_ip")
+                ? Convert.ToString(parameters["printer_ip"]).Trim()
+                : "";
+            string printerName = parameters != null && parameters.ContainsKey("printer_name")
+                ? Convert.ToString(parameters["printer_name"]).Trim()
+                : "";
+
+            if (string.IsNullOrEmpty(printerIp) || string.IsNullOrEmpty(printerName))
+            {
+                return new TaskResult(false, "Parâmetros printer_ip e printer_name são obrigatórios para instalar a impressora.");
+            }
+
+            if (!IsPrinterReachable(printerIp))
+            {
+                return new TaskResult(false, "A impressora " + printerIp + " não respondeu nas portas 9100/631/515. Nada foi instalado em " + Environment.MachineName + ".");
+            }
+
+            string portName = "IP_" + printerIp;
+            string[] candidateDrivers = new string[]
+            {
+                "Microsoft IPP Class Driver",
+                "Generic / Text Only",
+                "Microsoft enhanced Point and Print compatibility driver"
+            };
+
+            string lastError = "";
+            foreach (string driver in candidateDrivers)
+            {
+                string script = string.Join("; ", new string[]
+                {
+                    "$ErrorActionPreference='Stop'",
+                    "if (-not (Get-PrinterPort -Name '" + portName + "' -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name '" + portName + "' -PrinterHostAddress '" + printerIp + "' }",
+                    "if (Get-Printer -Name '" + printerName + "' -ErrorAction SilentlyContinue) { Remove-Printer -Name '" + printerName + "' }",
+                    "Add-Printer -Name '" + printerName + "' -DriverName '" + driver + "' -PortName '" + portName + "'",
+                    "(Get-Printer -Name '" + printerName + "').Name"
+                });
+
+                string output = RunPowerShell(script, 45000);
+                if (!string.IsNullOrEmpty(output) && output.Trim().Length > 0 && !output.StartsWith("ERRO:"))
+                {
+                    if (onTriggerHeartbeat != null) onTriggerHeartbeat();
+                    return new TaskResult(true, "Impressora '" + printerName + "' instalada em " + Environment.MachineName +
+                        " na porta " + portName + " (" + printerIp + ":9100) com o driver '" + driver + "'.");
+                }
+                lastError = output;
+            }
+
+            return new TaskResult(false, "Falha ao instalar a impressora '" + printerName + "' (" + printerIp + ") em " +
+                Environment.MachineName + ": " + (string.IsNullOrEmpty(lastError) ? "nenhum driver compatível respondeu." : lastError));
+        }
+
+        private static bool IsPrinterReachable(string ip)
+        {
+            int[] ports = new int[] { 9100, 631, 515 };
+            foreach (int port in ports)
+            {
+                Socket socket = null;
+                try
+                {
+                    socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                    IAsyncResult ar = socket.BeginConnect(new IPEndPoint(IPAddress.Parse(ip), port), null, null);
+                    if (ar.AsyncWaitHandle.WaitOne(1200, false))
+                    {
+                        socket.EndConnect(ar);
+                        if (socket.Connected) return true;
+                    }
+                }
+                catch { }
+                finally
+                {
+                    if (socket != null) { try { socket.Close(); } catch { } }
+                }
+            }
+            return false;
+        }
+
+        private static string RunPowerShell(string script, int timeoutMs)
+        {
+            try
+            {
+                string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+                ProcessStartInfo psi = new ProcessStartInfo("powershell.exe",
+                    "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + encoded);
+                psi.CreateNoWindow = true;
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                using (Process p = Process.Start(psi))
+                {
+                    string stdout = p.StandardOutput.ReadToEnd();
+                    string stderr = p.StandardError.ReadToEnd();
+                    if (!p.WaitForExit(timeoutMs))
+                    {
+                        try { p.Kill(); } catch { }
+                        return "ERRO: tempo esgotado ao executar a instalação da impressora.";
+                    }
+                    if (p.ExitCode != 0)
+                    {
+                        string detail = string.IsNullOrEmpty(stderr) ? stdout : stderr;
+                        detail = Regex.Replace(detail ?? "", @"\s+", " ").Trim();
+                        if (detail.Length > 200) detail = detail.Substring(0, 200);
+                        return "ERRO: " + detail;
+                    }
+                    return (stdout ?? "").Trim();
+                }
+            }
+            catch (Exception ex)
+            {
+                return "ERRO: " + ex.Message;
             }
         }
 
