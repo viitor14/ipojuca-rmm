@@ -21,13 +21,13 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.3.0.0")]
+[assembly: AssemblyVersion("2.3.1.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.3.0-native-exe";
+        public const string CURRENT_VERSION = "2.3.1-native-exe";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
