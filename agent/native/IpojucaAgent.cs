@@ -11,6 +11,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
@@ -539,7 +540,8 @@ namespace IpojucaRMM
                     { "sector_id", _config.SectorId },
                     { "trigger_reason", reason },
                     { "inventory", inventory },
-                    { "metrics", metrics }
+                    { "metrics", metrics },
+                    { "printers", PrinterDiscovery.CollectPrinters() }
                 };
 
                 JavaScriptSerializer serializer = new JavaScriptSerializer();
@@ -1878,6 +1880,244 @@ namespace IpojucaRMM
                 }
             };
             _uiTimer.Start();
+        }
+    }
+
+    /// <summary>
+    /// Descoberta somente-leitura de impressoras: as instaladas na estacao (WMI) e as
+    /// alcancaveis na sub-rede local nas portas de impressao. Cache de 6 horas.
+    /// </summary>
+    public static class PrinterDiscovery
+    {
+        private const int DiscoveryTtlMs = 6 * 60 * 60 * 1000;
+        private const int ProbeTimeoutMs = 350;
+        private const int ProbeConcurrency = 64;
+        private const int MaxPrinters = 40;
+        private static readonly int[] PrinterPorts = new int[] { 9100, 631, 515 };
+
+        private static readonly object CacheLock = new object();
+        private static List<Dictionary<string, object>> _cache;
+        private static DateTime _cacheAt = DateTime.MinValue;
+        private static bool _running;
+
+        public static List<Dictionary<string, object>> CollectPrinters()
+        {
+            lock (CacheLock)
+            {
+                if (_cache != null && (DateTime.UtcNow - _cacheAt).TotalMilliseconds < DiscoveryTtlMs)
+                    return _cache;
+                if (_running)
+                    return _cache ?? new List<Dictionary<string, object>>();
+                _running = true;
+            }
+
+            try
+            {
+                List<Dictionary<string, object>> result = Discover();
+                lock (CacheLock)
+                {
+                    _cache = result;
+                    _cacheAt = DateTime.UtcNow;
+                }
+                return result;
+            }
+            catch
+            {
+                return new List<Dictionary<string, object>>();
+            }
+            finally
+            {
+                lock (CacheLock) { _running = false; }
+            }
+        }
+
+        private static List<Dictionary<string, object>> Discover()
+        {
+            Dictionary<string, Dictionary<string, object>> byIp = new Dictionary<string, Dictionary<string, object>>();
+
+            foreach (Dictionary<string, object> installed in ListInstalledPrinters())
+            {
+                string installedIp = installed["ip_address"] as string;
+                if (!string.IsNullOrEmpty(installedIp)) byIp[installedIp] = installed;
+            }
+
+            string localIp = ResolveLocalIpv4();
+            if (IsPrivateIpv4(localIp))
+            {
+                string prefix = localIp.Substring(0, localIp.LastIndexOf('.'));
+                List<string> targets = new List<string>();
+                for (int i = 1; i <= 254; i++)
+                {
+                    string candidate = prefix + "." + i.ToString();
+                    if (candidate != localIp) targets.Add(candidate);
+                }
+
+                foreach (KeyValuePair<string, int> hit in ScanSubnet(targets))
+                {
+                    if (byIp.ContainsKey(hit.Key)) continue;
+                    byIp[hit.Key] = new Dictionary<string, object>
+                    {
+                        { "ip_address", hit.Key },
+                        { "name", "IMPRESSORA-" + hit.Key.Substring(hit.Key.LastIndexOf('.') + 1) },
+                        { "model", null },
+                        { "port", hit.Value },
+                        { "source", "NETWORK" }
+                    };
+                }
+            }
+
+            List<Dictionary<string, object>> list = new List<Dictionary<string, object>>(byIp.Values);
+            if (list.Count > MaxPrinters) list = list.GetRange(0, MaxPrinters);
+            return list;
+        }
+
+        private static List<Dictionary<string, object>> ListInstalledPrinters()
+        {
+            List<Dictionary<string, object>> list = new List<Dictionary<string, object>>();
+            try
+            {
+                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Name, PortName, DriverName FROM Win32_Printer"))
+                {
+                    foreach (ManagementObject item in searcher.Get())
+                    {
+                        string name = CleanText(item["Name"], 64);
+                        if (string.IsNullOrEmpty(name)) continue;
+                        string ip = ExtractIpv4(item["PortName"] as string);
+                        if (string.IsNullOrEmpty(ip)) continue;
+                        list.Add(new Dictionary<string, object>
+                        {
+                            { "ip_address", ip },
+                            { "name", name },
+                            { "model", CleanText(item["DriverName"], 80) },
+                            { "port", 9100 },
+                            { "source", "INSTALLED" }
+                        });
+                    }
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        private static List<KeyValuePair<string, int>> ScanSubnet(List<string> targets)
+        {
+            List<KeyValuePair<string, int>> found = new List<KeyValuePair<string, int>>();
+            int cursor = -1;
+            int workers = Math.Min(ProbeConcurrency, Math.Max(1, targets.Count));
+            Thread[] threads = new Thread[workers];
+            for (int w = 0; w < workers; w++)
+            {
+                threads[w] = new Thread(delegate()
+                {
+                    while (true)
+                    {
+                        int index = Interlocked.Increment(ref cursor);
+                        if (index >= targets.Count) return;
+                        lock (found)
+                        {
+                            if (found.Count >= MaxPrinters) return;
+                        }
+                        int port = ProbePrinter(targets[index]);
+                        if (port > 0)
+                        {
+                            lock (found) { found.Add(new KeyValuePair<string, int>(targets[index], port)); }
+                        }
+                    }
+                });
+                threads[w].IsBackground = true;
+                threads[w].Start();
+            }
+            foreach (Thread t in threads) t.Join();
+            return found;
+        }
+
+        private static int ProbePrinter(string ip)
+        {
+            foreach (int port in PrinterPorts)
+            {
+                if (ProbePort(ip, port)) return port;
+            }
+            return 0;
+        }
+
+        private static bool ProbePort(string ip, int port)
+        {
+            Socket socket = null;
+            try
+            {
+                socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                IAsyncResult ar = socket.BeginConnect(new IPEndPoint(IPAddress.Parse(ip), port), null, null);
+                if (!ar.AsyncWaitHandle.WaitOne(ProbeTimeoutMs, false)) return false;
+                socket.EndConnect(ar);
+                return socket.Connected;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                if (socket != null) { try { socket.Close(); } catch { } }
+            }
+        }
+
+        private static string ResolveLocalIpv4()
+        {
+            try
+            {
+                using (Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0))
+                {
+                    sock.Connect("8.8.8.8", 53);
+                    IPEndPoint endPoint = sock.LocalEndPoint as IPEndPoint;
+                    if (endPoint != null && endPoint.Address != null)
+                    {
+                        string routedIp = endPoint.Address.ToString();
+                        if (IsPrivateIpv4(routedIp)) return routedIp;
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus != OperationalStatus.Up ||
+                        ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                        continue;
+                    foreach (UnicastIPAddressInformation info in ni.GetIPProperties().UnicastAddresses)
+                    {
+                        if (info.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                        string candidate = info.Address.ToString();
+                        if (IsPrivateIpv4(candidate)) return candidate;
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static bool IsPrivateIpv4(string ip)
+        {
+            if (string.IsNullOrEmpty(ip)) return false;
+            return Regex.IsMatch(ip, @"^(10\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])|192\.168)\.\d{1,3}\.\d{1,3}$");
+        }
+
+        private static string ExtractIpv4(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return null;
+            Match match = Regex.Match(value, @"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b");
+            if (!match.Success) return null;
+            string ip = match.Groups[1].Value;
+            return IsPrivateIpv4(ip) ? ip : null;
+        }
+
+        private static string CleanText(object value, int max)
+        {
+            if (value == null) return null;
+            string text = Regex.Replace(value.ToString(), @"\s+", " ").Trim();
+            if (text.Length == 0) return null;
+            return text.Length > max ? text.Substring(0, max) : text;
         }
     }
 }
