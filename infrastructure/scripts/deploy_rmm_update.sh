@@ -14,7 +14,7 @@ REPO_DIR="${REPO_DIR:-${DETECTED_REPO_DIR}}"
 FRONTEND_PORT="${FRONTEND_PORT:-8095}"
 BACKEND_PORT="${BACKEND_PORT:-4005}"
 MYSQL_EXTERNAL_PORT="${MYSQL_EXTERNAL_PORT:-3309}"
-MIGRATION_FILE="infrastructure/mysql/02_hardware_identity_upsert.sql"
+MIGRATION_FILES="infrastructure/mysql/02_hardware_identity_upsert.sql infrastructure/mysql/03_approved_printers.sql"
 DRY_RUN="${DRY_RUN:-0}"
 
 run() {
@@ -32,8 +32,8 @@ if [ ! -d "${REPO_DIR}/.git" ]; then
 fi
 cd "${REPO_DIR}"
 
-if [ ! -f "${MIGRATION_FILE}" ]; then
-  echo "ERRO: migration ${MIGRATION_FILE} nao encontrada. Rode 'git pull origin main' antes." >&2
+if [ ! -f "infrastructure/mysql/02_hardware_identity_upsert.sql" ]; then
+  echo "ERRO: migration 02 nao encontrada. Rode 'git pull origin main' antes." >&2
   exit 1
 fi
 
@@ -50,7 +50,7 @@ run docker compose up -d --build
 
 if [ "$DRY_RUN" = "1" ]; then
   echo "[3/5] [dry-run] aguardaria o backend em http://127.0.0.1:${BACKEND_PORT}/api/health"
-  echo "[4/5] [dry-run] aplicaria ${MIGRATION_FILE} no container mysql"
+  echo "[4/5] [dry-run] aplicaria ${MIGRATION_FILES} no container mysql"
   echo "[5/5] [dry-run] validaria healthcheck e painel"
   echo "Dry-run concluido sem alterar nada."
   exit 0
@@ -80,18 +80,21 @@ fi
 
 # Remove o USE fixo: o banco e selecionado por argumento dentro do container.
 # shellcheck disable=SC2086
-sed '/^USE /d' "${MIGRATION_FILE}" | docker compose exec -T ${EXEC_ENV} mysql sh -c '
-  if [ -z "${MYSQL_USER:-}" ] || [ -z "${MYSQL_DATABASE:-}" ]; then
-    echo "ERRO: MYSQL_USER/MYSQL_DATABASE ausentes no container mysql." >&2
-    exit 1
-  fi
-  if [ -z "${MYSQL_PASSWORD:-}" ] && [ -z "${MYSQL_ROOT_PASSWORD:-}" ]; then
-    echo "ERRO: MYSQL_PASSWORD/MYSQL_ROOT_PASSWORD ausentes no container mysql." >&2
-    exit 1
-  fi
-  echo "  usuario=${MYSQL_USER} banco=${MYSQL_DATABASE} (senha oculta)"
-  MYSQL_PWD="${MYSQL_PASSWORD:-$MYSQL_ROOT_PASSWORD}" exec mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"
-'
+for migration in ${MIGRATION_FILES}; do
+  echo "  aplicando ${migration}"
+  sed '/^USE /d' "${migration}" | docker compose exec -T ${EXEC_ENV} mysql sh -c '
+    if [ -z "${MYSQL_USER:-}" ] || [ -z "${MYSQL_DATABASE:-}" ]; then
+      echo "ERRO: MYSQL_USER/MYSQL_DATABASE ausentes no container mysql." >&2
+      exit 1
+    fi
+    if [ -z "${MYSQL_PASSWORD:-}" ] && [ -z "${MYSQL_ROOT_PASSWORD:-}" ]; then
+      echo "ERRO: MYSQL_PASSWORD/MYSQL_ROOT_PASSWORD ausentes no container mysql." >&2
+      exit 1
+    fi
+    echo "  usuario=${MYSQL_USER} banco=${MYSQL_DATABASE} (senha oculta)"
+    MYSQL_PWD="${MYSQL_PASSWORD:-$MYSQL_ROOT_PASSWORD}" exec mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"
+  '
+done
 
 echo "[5/5] Verificando capacidades publicadas..."
 curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health"

@@ -1992,3 +1992,33 @@ Responda **`Approved`** (aceitando os padrões propostos para P1 e P2) ou indiqu
 | CA-135 | Regressão | `npm --prefix backend test`: 11 de 11 |
 
 **Pendência de implantação:** o painel em produção continua com o build antigo até o redeploy do container `frontend` na VPS (Fase 11, exige autorização).
+
+
+---
+
+# CICLO #29 — IMPRESSORAS HOMOLOGADAS E CONFIRMAÇÃO DE REINÍCIO
+
+## 52. Especificação e Correção (`@lead` + `@engineer`)
+
+**Pedido:** ao clicar em "Instalar Impressora Homologada", listar as impressoras disponíveis para instalar no PC; e "Reiniciar Computador" deve pedir confirmação antes de reiniciar.
+
+**Diagnóstico:**
+1. O botão disparava a tarefa com `params: {}`, mas a API espera `parameters`. Resultado: `printer_ip`/`printer_name` chegavam vazios e o backend respondia 400 "Parâmetros inválidos". Não existia nenhuma lista de impressoras em lugar algum do sistema.
+2. `REBOOT_WORKSTATION` era disparado no primeiro clique, sem confirmação.
+
+**Correções:**
+- `frontend/src/components/DiagnosticDrawer.jsx`: `handleRunTask` passou a interceptar os dois códigos. Impressora abre seletor; reinício abre confirmação. O disparo foi extraído para `dispatchTask(task, params)` e agora envia `parameters`.
+- Novo catálogo `approved_printers` (migration `03_approved_printers.sql`, idempotente) com 4 impressoras globais; `GET /api/printers?unit_id=` autenticado; `repository.listApprovedPrinters`.
+- `frontend/src/services/api.js`: `getApprovedPrinters`; `App.jsx` injeta `onLoadPrinters`.
+
+**Critérios de aceitação:**
+
+| ID | Critério | Evidência |
+| :--- | :--- | :--- |
+| CA-136 | Clique em Instalar Impressora abre lista de impressoras homologadas | Navegador: modal com 4 opções (ADM-BROTHER, CONS-01-EPSON, FARM-ZEBRA, RECEPCAO-HP) e IP/modelo |
+| CA-137 | Instalação envia IP e nome da impressora escolhida | Tarefa `INSTALL_APPROVED_PRINTER` COMPLETED: "Impressora 'ADM-BROTHER' mapeada em 10.200.33.204 na estação PC-TESTE-29." |
+| CA-138 | Reiniciar pede confirmação e não dispara antes | Modal "Confirmar Reinicialização" com Cancelar/Confirmar; nenhuma tarefa criada antes do clique em confirmar |
+| CA-139 | Confirmar dispara o reinício | Tarefa `REBOOT_WORKSTATION` COMPLETED após confirmação |
+| CA-140 | Regressão | `npm --prefix backend test`: 12 de 12 |
+
+**Fora do escopo:** o agente Node.js não implementa `REBOOT_WORKSTATION` (retorna 403); o agente C# em produção já executa `ScheduleSafeReboot()`. Cadastro/edição de impressoras pelo painel também não entrou neste ciclo.

@@ -1215,3 +1215,23 @@ Também testado: smbios divergente retorna 409 e audita `HARDWARE_KEY_CONFLICT`;
 | Build do frontend | `vite build` concluído; bundle com a interface de CRUD |
 | Painel publicado (:8095) | **Falha confirmada**: bundle antigo sem a interface de CRUD; depende de redeploy |
 | Verificação visual no navegador | Não realizada: a ferramenta de navegador não alcança `localhost` nesta máquina |
+
+
+---
+
+## Ciclo #29 — QA de Impressoras e Confirmação de Reinício
+
+Verificado no navegador (Vite dev em `10.200.33.30:5181` apontando para backend local em modo memória), com estação `PC-TESTE-29` registrada por heartbeat.
+
+| Verificação | Resultado |
+| :--- | :--- |
+| Modal de impressoras | 4 opções listadas com IP e modelo; primeira pré-selecionada; botão "Instalar impressora" habilitado |
+| Disparo da instalação | `INSTALL_APPROVED_PRINTER` COMPLETED com "Impressora 'ADM-BROTHER' mapeada em 10.200.33.204 na estação PC-TESTE-29." |
+| Modal de reinício | "Confirmar Reinicialização" com aviso de 30s, botões Cancelar e Confirmar reinício |
+| Nenhum disparo antes de confirmar | 2 tarefas antes do clique, ambas de impressora; nenhuma `REBOOT_WORKSTATION` |
+| Disparo após confirmar | 3ª tarefa `REBOOT_WORKSTATION` COMPLETED |
+| Suíte backend | 12 de 12 passando |
+| Build do frontend | `vite build` concluído |
+| Script de deploy | `bash -n`/`sh -n` ok; execução simulada aplica migrations 02 e 03 |
+
+**Não verificado:** o painel publicado em `:8095` ainda não tem este ciclo (depende de novo deploy na VPS). O agente Node.js não executa `REBOOT_WORKSTATION`.

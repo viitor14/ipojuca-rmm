@@ -737,6 +737,17 @@ router.get("/catalog/tasks", requireAuth, (req, res) => {
   res.json({ tasks });
 });
 
+// 7.1 Catalogo de impressoras homologadas para instalacao remota (Ciclo #29)
+router.get("/printers", requireAuth, async (req, res) => {
+  try {
+    const unitId = Number(req.query.unit_id) || null;
+    const printers = await repository.listApprovedPrinters({ unitId });
+    res.json({ printers });
+  } catch {
+    res.status(500).json({ error: "Falha ao listar impressoras homologadas." });
+  }
+});
+
 // 8. Disparo de Tarefa Remota Homologada (Inovação C com Controles de @security)
 router.post(
   "/command",

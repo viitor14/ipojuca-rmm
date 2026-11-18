@@ -672,6 +672,7 @@ export function DiagnosticDrawer({
   taskCatalog = [],
   currentUser,
   onDispatchTask,
+  onLoadPrinters,
   onRefreshTelemetryNow,
   onUpdateMachineAgent,
   onSendMessage,
@@ -689,6 +690,8 @@ export function DiagnosticDrawer({
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState("DIAG"); // 'DIAG' | 'ACTIONS'
   const [nowTimestamp, setNowTimestamp] = useState(Date.now());
+  const [printerPicker, setPrinterPicker] = useState(null);
+  const [rebootConfirm, setRebootConfirm] = useState({ open: false, task: null });
 
   useEffect(() => {
     const timer = setInterval(() => setNowTimestamp(Date.now()), 1000);
@@ -906,6 +909,18 @@ export function DiagnosticDrawer({
   }
 
   async function handleRunTask(task) {
+    if (task.code === "INSTALL_APPROVED_PRINTER") {
+      openPrinterPicker(task);
+      return;
+    }
+    if (task.code === "REBOOT_WORKSTATION") {
+      setRebootConfirm({ open: true, task });
+      return;
+    }
+    await dispatchTask(task);
+  }
+
+  async function dispatchTask(task, params = {}) {
     const cleanTitle = fixTextEncoding(task.title);
     setBusyTask(task.code);
     setFeedback({
@@ -967,7 +982,7 @@ export function DiagnosticDrawer({
       const res = await onDispatchTask({
         machineId: machine.id,
         taskCode: task.code,
-        params: {},
+        parameters: params,
       });
       setFeedback({
         type: "ok",
@@ -1000,6 +1015,57 @@ export function DiagnosticDrawer({
     } finally {
       setBusyTask(null);
     }
+  }
+
+  async function openPrinterPicker(task) {
+    setPrinterPicker({
+      open: true,
+      task,
+      loading: true,
+      printers: [],
+      selectedId: null,
+      error: null,
+    });
+    try {
+      const list = onLoadPrinters ? await onLoadPrinters(machine.unit_id) : [];
+      setPrinterPicker((prev) =>
+        prev
+          ? {
+              ...prev,
+              loading: false,
+              printers: list,
+              selectedId: list[0]?.id ?? null,
+              error: list.length
+                ? null
+                : "Nenhuma impressora homologada disponível para esta unidade.",
+            }
+          : prev
+      );
+    } catch (err) {
+      setPrinterPicker((prev) =>
+        prev
+          ? { ...prev, loading: false, error: `Falha ao carregar impressoras: ${err.message}` }
+          : prev
+      );
+    }
+  }
+
+  async function confirmPrinterInstall() {
+    if (!printerPicker) return;
+    const printer = printerPicker.printers.find((p) => p.id === printerPicker.selectedId);
+    if (!printer) return;
+    const task = printerPicker.task;
+    setPrinterPicker(null);
+    await dispatchTask(task, {
+      printer_ip: printer.ip_address,
+      printer_name: printer.name,
+    });
+  }
+
+  async function confirmReboot() {
+    const task = rebootConfirm.task;
+    setRebootConfirm({ open: false, task: null });
+    if (task) await dispatchTask(task);
   }
 
   return (
@@ -1431,6 +1497,189 @@ export function DiagnosticDrawer({
           </>
         )}
       </BladeContainer>
+
+      {printerPicker?.open && (
+        <DiagnosticModalBackdrop onClick={() => setPrinterPicker(null)}>
+          <DiagnosticModalCard onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>
+                Instalar Impressora Homologada
+              </h3>
+              <div style={{ fontSize: "0.75rem", color: "#737B75" }}>
+                Estação: {machine.hostname} ({machine.ip_address}) • Selecione a impressora de rede a mapear
+              </div>
+            </div>
+
+            {printerPicker.loading && (
+              <div style={{ fontSize: "0.78rem", color: "#52796B", fontWeight: 600 }}>
+                Carregando impressoras homologadas...
+              </div>
+            )}
+
+            {printerPicker.error && (
+              <div style={{ fontSize: "0.78rem", color: "#DC2626", fontWeight: 600 }}>
+                {printerPicker.error}
+              </div>
+            )}
+
+            {!printerPicker.loading && printerPicker.printers.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  maxHeight: "260px",
+                  overflowY: "auto",
+                }}
+              >
+                {printerPicker.printers.map((printer) => {
+                  const selected = printer.id === printerPicker.selectedId;
+                  return (
+                    <label
+                      key={printer.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "8px 10px",
+                        borderRadius: "6px",
+                        border: `1px solid ${selected ? "#52796B" : "#E4E8E3"}`,
+                        background: selected ? "#F0FDF4" : "#F8FAF8",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="approved_printer"
+                        checked={selected}
+                        onChange={() =>
+                          setPrinterPicker((prev) =>
+                            prev ? { ...prev, selectedId: printer.id } : prev
+                          )
+                        }
+                      />
+                      <span style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                        <strong style={{ fontSize: "0.8rem", color: "#242925" }}>
+                          {printer.name}
+                        </strong>
+                        <span
+                          style={{
+                            fontFamily: "monospace",
+                            fontSize: "0.72rem",
+                            color: "#737B75",
+                          }}
+                        >
+                          {printer.ip_address}
+                          {printer.model ? ` • ${printer.model}` : ""}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setPrinterPicker(null)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  background: "#F8FAF8",
+                  color: "#242925",
+                  border: "1px solid #E4E8E3",
+                  fontWeight: 600,
+                  fontSize: "0.76rem",
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!printerPicker.selectedId}
+                onClick={confirmPrinterInstall}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  background: printerPicker.selectedId ? "#52796B" : "#CBD3CB",
+                  color: "#FFFFFF",
+                  border: "none",
+                  fontWeight: 600,
+                  fontSize: "0.76rem",
+                  cursor: printerPicker.selectedId ? "pointer" : "not-allowed",
+                }}
+              >
+                Instalar impressora
+              </button>
+            </div>
+          </DiagnosticModalCard>
+        </DiagnosticModalBackdrop>
+      )}
+
+      {rebootConfirm.open && (
+        <DiagnosticModalBackdrop onClick={() => setRebootConfirm({ open: false, task: null })}>
+          <DiagnosticModalCard onClick={(e) => e.stopPropagation()}>
+            <div>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>Confirmar Reinicialização</h3>
+              <div style={{ fontSize: "0.75rem", color: "#737B75" }}>
+                Estação: {machine.hostname} ({machine.ip_address})
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "#FFFBEB",
+                border: "1px solid #FDE68A",
+                borderRadius: "6px",
+                padding: "10px 12px",
+                fontSize: "0.78rem",
+                color: "#92400E",
+                lineHeight: 1.4,
+              }}
+            >
+              O computador será reiniciado com aviso de 30 segundos na tela do usuário.
+              Salve o trabalho em aberto antes de confirmar.
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setRebootConfirm({ open: false, task: null })}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  background: "#F8FAF8",
+                  color: "#242925",
+                  border: "1px solid #E4E8E3",
+                  fontWeight: 600,
+                  fontSize: "0.76rem",
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmReboot}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  background: "#DC2626",
+                  color: "#FFFFFF",
+                  border: "none",
+                  fontWeight: 600,
+                  fontSize: "0.76rem",
+                  cursor: "pointer",
+                }}
+              >
+                Confirmar reinício
+              </button>
+            </div>
+          </DiagnosticModalCard>
+        </DiagnosticModalBackdrop>
+      )}
 
       {activeReport && (
         <DiagnosticModalBackdrop onClick={() => setActiveReport(null)}>

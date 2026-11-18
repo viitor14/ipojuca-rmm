@@ -87,8 +87,21 @@ CREATE TABLE IF NOT EXISTS machines (
   INDEX idx_machines_last_seen (health_status, last_seen_at)
 ) ENGINE=InnoDB;
 
--- 3.1 Historico de mudancas de hardware (Ciclo #27)
-CREATE TABLE IF NOT EXISTS machine_inventory_changes (
+-- 3.2 Catalogo de impressoras homologadas (Ciclo #29)
+CREATE TABLE IF NOT EXISTS approved_printers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  unit_id INT NULL DEFAULT NULL,
+  name VARCHAR(64) NOT NULL,
+  ip_address VARCHAR(45) NOT NULL,
+  model VARCHAR(80) DEFAULT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_approved_printers_unit FOREIGN KEY (unit_id) REFERENCES health_units(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_approved_printer_unit_ip (unit_id, ip_address),
+  INDEX idx_approved_printers_unit (unit_id, is_active)
+) ENGINE=InnoDB;
+
+-- 3.1 Historico de mudancas de hardware (Ciclo #27)CREATE TABLE IF NOT EXISTS machine_inventory_changes (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   machine_id INT NOT NULL,
   field_name VARCHAR(32) NOT NULL,

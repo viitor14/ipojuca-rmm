@@ -805,6 +805,11 @@ export default function App() {
     return res;
   }
 
+  async function handleLoadPrinters(unitId) {
+    const res = await rmmApi.getApprovedPrinters(auth.token, unitId);
+    return res.printers || [];
+  }
+
   async function handleRefreshTelemetryNow(machineId) {
     const res = await rmmApi.refreshMachineTelemetryNow(auth.token, machineId);
     await loadAllData(auth.token, selectedUnitId, machineId);
@@ -1211,6 +1216,7 @@ export default function App() {
             taskCatalog={taskCatalog}
             currentUser={auth.user || { name: 'Operador', role: 'ADMIN_N2' }}
             onDispatchTask={handleDispatchTask}
+            onLoadPrinters={handleLoadPrinters}
             onRefreshTelemetryNow={handleRefreshTelemetryNow}
             onUpdateMachineAgent={handleUpdateMachineAgent}
             onSendMessage={handleSendMessage}

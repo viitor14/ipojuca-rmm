@@ -681,3 +681,52 @@ test('11. Ciclo #28 (CA-131 a CA-133): exclusão de unidade/setor não deixa ví
   assert.equal(delSector.status, 200);
   assert.equal(await repository.findSectorById(sectorC.data.sector.id), null);
 });
+
+test('12. Ciclo #29 (CA-136 a CA-139): catalogo de impressoras homologadas e parametros de instalacao', async () => {
+  const adminLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+  });
+  const token = adminLogin.data.token;
+  const auth = { Authorization: `Bearer ${token}` };
+
+  const list = await requestJson('GET', '/api/printers?unit_id=1', { headers: auth });
+  assert.equal(list.status, 200);
+  assert.ok(list.data.printers.length >= 4, 'catalogo deve trazer as impressoras homologadas');
+  const printer = list.data.printers[0];
+  assert.match(printer.ip_address, /^10\./);
+  assert.ok(printer.name);
+
+  const noAuth = await requestJson('GET', '/api/printers');
+  assert.equal(noAuth.status, 401);
+
+  const machine = await repository.enrollNewAgentMachine({
+    agentUuid: 'agt-printer-29',
+    agentToken: 'tok-printer-29',
+    unitId: 1,
+    sectorId: 1,
+    inventory: { hostname: 'PC-PRINTER-29', serial_number: 'PRN29SN', ram_total_mb: 4096, disk_total_gb: 120 },
+  });
+
+  const withoutParams = await requestJson('POST', '/api/command', {
+    headers: auth,
+    body: { machine_id: machine.id, task_code: 'INSTALL_APPROVED_PRINTER', parameters: {} },
+  });
+  assert.equal(withoutParams.status, 400);
+
+  const withParams = await requestJson('POST', '/api/command', {
+    headers: auth,
+    body: {
+      machine_id: machine.id,
+      task_code: 'INSTALL_APPROVED_PRINTER',
+      parameters: { printer_ip: printer.ip_address, printer_name: printer.name },
+    },
+  });
+  assert.ok([200, 202].includes(withParams.status));
+  assert.ok(String(withParams.data.task?.output_summary || '').includes(printer.name));
+
+  const reboot = await requestJson('POST', '/api/command', {
+    headers: auth,
+    body: { machine_id: machine.id, task_code: 'REBOOT_WORKSTATION', parameters: {} },
+  });
+  assert.ok([200, 202].includes(reboot.status));
+});

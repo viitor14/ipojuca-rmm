@@ -134,6 +134,12 @@ class RmmRepository {
     this.remoteTasks = [];
     this.auditLogs = [];
     this.inventoryChanges = [];
+    this.approvedPrinters = [
+      { id: 1, unit_id: null, name: 'RECEPCAO-HP', ip_address: '10.200.33.201', model: 'HP LaserJet Pro M404dn', is_active: 1 },
+      { id: 2, unit_id: null, name: 'CONS-01-EPSON', ip_address: '10.200.33.202', model: 'Epson EcoTank L3250', is_active: 1 },
+      { id: 3, unit_id: null, name: 'FARM-ZEBRA', ip_address: '10.200.33.203', model: 'Zebra ZD220 (etiquetas)', is_active: 1 },
+      { id: 4, unit_id: null, name: 'ADM-BROTHER', ip_address: '10.200.33.204', model: 'Brother HL-L2350DW', is_active: 1 },
+    ];
     this.lastBroadcastedIdleByMachine = new Map();
 
     this.users = [
@@ -247,6 +253,18 @@ class RmmRepository {
         CONSTRAINT fk_inv_changes_machine FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
         INDEX idx_inv_changes_machine_time (machine_id, changed_at)
       ) ENGINE=InnoDB`,
+      `CREATE TABLE IF NOT EXISTS approved_printers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        unit_id INT NULL DEFAULT NULL,
+        name VARCHAR(64) NOT NULL,
+        ip_address VARCHAR(45) NOT NULL,
+        model VARCHAR(80) DEFAULT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_approved_printers_unit FOREIGN KEY (unit_id) REFERENCES health_units(id) ON DELETE CASCADE,
+        UNIQUE KEY uk_approved_printer_unit_ip (unit_id, ip_address),
+        INDEX idx_approved_printers_unit (unit_id, is_active)
+      ) ENGINE=InnoDB`,
     ];
     for (const ddl of identityMigrations) {
       try {
@@ -264,6 +282,26 @@ class RmmRepository {
       );
     } catch {
       // Segue sem limpeza de placeholders
+    }
+
+    // Catalogo inicial de impressoras homologadas (global: unit_id NULL)
+    const printerSeeds = [
+      ['RECEPCAO-HP', '10.200.33.201', 'HP LaserJet Pro M404dn'],
+      ['CONS-01-EPSON', '10.200.33.202', 'Epson EcoTank L3250'],
+      ['FARM-ZEBRA', '10.200.33.203', 'Zebra ZD220 (etiquetas)'],
+      ['ADM-BROTHER', '10.200.33.204', 'Brother HL-L2350DW'],
+    ];
+    for (const [name, ip, model] of printerSeeds) {
+      try {
+        await this.pool.execute(
+          `INSERT INTO approved_printers (unit_id, name, ip_address, model)
+           SELECT NULL, ?, ?, ? FROM DUAL
+            WHERE NOT EXISTS (SELECT 1 FROM approved_printers WHERE ip_address = ?)`,
+          [name, ip, model, ip]
+        );
+      } catch {
+        // Catalogo ja populado ou tabela indisponivel
+      }
     }
 
     // Semeia unidades/setores iniciais somente se o banco ainda estiver vazio
@@ -645,6 +683,24 @@ class RmmRepository {
       .filter((c) => c.machine_id === Number(machineId))
       .slice(-limit)
       .reverse();
+  }
+
+  async listApprovedPrinters({ unitId = null } = {}) {
+    const numericUnitId = Number(unitId) || null;
+    if (this.mode === 'mysql') {
+      const [rows] = await this.pool.execute(
+        `SELECT id, unit_id, name, ip_address, model, is_active
+           FROM approved_printers
+          WHERE is_active = 1 AND (unit_id IS NULL OR unit_id = ?)
+          ORDER BY (unit_id IS NULL) DESC, name ASC`,
+        [numericUnitId]
+      );
+      return rows;
+    }
+    return this.approvedPrinters
+      .filter((p) => p.is_active === 1 && (p.unit_id === null || p.unit_id === numericUnitId))
+      .slice()
+      .sort((a, b) => (a.unit_id === null ? -1 : 1) - (b.unit_id === null ? -1 : 1) || a.name.localeCompare(b.name));
   }
 
   async findUserByEmail(email) {
