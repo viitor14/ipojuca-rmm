@@ -691,10 +691,7 @@ test('12. Ciclo #29 (CA-136 a CA-139): catalogo de impressoras homologadas e par
 
   const list = await requestJson('GET', '/api/printers?unit_id=1', { headers: auth });
   assert.equal(list.status, 200);
-  assert.ok(list.data.printers.length >= 4, 'catalogo deve trazer as impressoras homologadas');
-  const printer = list.data.printers[0];
-  assert.match(printer.ip_address, /^10\./);
-  assert.ok(printer.name);
+  assert.ok(Array.isArray(list.data.printers));
 
   const noAuth = await requestJson('GET', '/api/printers');
   assert.equal(noAuth.status, 401);
@@ -706,6 +703,33 @@ test('12. Ciclo #29 (CA-136 a CA-139): catalogo de impressoras homologadas e par
     sectorId: 1,
     inventory: { hostname: 'PC-PRINTER-29', serial_number: 'PRN29SN', ram_total_mb: 4096, disk_total_gb: 120 },
   });
+
+  // Ciclo #30: impressoras reais descobertas na LAN chegam pelo heartbeat
+  const hb = await requestJson('POST', '/api/heartbeat', {
+    headers: {
+      'X-Agent-Uuid': 'agt-printer-29',
+      'X-Agent-Token': 'tok-printer-29',
+    },
+    body: {
+      agent_version: '2.4.0',
+      inventory: { hostname: 'PC-PRINTER-29', serial_number: 'PRN29SN' },
+      metrics: { cpu_usage_pct: 5, ram_usage_pct: 20, disk_usage_pct: 30, uptime_seconds: 60 },
+      printers: [
+        { ip_address: '10.200.33.18', name: 'IMPRESSORA-18', port: 9100, source: 'NETWORK' },
+        { ip_address: '10.200.33.60', name: 'IMPRESSORA-60', port: 9100, source: 'NETWORK' },
+      ],
+    },
+  });
+  assert.equal(hb.status, 200);
+
+  const withDiscovery = await requestJson('GET', `/api/printers?unit_id=1&machine_id=${machine.id}`, {
+    headers: auth,
+  });
+  assert.equal(withDiscovery.status, 200);
+  const discovered = withDiscovery.data.printers.filter((p) => p.source === 'NETWORK');
+  assert.equal(discovered.length, 2);
+  assert.ok(discovered.some((p) => p.ip_address === '10.200.33.18'));
+  const printer = discovered[0];
 
   const withoutParams = await requestJson('POST', '/api/command', {
     headers: auth,

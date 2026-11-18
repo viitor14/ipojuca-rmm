@@ -2,6 +2,7 @@ const os = require('os');
 const fs = require('fs');
 const dgram = require('dgram');
 const { collectHardwareInventory } = require('./hardwareInventory');
+const { discoverPrinters } = require('./printerDiscovery');
 
 function isVirtualAdapterName(name = '') {
   return /vethernet|wsl|hyper-v|docker|virtualbox|vmware|vbox|loopback|tunnel|tap|tun|vpn|radmin|zerotier|tailscale|bluetooth|npcap/i.test(
@@ -180,6 +181,12 @@ async function collectTelemetrySnapshot({ skipNativeQueries = false } = {}) {
   const collectionErrors = [...(hw.errors || [])];
   if (diskTotalGb === null) collectionErrors.push('disco: statfs indisponivel');
 
+  const printerScan = await discoverPrinters({
+    localIp: netInfo.ip_address,
+    cacheOnly: skipNativeQueries,
+  });
+  collectionErrors.push(...(printerScan.errors || []));
+
   const cpus = os.cpus() || [];
   const totalRamMb = f.ram_total_mb || Math.round(os.totalmem() / (1024 * 1024));
   const freeRamMb = Math.round(os.freemem() / (1024 * 1024));
@@ -216,6 +223,8 @@ async function collectTelemetrySnapshot({ skipNativeQueries = false } = {}) {
       spooler_running: true,
     },
     collection_errors: collectionErrors,
+    printers: printerScan.printers || [],
+    printers_collected_at: printerScan.collected_at || null,
   };
 }
 

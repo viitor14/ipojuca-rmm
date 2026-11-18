@@ -134,6 +134,7 @@ router.get("/health", (req, res) => {
       "hardware:identity-upsert",
       "inventory:changes",
       "printers:catalog",
+      "printers:discovery",
     ],
     timestamp: new Date().toISOString(),
   });
@@ -257,7 +258,7 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
       return res.status(401).json({ error: "Token do agente inválido." });
     }
 
-    const { agent_version, inventory = {}, metrics = {} } = req.body || {};
+    const { agent_version, inventory = {}, metrics = {}, printers = [] } = req.body || {};
 
     // Validação numérica de métricas
     const sanitizedMetrics = {
@@ -295,9 +296,21 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
       healthStatus: evaluation.health_status,
     });
 
+    // Impressoras descobertas na LAN pela estacao (Ciclo #30)
+    if (Array.isArray(printers) && printers.length) {
+      try {
+        await repository.upsertDiscoveredPrinters(
+          updatedMachine.id,
+          updatedMachine.unit_id,
+          printers
+        );
+      } catch {
+        // Falha de descoberta nao invalida o heartbeat
+      }
+    }
+
     // Emite atualização imediata para o Digital Twin 3D via Socket.io e resolve waiters manuais
-    socketHub.broadcastToDashboard("machine:updated", updatedMachine);
-    notifyLiveAgentHeartbeat(String(agentUuid), updatedMachine);
+    socketHub.broadcastToDashboard("machine:updated", updatedMachine);    notifyLiveAgentHeartbeat(String(agentUuid), updatedMachine);
 
     let alertTriggered = null;
     if (evaluation.health_status === "CRITICAL") {
@@ -738,14 +751,39 @@ router.get("/catalog/tasks", requireAuth, (req, res) => {
   res.json({ tasks });
 });
 
-// 7.1 Catalogo de impressoras homologadas para instalacao remota (Ciclo #29)
+// 7.1 Impressoras: catalogo homologado + descobertas na LAN da estacao (Ciclo #30)
 router.get("/printers", requireAuth, async (req, res) => {
   try {
     const unitId = Number(req.query.unit_id) || null;
-    const printers = await repository.listApprovedPrinters({ unitId });
-    res.json({ printers });
+    const machineId = Number(req.query.machine_id) || null;
+    const approved = await repository.listApprovedPrinters({ unitId });
+    const discovered = await repository.listDiscoveredPrinters({ machineId, unitId });
+
+    const byIp = new Map();
+    for (const p of approved) {
+      byIp.set(p.ip_address, {
+        id: `approved-${p.id}`,
+        ip_address: p.ip_address,
+        name: p.name,
+        model: p.model,
+        source: "APPROVED",
+      });
+    }
+    for (const p of discovered) {
+      byIp.set(p.ip_address, {
+        id: `discovered-${p.id}`,
+        ip_address: p.ip_address,
+        name: p.name,
+        model: p.model,
+        source: p.source,
+        machine_id: p.machine_id,
+        last_seen_at: p.last_seen_at,
+      });
+    }
+
+    res.json({ printers: Array.from(byIp.values()) });
   } catch {
-    res.status(500).json({ error: "Falha ao listar impressoras homologadas." });
+    res.status(500).json({ error: "Falha ao listar impressoras." });
   }
 });
 

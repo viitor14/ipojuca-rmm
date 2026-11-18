@@ -805,8 +805,8 @@ export default function App() {
     return res;
   }
 
-  async function handleLoadPrinters(unitId) {
-    const res = await rmmApi.getApprovedPrinters(auth.token, unitId);
+  async function handleLoadPrinters(unitId, machineId) {
+    const res = await rmmApi.getApprovedPrinters(auth.token, unitId, machineId);
     return res.printers || [];
   }
 

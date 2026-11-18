@@ -1027,7 +1027,7 @@ export function DiagnosticDrawer({
       error: null,
     });
     try {
-      const list = onLoadPrinters ? await onLoadPrinters(machine.unit_id) : [];
+      const list = onLoadPrinters ? await onLoadPrinters(machine.unit_id, machine.id) : [];
       setPrinterPicker((prev) =>
         prev
           ? {
@@ -1037,7 +1037,7 @@ export function DiagnosticDrawer({
               selectedId: list[0]?.id ?? null,
               error: list.length
                 ? null
-                : "Nenhuma impressora homologada disponível para esta unidade.",
+                : "Nenhuma impressora encontrada na rede desta estação. Verifique se o agente já enviou um heartbeat com a descoberta.",
             }
           : prev
       );
@@ -1569,6 +1569,33 @@ export function DiagnosticDrawer({
                       <span style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
                         <strong style={{ fontSize: "0.8rem", color: "#242925" }}>
                           {printer.name}
+                          <span
+                            style={{
+                              marginLeft: "6px",
+                              padding: "1px 5px",
+                              borderRadius: "4px",
+                              fontSize: "0.6rem",
+                              fontWeight: 700,
+                              background:
+                                printer.source === "NETWORK"
+                                  ? "#EFF6FF"
+                                  : printer.source === "INSTALLED"
+                                    ? "#F0FDF4"
+                                    : "#FEF3C7",
+                              color:
+                                printer.source === "NETWORK"
+                                  ? "#1D4ED8"
+                                  : printer.source === "INSTALLED"
+                                    ? "#2D6A4F"
+                                    : "#92400E",
+                            }}
+                          >
+                            {printer.source === "NETWORK"
+                              ? "REDE"
+                              : printer.source === "INSTALLED"
+                                ? "INSTALADA"
+                                : "HOMOLOGADA"}
+                          </span>
                         </strong>
                         <span
                           style={{

@@ -134,12 +134,8 @@ class RmmRepository {
     this.remoteTasks = [];
     this.auditLogs = [];
     this.inventoryChanges = [];
-    this.approvedPrinters = [
-      { id: 1, unit_id: null, name: 'RECEPCAO-HP', ip_address: '10.200.33.201', model: 'HP LaserJet Pro M404dn', is_active: 1 },
-      { id: 2, unit_id: null, name: 'CONS-01-EPSON', ip_address: '10.200.33.202', model: 'Epson EcoTank L3250', is_active: 1 },
-      { id: 3, unit_id: null, name: 'FARM-ZEBRA', ip_address: '10.200.33.203', model: 'Zebra ZD220 (etiquetas)', is_active: 1 },
-      { id: 4, unit_id: null, name: 'ADM-BROTHER', ip_address: '10.200.33.204', model: 'Brother HL-L2350DW', is_active: 1 },
-    ];
+    this.discoveredPrinters = [];
+    this.approvedPrinters = [];
     this.lastBroadcastedIdleByMachine = new Map();
 
     this.users = [
@@ -265,6 +261,20 @@ class RmmRepository {
         UNIQUE KEY uk_approved_printer_unit_ip (unit_id, ip_address),
         INDEX idx_approved_printers_unit (unit_id, is_active)
       ) ENGINE=InnoDB`,
+      `CREATE TABLE IF NOT EXISTS discovered_printers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        machine_id INT NOT NULL,
+        unit_id INT NULL DEFAULT NULL,
+        ip_address VARCHAR(45) NOT NULL,
+        name VARCHAR(64) NOT NULL,
+        model VARCHAR(80) DEFAULT NULL,
+        port SMALLINT UNSIGNED DEFAULT NULL,
+        source ENUM('NETWORK','INSTALLED') NOT NULL DEFAULT 'NETWORK',
+        last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_discovered_printers_machine FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+        UNIQUE KEY uk_discovered_printer_machine_ip (machine_id, ip_address),
+        INDEX idx_discovered_printers_unit (unit_id, last_seen_at)
+      ) ENGINE=InnoDB`,
     ];
     for (const ddl of identityMigrations) {
       try {
@@ -284,24 +294,13 @@ class RmmRepository {
       // Segue sem limpeza de placeholders
     }
 
-    // Catalogo inicial de impressoras homologadas (global: unit_id NULL)
-    const printerSeeds = [
-      ['RECEPCAO-HP', '10.200.33.201', 'HP LaserJet Pro M404dn'],
-      ['CONS-01-EPSON', '10.200.33.202', 'Epson EcoTank L3250'],
-      ['FARM-ZEBRA', '10.200.33.203', 'Zebra ZD220 (etiquetas)'],
-      ['ADM-BROTHER', '10.200.33.204', 'Brother HL-L2350DW'],
-    ];
-    for (const [name, ip, model] of printerSeeds) {
-      try {
-        await this.pool.execute(
-          `INSERT INTO approved_printers (unit_id, name, ip_address, model)
-           SELECT NULL, ?, ?, ? FROM DUAL
-            WHERE NOT EXISTS (SELECT 1 FROM approved_printers WHERE ip_address = ?)`,
-          [name, ip, model, ip]
-        );
-      } catch {
-        // Catalogo ja populado ou tabela indisponivel
-      }
+    // Ciclo #30: remove o catalogo ficticio semeado no Ciclo #29 (IPs inventados)
+    try {
+      await this.pool.query(
+        "DELETE FROM approved_printers WHERE ip_address IN ('10.200.33.201','10.200.33.202','10.200.33.203','10.200.33.204')"
+      );
+    } catch {
+      // Tabela ainda nao existe
     }
 
     // Semeia unidades/setores iniciais somente se o banco ainda estiver vazio
@@ -701,6 +700,90 @@ class RmmRepository {
       .filter((p) => p.is_active === 1 && (p.unit_id === null || p.unit_id === numericUnitId))
       .slice()
       .sort((a, b) => (a.unit_id === null ? -1 : 1) - (b.unit_id === null ? -1 : 1) || a.name.localeCompare(b.name));
+  }
+
+  async upsertDiscoveredPrinters(machineId, unitId, printers = []) {
+    const list = (Array.isArray(printers) ? printers : [])
+      .map((p) => ({
+        ip_address: String(p?.ip_address || '').trim(),
+        name: String(p?.name || '').trim().slice(0, 64),
+        model: p?.model ? String(p.model).trim().slice(0, 80) : null,
+        port: Number(p?.port) || null,
+        source: p?.source === 'INSTALLED' ? 'INSTALLED' : 'NETWORK',
+      }))
+      .filter((p) => /^\d{1,3}(\.\d{1,3}){3}$/.test(p.ip_address) && p.name);
+
+    if (!list.length) return [];
+
+    if (this.mode === 'mysql') {
+      for (const p of list) {
+        await this.pool.execute(
+          `INSERT INTO discovered_printers (machine_id, unit_id, ip_address, name, model, port, source, last_seen_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+           ON DUPLICATE KEY UPDATE unit_id=VALUES(unit_id), name=VALUES(name), model=VALUES(model),
+             port=VALUES(port), source=VALUES(source), last_seen_at=NOW()`,
+          [machineId, unitId ?? null, p.ip_address, p.name, p.model, p.port, p.source]
+        );
+      }
+      const keep = list.map((p) => p.ip_address);
+      await this.pool.query(
+        `DELETE FROM discovered_printers WHERE machine_id = ? AND ip_address NOT IN (${keep.map(() => '?').join(',')})`,
+        [machineId, ...keep]
+      );
+      return this.listDiscoveredPrinters({ machineId });
+    }
+
+    const nowIso = new Date().toISOString();
+    this.discoveredPrinters = this.discoveredPrinters.filter(
+      (row) => row.machine_id !== Number(machineId) || list.some((p) => p.ip_address === row.ip_address)
+    );
+    for (const p of list) {
+      const existing = this.discoveredPrinters.find(
+        (row) => row.machine_id === Number(machineId) && row.ip_address === p.ip_address
+      );
+      if (existing) {
+        Object.assign(existing, p, { unit_id: unitId ?? null, last_seen_at: nowIso });
+      } else {
+        this.discoveredPrinters.push({
+          id: this.discoveredPrinters.length + 1,
+          machine_id: Number(machineId),
+          unit_id: unitId ?? null,
+          ...p,
+          last_seen_at: nowIso,
+        });
+      }
+    }
+    return this.listDiscoveredPrinters({ machineId });
+  }
+
+  async listDiscoveredPrinters({ machineId = null, unitId = null } = {}) {
+    if (this.mode === 'mysql') {
+      const clauses = [];
+      const params = [];
+      if (machineId) {
+        clauses.push('machine_id = ?');
+        params.push(Number(machineId));
+      }
+      if (unitId) {
+        clauses.push('unit_id = ?');
+        params.push(Number(unitId));
+      }
+      const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+      const [rows] = await this.pool.execute(
+        `SELECT id, machine_id, unit_id, ip_address, name, model, port, source, last_seen_at
+           FROM discovered_printers ${where} ORDER BY name ASC`,
+        params
+      );
+      return rows;
+    }
+    return this.discoveredPrinters
+      .filter(
+        (row) =>
+          (!machineId || row.machine_id === Number(machineId)) &&
+          (!unitId || row.unit_id === Number(unitId))
+      )
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async findUserByEmail(email) {

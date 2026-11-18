@@ -14,7 +14,7 @@ REPO_DIR="${REPO_DIR:-${DETECTED_REPO_DIR}}"
 FRONTEND_PORT="${FRONTEND_PORT:-8095}"
 BACKEND_PORT="${BACKEND_PORT:-4005}"
 MYSQL_EXTERNAL_PORT="${MYSQL_EXTERNAL_PORT:-3309}"
-MIGRATION_FILES="infrastructure/mysql/02_hardware_identity_upsert.sql infrastructure/mysql/03_approved_printers.sql"
+MIGRATION_FILES="infrastructure/mysql/02_hardware_identity_upsert.sql infrastructure/mysql/03_approved_printers.sql infrastructure/mysql/04_discovered_printers.sql"
 DRY_RUN="${DRY_RUN:-0}"
 
 run() {

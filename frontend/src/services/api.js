@@ -136,8 +136,11 @@ export const rmmApi = {
   getTaskCatalog(token) {
     return request('/api/catalog/tasks', { token });
   },
-  getApprovedPrinters(token, unitId) {
-    const query = unitId ? `?unit_id=${encodeURIComponent(unitId)}` : '';
+  getApprovedPrinters(token, unitId, machineId) {
+    const params = new URLSearchParams();
+    if (unitId) params.set('unit_id', unitId);
+    if (machineId) params.set('machine_id', machineId);
+    const query = params.toString() ? `?${params.toString()}` : '';
     return request(`/api/printers${query}`, { token });
   },
   dispatchAuthorizedTask(token, { machineId, taskCode, parameters, reason }) {
