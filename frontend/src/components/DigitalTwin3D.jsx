@@ -11,6 +11,7 @@ import { ReceptionCounterModel } from './models/ReceptionCounterModel';
 import { StorageCabinetModel } from './models/StorageCabinetModel';
 import { ThermalPrinterModel } from './models/ThermalPrinterModel';
 import { WaitingBenchModel } from './models/WaitingBenchModel';
+import { getReceptionVariant } from './twin/receptionThemes';
 
 const StageContainer = styled.div`
   position: absolute;
@@ -123,6 +124,7 @@ function CameraRig({
   selectedSector,
   controlsRef,
   boardBounds,
+  camScale = 1,
 }) {
   const targetLookAt = useRef(new THREE.Vector3(0, 0.4, 0));
   const targetCamPos = useRef(new THREE.Vector3(-11.2, 10.0, 11.2));
@@ -158,9 +160,9 @@ function CameraRig({
       // ISO Padrão Habblaude Premium equilibrado e centrado na edificação
       targetLookAt.current.set(cx, 0.4, cz);
       targetCamPos.current.set(
-        cx - 11.2 * scale,
-        10.0 * Math.min(1.65, scale),
-        cz + 11.2 * scale
+        cx - 11.2 * scale * camScale,
+        10.0 * Math.min(1.65, scale) * camScale,
+        cz + 11.2 * scale * camScale
       );
     }
 
@@ -570,18 +572,20 @@ function resolveSectorArchetype(sector) {
   return 'ADM';
 }
 
-function getSectorTheme(sector) {
-  return SECTOR_THEMES[resolveSectorArchetype(sector)] || SECTOR_THEMES.ADM;
+function getSectorTheme(sector, variant = null) {
+  const base = SECTOR_THEMES[resolveSectorArchetype(sector)] || SECTOR_THEMES.ADM;
+  if (!variant) return base;
+  return { ...base, ...variant.room };
 }
 
 /* Paredes arquitetônicas com vãos de portas, rodapés nobres e janelas translúcidas */
-function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLabels = true }) {
+function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLabels = true, variant = null }) {
   const baseX = Number(sector.bounds_x || 0);
   const baseZ = Number(sector.bounds_z || 0);
   const width = Number(sector.width_3d || 9.0);
   const depth = Number(sector.depth_3d || 5.0);
 
-  const themeConfig = getSectorTheme(sector);
+  const themeConfig = getSectorTheme(sector, variant);
   const wallHeight = 1.45;
   const wallThickness = 0.18;
 
@@ -1390,6 +1394,7 @@ export function DigitalTwin3D({
   onSelectMachine,
   cameraMode = 'ISO',
   onUserOrbit,
+  roomVariant = null,
   sceneLayers = {
     furniture: true,
     labels: true,
@@ -1429,21 +1434,50 @@ export function DigitalTwin3D({
       }
     : null;
 
+  const variantLight = roomVariant?.lighting || null;
+  // Hook de QA: ?dpr=2 força resolução de captura sem alterar o padrão de produção.
+  const dprOverride = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const raw = new URLSearchParams(window.location.search).get('dpr');
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 1 && n <= 3 ? n : null;
+  }, []);
+
+  // Hook de QA: ?cam=1.4 afasta a câmera isométrica para capturas de conjunto.
+  const camScale = useMemo(() => {
+    if (typeof window === 'undefined') return 1;
+    const n = Number(new URLSearchParams(window.location.search).get('cam'));
+    return Number.isFinite(n) && n >= 0.6 && n <= 3 ? n : 1;
+  }, []);
+
   return (
     <StageContainer>
       <Canvas
         shadows
-        gl={{ preserveDrawingBuffer: true, antialias: true }}
+        dpr={dprOverride || [1, 2]}
+        gl={{
+          preserveDrawingBuffer: true,
+          antialias: true,
+          powerPreference: 'high-performance',
+          alpha: false,
+        }}
         camera={{ position: [-11.2, 10.0, 11.2], fov: 34 }}
       >
-        <color attach="background" args={['#EAECE8']} />
+        <color attach="background" args={[variantLight?.background || '#EAECE8']} />
 
         {/* ILUMINAÇÃO SUAVE DE MAQUETE FÍSICA CONTROLADA (ESTÚDIO) */}
         {/* 1. Luz ambiente difusa uniforme */}
-        <ambientLight intensity={0.92} color="#FFFDF9" />
+        <ambientLight
+          intensity={variantLight?.ambient?.intensity ?? 0.92}
+          color={variantLight?.ambient?.color || '#FFFDF9'}
+        />
 
         {/* 2. Luz de hemisfério para preenchimento de faces verticais */}
-        <hemisphereLight skyColor="#FFFDF7" groundColor="#DCE3DA" intensity={0.4} />
+        <hemisphereLight
+          skyColor={variantLight?.hemisphere?.sky || '#FFFDF7'}
+          groundColor={variantLight?.hemisphere?.ground || '#DCE3DA'}
+          intensity={variantLight?.hemisphere?.intensity ?? 0.4}
+        />
 
         {/* 3. Luz direcional principal com sombras suaves (Soft Contact Shadows) */}
         <directionalLight
@@ -1452,7 +1486,8 @@ export function DigitalTwin3D({
             22 * Math.min(1.6, boardBounds?.scale || 1),
             (boardBounds?.centerZ || 0) + 12 * (boardBounds?.scale || 1),
           ]}
-          intensity={1.15}
+          intensity={variantLight?.key?.intensity ?? 1.15}
+          color={variantLight?.key?.color || '#FFFFFF'}
           castShadow
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
@@ -1467,7 +1502,11 @@ export function DigitalTwin3D({
         />
 
         {/* 4. Luz secundária de preenchimento (Fill Light) para eliminar faixas escuras */}
-        <directionalLight position={[-12, 12, -10]} intensity={0.35} color="#E2E7E2" />
+        <directionalLight
+          position={[-12, 12, -10]}
+          intensity={variantLight?.fill?.intensity ?? 0.35}
+          color={variantLight?.fill?.color || '#E2E7E2'}
+        />
 
         {/* Rig de Câmera com interpolação fluida */}
         <CameraRig
@@ -1476,6 +1515,7 @@ export function DigitalTwin3D({
           selectedSector={selectedSector}
           controlsRef={controlsRef}
           boardBounds={boardBounds}
+          camScale={camScale}
         />
 
         {/* Base da Maquete (Adaptativa à quantidade e largura dos setores) */}
@@ -1493,6 +1533,7 @@ export function DigitalTwin3D({
                 allSectors={sectors}
                 sectorMachines={sectorMachines}
                 showLabels={sceneLayers.labels !== false}
+                variant={roomVariant}
               />
               {sceneLayers.furniture !== false && (
                 <ClinicalFurnitureVoxel sector={sector} />

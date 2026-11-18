@@ -5,6 +5,7 @@ import { GlobalStyles } from './styles/GlobalStyles';
 import { rmmApi, connectDashboardSocket } from './services/api';
 import { DigitalTwin3D } from './components/DigitalTwin3D';
 import { PixelArtTwin } from './components/PixelArtTwin';
+import { RECEPTION_VARIANTS, getReceptionVariant } from './components/twin/receptionThemes';
 import { DiagnosticDrawer } from './components/DiagnosticDrawer';
 import { UnitSectorManagerModal } from './components/UnitSectorManagerModal';
 
@@ -562,6 +563,7 @@ export default function App() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [cameraMode, setCameraMode] = useState('ISO');
   const [twinMode, setTwinMode] = useState('PIXEL');
+  const [roomVariantId, setRoomVariantId] = useState('A');
   const [searchQuery, setSearchQuery] = useState('');
   const [dockCollapsed, setDockCollapsed] = useState(() => {
     try {
@@ -936,6 +938,7 @@ export default function App() {
         selectedMachine={selectedMachine}
         selectedSector={selectedSector}
         cameraMode={cameraMode}
+        roomVariant={getReceptionVariant(roomVariantId)}
         sceneLayers={sceneLayers}
         onUserOrbit={() => {
           if (cameraMode !== 'FREE') setCameraMode('FREE');
@@ -1051,6 +1054,18 @@ export default function App() {
                 </CamModeBtn>
               </>
             )}
+
+            {twinMode === '3D' &&
+              Object.values(RECEPTION_VARIANTS).map((v) => (
+                <CamModeBtn
+                  key={v.id}
+                  $active={roomVariantId === v.id}
+                  onClick={() => setRoomVariantId(v.id)}
+                  title={`${v.name} — ${v.tagline}`}
+                >
+                  {v.id}
+                </CamModeBtn>
+              ))}
 
             <CamModeBtn
               as="a"
