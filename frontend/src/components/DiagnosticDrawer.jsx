@@ -1042,9 +1042,17 @@ export function DiagnosticDrawer({
           : prev
       );
     } catch (err) {
+      const raw = String(err?.message || "");
+      const stale = /Rota n[ãa]o encontrada|404/i.test(raw);
       setPrinterPicker((prev) =>
         prev
-          ? { ...prev, loading: false, error: `Falha ao carregar impressoras: ${err.message}` }
+          ? {
+              ...prev,
+              loading: false,
+              error: stale
+                ? "Servidor desatualizado: a rota /api/printers não existe no backend em execução. Rode o deploy na VPS."
+                : `Falha ao carregar impressoras: ${raw}`,
+            }
           : prev
       );
     }

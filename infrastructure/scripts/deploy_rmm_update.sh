@@ -97,9 +97,19 @@ for migration in ${MIGRATION_FILES}; do
 done
 
 echo "[5/5] Verificando capacidades publicadas..."
-curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health"
-echo
+echo "  commit em execucao: $(git rev-parse --short HEAD)"
+HEALTH_JSON="$(curl -fsS "http://127.0.0.1:${BACKEND_PORT}/api/health")"
+echo "${HEALTH_JSON}"
 curl -fsS -o /dev/null -w "frontend HTTP %{http_code}\n" "http://127.0.0.1:${FRONTEND_PORT}/"
+
+case "${HEALTH_JSON}" in
+  *'"printers:catalog"'*) ;;
+  *)
+    echo "ERRO: o backend em execucao nao expoe /api/printers (container antigo)." >&2
+    echo "      Verifique se o 'git pull' trouxe o commit esperado e rode novamente." >&2
+    exit 1
+    ;;
+esac
 
 echo ""
 echo "Atualizacao concluida."

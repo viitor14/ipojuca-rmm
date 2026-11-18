@@ -133,6 +133,7 @@ router.get("/health", (req, res) => {
       "sectors:crud",
       "hardware:identity-upsert",
       "inventory:changes",
+      "printers:catalog",
     ],
     timestamp: new Date().toISOString(),
   });
