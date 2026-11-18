@@ -28,7 +28,7 @@ const pendingMessagesByAgent = new Map();
 const chatHistoryByMachine = new Map();
 const heartbeatWaitersByAgent = new Map();
 
-const LATEST_AGENT_VERSION = "2.3.3-native-exe";
+const LATEST_AGENT_VERSION = "2.3.4-native-exe";
 
 function waitForLiveAgentTaskResult(taskId, timeoutMs = 4500) {
   return new Promise((resolve) => {

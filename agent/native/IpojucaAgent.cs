@@ -21,13 +21,13 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.3.3.0")]
+[assembly: AssemblyVersion("2.3.4.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.3.3-native-exe";
+        public const string CURRENT_VERSION = "2.3.4-native-exe";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -868,6 +868,15 @@ namespace IpojucaRMM
                 return new TaskResult(false, "A impressora " + printerIp + " não respondeu nas portas 9100/631/515. Nada foi instalado em " + Environment.MachineName + ".");
             }
 
+            bool syntheticName = Regex.IsMatch(printerName, @"^IMPRESSORA-\d+$");
+            string realName;
+            string realModel;
+            PrinterDiscovery.ResolveIppIdentity(printerIp, out realName, out realModel);
+            if (!string.IsNullOrEmpty(realName) && (syntheticName || string.IsNullOrEmpty(printerName)))
+            {
+                printerName = SanitizePrinterName(realName);
+            }
+
             string portName = "IP_" + printerIp;
             List<string> candidateDrivers = new List<string>();
             string vendor = DetectPrinterVendor(printerIp);
@@ -875,7 +884,9 @@ namespace IpojucaRMM
             {
                 foreach (string installed in ListInstalledDrivers())
                 {
-                    if (installed.ToUpperInvariant().Contains(vendor) && !candidateDrivers.Contains(installed))
+                    string upper = installed.ToUpperInvariant();
+                    if (upper.Contains("FAX")) continue;
+                    if (upper.Contains(vendor) && !candidateDrivers.Contains(installed))
                     {
                         candidateDrivers.Add(installed);
                     }
@@ -909,6 +920,15 @@ namespace IpojucaRMM
 
             return new TaskResult(false, "Falha ao instalar a impressora '" + printerName + "' (" + printerIp + ") em " +
                 Environment.MachineName + ": " + (string.IsNullOrEmpty(lastError) ? "nenhum driver compatível respondeu." : lastError));
+        }
+
+        private static string SanitizePrinterName(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            string clean = Regex.Replace(value, @"[\\/,;:|*?""<>]", " ").Trim();
+            clean = Regex.Replace(clean, @"\s+", " ");
+            if (clean.Length > 200) clean = clean.Substring(0, 200).Trim();
+            return clean;
         }
 
         private static string DetectPrinterVendor(string ip)
@@ -2155,11 +2175,14 @@ namespace IpojucaRMM
                 foreach (KeyValuePair<string, int> hit in ScanSubnet(targets))
                 {
                     if (byIp.ContainsKey(hit.Key)) continue;
+                    string realName;
+                    string realModel;
+                    ResolveIppIdentity(hit.Key, out realName, out realModel);
                     byIp[hit.Key] = new Dictionary<string, object>
                     {
                         { "ip_address", hit.Key },
-                        { "name", "IMPRESSORA-" + hit.Key.Substring(hit.Key.LastIndexOf('.') + 1) },
-                        { "model", null },
+                        { "name", string.IsNullOrEmpty(realName) ? "IMPRESSORA-" + hit.Key.Substring(hit.Key.LastIndexOf('.') + 1) : realName },
+                        { "model", realModel },
                         { "port", hit.Value },
                         { "source", "NETWORK" }
                     };
@@ -2169,6 +2192,108 @@ namespace IpojucaRMM
             List<Dictionary<string, object>> list = new List<Dictionary<string, object>>(byIp.Values);
             if (list.Count > MaxPrinters) list = list.GetRange(0, MaxPrinters);
             return list;
+        }
+
+        /// <summary>
+        /// Consulta o nome real do equipamento via IPP (Get-Printer-Attributes).
+        /// Retorna printer-info, senao printer-name, senao printer-make-and-model.
+        /// </summary>
+        public static void ResolveIppIdentity(string ip, out string name, out string model)
+        {
+            name = null;
+            model = null;
+            try
+            {
+                byte[] body = BuildIppGetAttributes(ip);
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + ip + ":631/ipp/print");
+                req.Method = "POST";
+                req.ContentType = "application/ipp";
+                req.Timeout = 5000;
+                req.ReadWriteTimeout = 5000;
+                req.ServicePoint.Expect100Continue = false;
+                req.ContentLength = body.Length;
+                using (Stream s = req.GetRequestStream())
+                {
+                    s.Write(body, 0, body.Length);
+                }
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                using (Stream rs = resp.GetResponseStream())
+                {
+                    byte[] buffer = new byte[65536];
+                    int total = 0;
+                    int read;
+                    while (total < buffer.Length && (read = rs.Read(buffer, total, buffer.Length - total)) > 0)
+                    {
+                        total += read;
+                    }
+                    Dictionary<string, string> attrs = ParseIppAttributes(buffer, total);
+                    string info;
+                    string pname;
+                    string make;
+                    attrs.TryGetValue("printer-info", out info);
+                    attrs.TryGetValue("printer-name", out pname);
+                    attrs.TryGetValue("printer-make-and-model", out make);
+                    name = FirstNonEmpty(make, info, pname);
+                    model = FirstNonEmpty(make, info);
+                }
+            }
+            catch { }
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            foreach (string v in values)
+            {
+                if (!string.IsNullOrEmpty(v) && v.Trim().Length > 0) return v.Trim();
+            }
+            return null;
+        }
+
+        private static byte[] BuildIppGetAttributes(string ip)
+        {
+            List<byte> body = new List<byte>();
+            body.Add(0x01); body.Add(0x01);
+            body.Add(0x00); body.Add(0x0B);
+            body.Add(0x00); body.Add(0x00); body.Add(0x00); body.Add(0x01);
+            body.Add(0x01);
+            AppendIppAttribute(body, 0x47, "attributes-charset", "utf-8");
+            AppendIppAttribute(body, 0x48, "attributes-natural-language", "en-us");
+            AppendIppAttribute(body, 0x45, "printer-uri", "ipp://" + ip + "/ipp/print");
+            body.Add(0x03);
+            return body.ToArray();
+        }
+
+        private static void AppendIppAttribute(List<byte> body, byte tag, string name, string value)
+        {
+            byte[] n = Encoding.UTF8.GetBytes(name);
+            byte[] v = Encoding.UTF8.GetBytes(value);
+            body.Add(tag);
+            body.Add((byte)(n.Length >> 8)); body.Add((byte)(n.Length & 0xFF));
+            body.AddRange(n);
+            body.Add((byte)(v.Length >> 8)); body.Add((byte)(v.Length & 0xFF));
+            body.AddRange(v);
+        }
+
+        private static Dictionary<string, string> ParseIppAttributes(byte[] data, int length)
+        {
+            Dictionary<string, string> result = new Dictionary<string, string>();
+            int i = 8;
+            while (i < length)
+            {
+                byte tag = data[i];
+                if (tag == 0x03) break;
+                if (tag < 0x10) { i++; continue; }
+                if (i + 5 > length) break;
+                int nameLen = (data[i + 1] << 8) | data[i + 2];
+                if (i + 3 + nameLen + 2 > length) break;
+                string name = Encoding.UTF8.GetString(data, i + 3, nameLen);
+                int valueLen = (data[i + 3 + nameLen] << 8) | data[i + 4 + nameLen];
+                if (i + 5 + nameLen + valueLen > length) break;
+                string value = Encoding.UTF8.GetString(data, i + 5 + nameLen, valueLen);
+                if (!result.ContainsKey(name)) result[name] = value;
+                i += 5 + nameLen + valueLen;
+            }
+            return result;
         }
 
         private static List<Dictionary<string, object>> ListInstalledPrinters()

@@ -106,10 +106,10 @@ const TASK_CATALOG = Object.freeze({
           error: 'printer_ip deve ser um endereço IPv4 privado válido da rede institucional.',
         };
       }
-      if (!/^[a-zA-Z0-9_-]{3,32}$/.test(printerName)) {
+      if (!/^[a-zA-Z0-9 _().-]{3,64}$/.test(printerName)) {
         return {
           valid: false,
-          error: 'printer_name deve conter apenas caracteres alfanuméricos, hífen ou underscore (3-32 chars).',
+          error: 'printer_name deve conter letras, números, espaço, hífen, underscore, ponto ou parênteses (3-64 chars).',
         };
       }
       return {
