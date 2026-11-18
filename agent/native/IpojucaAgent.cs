@@ -21,13 +21,13 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.3.2.0")]
+[assembly: AssemblyVersion("2.3.3.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.3.2-native-exe";
+        public const string CURRENT_VERSION = "2.3.3-native-exe";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -869,12 +869,21 @@ namespace IpojucaRMM
             }
 
             string portName = "IP_" + printerIp;
-            string[] candidateDrivers = new string[]
+            List<string> candidateDrivers = new List<string>();
+            string vendor = DetectPrinterVendor(printerIp);
+            if (!string.IsNullOrEmpty(vendor))
             {
-                "Microsoft IPP Class Driver",
-                "Generic / Text Only",
-                "Microsoft enhanced Point and Print compatibility driver"
-            };
+                foreach (string installed in ListInstalledDrivers())
+                {
+                    if (installed.ToUpperInvariant().Contains(vendor) && !candidateDrivers.Contains(installed))
+                    {
+                        candidateDrivers.Add(installed);
+                    }
+                }
+            }
+            candidateDrivers.Add("Microsoft IPP Class Driver");
+            candidateDrivers.Add("Generic / Text Only");
+            candidateDrivers.Add("Microsoft enhanced Point and Print compatibility driver");
 
             string lastError = "";
             foreach (string driver in candidateDrivers)
@@ -900,6 +909,63 @@ namespace IpojucaRMM
 
             return new TaskResult(false, "Falha ao instalar a impressora '" + printerName + "' (" + printerIp + ") em " +
                 Environment.MachineName + ": " + (string.IsNullOrEmpty(lastError) ? "nenhum driver compatível respondeu." : lastError));
+        }
+
+        private static string DetectPrinterVendor(string ip)
+        {
+            try
+            {
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create("http://" + ip + "/");
+                req.Method = "GET";
+                req.Timeout = 2500;
+                req.ReadWriteTimeout = 2500;
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                {
+                    string server = resp.Headers["Server"] ?? "";
+                    string body = "";
+                    using (StreamReader reader = new StreamReader(resp.GetResponseStream()))
+                    {
+                        char[] buffer = new char[2048];
+                        int read = reader.Read(buffer, 0, buffer.Length);
+                        if (read > 0) body = new string(buffer, 0, read);
+                    }
+                    string blob = (server + " " + body).ToUpperInvariant();
+                    if (blob.Contains("KM-MFP") || blob.Contains("KYOCERA")) return "KYOCERA";
+                    if (blob.Contains("EPSON")) return "EPSON";
+                    if (blob.Contains("BROTHER")) return "BROTHER";
+                    if (blob.Contains("CANON")) return "CANON";
+                    if (blob.Contains("RICOH")) return "RICOH";
+                    if (blob.Contains("XEROX")) return "XEROX";
+                    if (blob.Contains("SAMSUNG")) return "SAMSUNG";
+                    if (blob.Contains("LEXMARK")) return "LEXMARK";
+                    if (blob.Contains("KONICA")) return "KONICA";
+                    if (blob.Contains("HEWLETT") || blob.Contains("HP ")) return "HP";
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static List<string> ListInstalledDrivers()
+        {
+            List<string> names = new List<string>();
+            try
+            {
+                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_PrinterDriver"))
+                {
+                    foreach (ManagementObject item in searcher.Get())
+                    {
+                        string name = Convert.ToString(item["Name"]);
+                        if (string.IsNullOrEmpty(name)) continue;
+                        int comma = name.IndexOf(',');
+                        if (comma > 0) name = name.Substring(0, comma);
+                        name = name.Trim();
+                        if (name.Length > 0 && !names.Contains(name)) names.Add(name);
+                    }
+                }
+            }
+            catch { }
+            return names;
         }
 
         private static bool IsPrinterReachable(string ip)
