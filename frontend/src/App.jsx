@@ -1069,7 +1069,9 @@ export default function App() {
               </div>
               <KpiMatrix>
                 <KpiCell $color={theme.colors.status.NORMAL}>
-                  <div className="num">{totalSummary.NORMAL}</div>
+                  <div className="num">
+                    {totalSummary.NORMAL + totalSummary.WARNING + totalSummary.CRITICAL}
+                  </div>
                   <div className="lbl">ONLINE</div>
                 </KpiCell>
                 <KpiCell $color={theme.colors.status.WARNING}>
