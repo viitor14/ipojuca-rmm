@@ -375,7 +375,7 @@ function IsometricBoard({ sectors = [], boardBounds }) {
       {/* Capacho de boas-vindas hospitalar */}
       <mesh receiveShadow position={[minX + 0.6, 0.021, 0]}>
         <boxGeometry args={[1.0, 0.006, 1.8]} />
-        <meshStandardMaterial color="#1E3A8A" roughness={0.85} />
+        <meshStandardMaterial color="#8D6E63" roughness={0.85} />
       </mesh>
 
       {/* 5. Corredor Central Interno de Circulação Hospitalar com Passadeira */}
@@ -485,8 +485,8 @@ const SECTOR_THEMES = {
     wallCapColor: '#8D6E63',
     baseboardColor: '#5C4033',
     hasRug: true,
-    rugColor: '#1D4ED8',
-    rugBorderColor: '#60A5FA',
+    rugColor: '#A3B18A',
+    rugBorderColor: '#DAD7CD',
     rugSize: [3.2, 2.0],
     rugPos: [0.5, 0.0, -0.2],
     hasClock: true,
@@ -1433,6 +1433,7 @@ export function DigitalTwin3D({
     <StageContainer>
       <Canvas
         shadows
+        gl={{ preserveDrawingBuffer: true, antialias: true }}
         camera={{ position: [-11.2, 10.0, 11.2], fov: 34 }}
       >
         <color attach="background" args={['#EAECE8']} />

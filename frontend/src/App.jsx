@@ -4,6 +4,7 @@ import { theme, STATUS_LABELS, fixTextEncoding } from './styles/theme';
 import { GlobalStyles } from './styles/GlobalStyles';
 import { rmmApi, connectDashboardSocket } from './services/api';
 import { DigitalTwin3D } from './components/DigitalTwin3D';
+import { PixelArtTwin } from './components/PixelArtTwin';
 import { DiagnosticDrawer } from './components/DiagnosticDrawer';
 import { UnitSectorManagerModal } from './components/UnitSectorManagerModal';
 
@@ -560,6 +561,7 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [socketConnected, setSocketConnected] = useState(false);
   const [cameraMode, setCameraMode] = useState('ISO');
+  const [twinMode, setTwinMode] = useState('PIXEL');
   const [searchQuery, setSearchQuery] = useState('');
   const [dockCollapsed, setDockCollapsed] = useState(() => {
     try {
@@ -916,6 +918,18 @@ export default function App() {
       <GlobalStyles />
 
       {/* MAQUETE 3D ISOMÉTRICA EM TELA CHEIA (ESTILO HABBLAUDE) */}
+      {twinMode === 'PIXEL' ? (
+        <PixelArtTwin
+          activeUnit={activeUnit}
+          machines={machines}
+          selectedMachine={selectedMachine}
+          selectedSector={selectedSector}
+          onSelectMachine={(m) => {
+            setSelectedMachineId(m.id);
+            setSelectedSectorId(null);
+          }}
+        />
+      ) : (
       <DigitalTwin3D
         activeUnit={activeUnit}
         machines={machines}
@@ -932,6 +946,7 @@ export default function App() {
           setCameraMode('FOCUS');
         }}
       />
+      )}
 
       {/* INTERFACE ADMINISTRATIVA EDITORIAL MINIMALISTA */}
       <HudOverlay>
@@ -988,35 +1003,54 @@ export default function App() {
 
           <RightControlPod>
             <CamModeBtn
-              $active={cameraMode === 'ISO'}
-              onClick={() => {
-                setSelectedSectorId(null);
-                setCameraMode('ISO');
-              }}
+              $active={twinMode === 'PIXEL'}
+              onClick={() => setTwinMode('PIXEL')}
+              title="Maquete isométrica em pixel art (Canvas 2D)"
             >
-              ISO 3D
+              PIXEL
             </CamModeBtn>
             <CamModeBtn
-              $active={cameraMode === 'TOP'}
-              onClick={() => setCameraMode('TOP')}
+              $active={twinMode === '3D'}
+              onClick={() => setTwinMode('3D')}
+              title="Inspeção tridimensional (Three.js)"
             >
-              CAD TOPO
+              3D
             </CamModeBtn>
-            <CamModeBtn
-              $active={cameraMode === 'FOCUS'}
-              onClick={() => setCameraMode('FOCUS')}
-            >
-              FOCO
-            </CamModeBtn>
-            <CamModeBtn
-              $active={cameraMode === 'ORBIT'}
-              onClick={() =>
-                setCameraMode((prev) => (prev === 'ORBIT' ? 'ISO' : 'ORBIT'))
-              }
-              title="Giro orbital suave ao redor da maquete"
-            >
-              360°
-            </CamModeBtn>
+
+            {twinMode === '3D' && (
+              <>
+                <CamModeBtn
+                  $active={cameraMode === 'ISO'}
+                  onClick={() => {
+                    setSelectedSectorId(null);
+                    setCameraMode('ISO');
+                  }}
+                >
+                  ISO 3D
+                </CamModeBtn>
+                <CamModeBtn
+                  $active={cameraMode === 'TOP'}
+                  onClick={() => setCameraMode('TOP')}
+                >
+                  CAD TOPO
+                </CamModeBtn>
+                <CamModeBtn
+                  $active={cameraMode === 'FOCUS'}
+                  onClick={() => setCameraMode('FOCUS')}
+                >
+                  FOCO
+                </CamModeBtn>
+                <CamModeBtn
+                  $active={cameraMode === 'ORBIT'}
+                  onClick={() =>
+                    setCameraMode((prev) => (prev === 'ORBIT' ? 'ISO' : 'ORBIT'))
+                  }
+                  title="Giro orbital suave ao redor da maquete"
+                >
+                  360°
+                </CamModeBtn>
+              </>
+            )}
 
             <CamModeBtn
               as="a"
