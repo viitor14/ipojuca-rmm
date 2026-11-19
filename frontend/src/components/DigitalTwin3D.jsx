@@ -1075,11 +1075,11 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ, refined = true }) {
       {/* 1. BALCÃO DE ATENDIMENTO EM L (reception_counter.glb) - Ponto focal na entrada */}
       <ReceptionCounterModel position={[-2.2, 0, 0.55]} />
 
-      {/* 2. IMPRESSORA TÉRMICA DE PRONTUÁRIO NO BALCÃO (thermal_printer.glb) */}
-      <ThermalPrinterModel position={[-2.95, 1.10, 0.40]} isActive={true} />
+      {/* 2. IMPRESSORA TÉRMICA DE PRONTUÁRIO NO BALCÃO (thermal_printer.glb) - tampo em 0.99 */}
+      <ThermalPrinterModel position={[-2.95, 1.04, 0.40]} isActive={true} />
 
-      {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (storage_cabinet.glb) - Rente à alvenaria norte */}
-      <StorageCabinetModel position={[-3.82, 0, -halfD + 0.42]} rotation={[0, Math.PI, 0]} />
+      {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (storage_cabinet.glb) - afastado do rodapé norte/oeste */}
+      <StorageCabinetModel position={[-3.70, 0, -halfD + 0.55]} rotation={[0, Math.PI, 0]} />
 
       {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (WaterDispenserHabblaude) */}
       <group position={[halfW - 0.65, 0, -halfD + 0.42]}>
@@ -1370,19 +1370,22 @@ function computeMachineLayout(machines, sectors) {
       // Layout ergonômico e 100% livre de colisões da Recepção (Ciclo #24)
       const receptionSlots = [
         // Posto 1: Atendimento Principal (Piloto machine.id = 9) na bancada interna do balcão em L
-        { x: bx - 1.85, z: bz + 0.78, rotY: Math.PI, hideDesk: true },
+        // surfaceY 1.02 = tampo do balcão (0.99) + base do GLB do PC (0.028)
+        { x: bx - 1.85, z: bz + 0.78, rotY: Math.PI, hideDesk: true, surfaceY: 1.02, showPrinter: false },
         // Posto 2: Atendimento Secundário / Apoio (Mesa executiva sul, atendente voltado para o norte)
-        { x: bx + 2.20, z: bz + 0.85, rotY: Math.PI },
+        { x: bx + 2.20, z: bz + 0.85, rotY: Math.PI, surfaceY: 0.84, showPrinter: false },
         // Posto 3: Triagem Clínica (Quadrante norte, atendente voltado para o sul/circulação)
-        { x: bx - 1.20, z: bz - 1.20, rotY: 0 },
+        { x: bx - 1.20, z: bz - 1.20, rotY: 0, surfaceY: 0.84, showPrinter: false },
         // Posto 4: Regulação / Pós-Consulta (Quadrante nordeste, atendente voltado para o sul/circulação)
-        { x: bx + 2.20, z: bz - 1.20, rotY: 0 },
+        { x: bx + 2.20, z: bz - 1.20, rotY: 0, surfaceY: 0.84, showPrinter: false },
       ];
       ordered.forEach((m, i) => {
         const slot = receptionSlots[i] || {
           x: bx + (i % 2 === 0 ? -2.0 : 2.0),
           z: bz + (Math.floor(i / 2) * 1.5),
           rotY: 0,
+          surfaceY: 0.84,
+          showPrinter: false,
         };
         result.set(m.id, slot);
       });
@@ -1398,6 +1401,9 @@ function computeMachineLayout(machines, sectors) {
           x: bx + (col - (cols - 1) / 2) * spacing,
           z: bz - 0.5 + row * 1.85,
           rotY: 0,
+          surfaceY: 0.84,
+          // Uma única impressora por setor, no primeiro posto
+          showPrinter: i === 0,
         });
       });
     }
@@ -1413,6 +1419,10 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos, showLab
   const posZ = layoutPos ? layoutPos.z : Number(machine.pos_z || 0);
   const rotY = layoutPos?.rotY || 0;
   const hideDesk = Boolean(layoutPos?.hideDesk);
+  // Altura da superficie de apoio: tampo da mesa (0.803) ou tampo do balcao (0.99).
+  // O GLB do PC tem base em y=-0.028, por isso o offset de 0.028.
+  const surfaceY = layoutPos?.surfaceY ?? 0.84;
+  const showPrinter = Boolean(layoutPos?.showPrinter);
 
   return (
     <group position={[posX, 0, posZ]} rotation={[0, rotY, 0]}>
@@ -1428,12 +1438,12 @@ function ComputerAvatarVoxel({ machine, isSelected, onSelect, layoutPos, showLab
         isSelected={isSelected}
         onSelect={onSelect}
         showLabel={showLabels}
-        position={[0, 0.76, 0]}
+        position={[0, surfaceY, 0]}
       />
 
-      {/* 4. IMPRESSORA ACOPLADA SE SPOOLER ATIVO (thermal_printer.glb) */}
-      {machine.spooler_running && (
-        <ThermalPrinterModel position={[-0.48, 0.76, 0]} isActive={true} />
+      {/* 4. IMPRESSORA ACOPLADA: no máximo uma por setor, e nunca na recepção (o balcão já tem) */}
+      {showPrinter && machine.spooler_running && (
+        <ThermalPrinterModel position={[-0.48, surfaceY, 0]} isActive={true} />
       )}
     </group>
   );
