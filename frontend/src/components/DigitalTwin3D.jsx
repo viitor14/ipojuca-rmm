@@ -1176,7 +1176,7 @@ function ClinicalFurnitureVoxel({ sector }) {
     <group position={[baseX, 0, baseZ]}>
       {/* 1. RECEPÇÃO & TRIAGEM: Renderiza a Sala-Piloto de Alta Fidelidade */}
       {isReception && (
-        <ReceptionPilotFurniture halfW={halfW} halfD={halfD} backZ={backZ} />
+        <ReceptionPilotFurniture halfW={halfW} halfD={halfD} backZ={backZ} refined={false} />
       )}
 
       {/* 2. CONSULTÓRIO MÉDICO / ENFERMAGEM */}

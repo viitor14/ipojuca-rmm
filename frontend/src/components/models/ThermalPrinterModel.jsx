@@ -6,7 +6,7 @@ export function ThermalPrinterModel({
   rotation = [0, 0, 0],
   isActive = true,
 }) {
-  const { scene } = useGLTF('/models/tech/thermal_printer.glb?v=24');
+  const { scene } = useGLTF('/models/refined/thermal_printer.glb?v=35');
 
   const modelInstance = useMemo(() => {
     const clone = scene.clone(true);
@@ -46,5 +46,5 @@ export function ThermalPrinterModel({
   return <primitive object={modelInstance} position={position} rotation={rotation} />;
 }
 
-useGLTF.preload('/models/tech/thermal_printer.glb?v=24');
+useGLTF.preload('/models/refined/thermal_printer.glb?v=35');
 

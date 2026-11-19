@@ -107,10 +107,11 @@ function softCylinder(rTop, rBottom, h, seg = 24) {
   return geo;
 }
 
-function mesh(geo, mat, pos = [0, 0, 0], rot = [0, 0, 0]) {
+function mesh(geo, mat, pos = [0, 0, 0], rot = [0, 0, 0], name = '') {
   const m = new THREE.Mesh(geo, mat);
   m.position.set(...pos);
   m.rotation.set(...rot);
+  if (name) m.name = name;
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
@@ -185,7 +186,7 @@ function buildWorkstation() {
   parts.push(mesh(roundedBox(0.24, 0.014, 0.17, 0.007), MAT.graphite, [-0.06, 0.007, 0.10]));
   parts.push(mesh(roundedBox(0.05, 0.22, 0.035, 0.012), MAT.graphite, [-0.06, 0.12, 0.125]));
   parts.push(mesh(roundedBox(0.56, 0.34, 0.028, 0.012), MAT.graphite, [-0.06, 0.245, 0.10], [-0.06, 0, 0]));
-  parts.push(mesh(roundedBox(0.535, 0.315, 0.004, 0.006), MAT.screen, [-0.06, 0.245, 0.086], [-0.06, 0, 0]));
+  parts.push(mesh(roundedBox(0.535, 0.315, 0.004, 0.006), MAT.screen, [-0.06, 0.245, 0.086], [-0.06, 0, 0], 'ScreenDisplay'));
   // Teclado com bloco principal, numerico e barra de espaco
   parts.push(mesh(roundedBox(0.40, 0.016, 0.145, 0.008), MAT.graphite, [-0.06, 0.008, -0.16]));
   parts.push(mesh(roundedBox(0.30, 0.006, 0.10, 0.004), MAT.plastic, [-0.10, 0.017, -0.16]));
@@ -198,8 +199,8 @@ function buildWorkstation() {
   for (let i = 0; i < 5; i += 1) {
     parts.push(mesh(roundedBox(0.13, 0.012, 0.006, 0.003), MAT.metalDark, [0.42, 0.06 + i * 0.03, -0.185]));
   }
-  parts.push(mesh(softCylinder(0.012, 0.012, 0.008, 16), MAT.metal, [0.38, 0.30, -0.19], [Math.PI / 2, 0, 0]));
-  parts.push(mesh(roundedBox(0.02, 0.008, 0.006, 0.002), MAT.accent, [0.44, 0.27, -0.19]));
+  parts.push(mesh(softCylinder(0.012, 0.012, 0.008, 16), MAT.metal, [0.38, 0.30, -0.19], [Math.PI / 2, 0, 0], 'StatusLed'));
+  parts.push(mesh(roundedBox(0.02, 0.008, 0.006, 0.002), MAT.accent, [0.44, 0.27, -0.19], [0, 0, 0], 'ActivityLed'));
   return group('workstation_pc_refined', parts);
 }
 
@@ -210,7 +211,7 @@ function buildPrinter() {
   parts.push(mesh(roundedBox(0.30, 0.012, 0.05, 0.005), MAT.graphite, [0, 0.10, -0.185]));
   parts.push(mesh(roundedBox(0.34, 0.02, 0.20, 0.008), MAT.plastic, [0, 0.245, -0.06], [-0.18, 0, 0]));
   parts.push(mesh(roundedBox(0.16, 0.006, 0.10, 0.003), MAT.screen, [0.10, 0.205, -0.16], [-0.5, 0, 0]));
-  parts.push(mesh(softCylinder(0.014, 0.014, 0.01, 16), MAT.accent, [-0.14, 0.205, -0.165], [Math.PI / 2, 0, 0]));
+  parts.push(mesh(softCylinder(0.014, 0.014, 0.01, 16), MAT.accent, [-0.14, 0.205, -0.165], [Math.PI / 2, 0, 0], 'StatusLed_Printer'));
   return group('thermal_printer_refined', parts);
 }
 

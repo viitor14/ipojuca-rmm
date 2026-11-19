@@ -392,7 +392,7 @@ export function WorkstationModel({
   rotation = [0, 0, 0],
 }) {
   const [hovered, setHovered] = useState(false);
-  const { scene } = useGLTF('/models/tech/workstation_pc.glb?v=24');
+  const { scene } = useGLTF('/models/refined/workstation_pc.glb?v=35');
 
   const statusKey = STATUS_BADGE_THEME[machine.health_status] ? machine.health_status : 'NORMAL';
   const badgeTheme = STATUS_BADGE_THEME[statusKey];
@@ -495,7 +495,7 @@ export function WorkstationModel({
   );
 }
 
-useGLTF.preload('/models/tech/workstation_pc.glb?v=24');
+useGLTF.preload('/models/refined/workstation_pc.glb?v=35');
 
 /**
  * MODELO PROCEDURAL DE FALLBACK (Preservado para contingência de carregamento)
