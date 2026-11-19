@@ -491,12 +491,13 @@ function IsometricBoard({ sectors = [], boardBounds }) {
 const SECTOR_THEMES = {
   REC: {
     floorType: 'parquet',
-    wallColor: '#F2E3CE',
-    wallCapColor: '#2E7D6B',
-    baseboardColor: '#5C4033',
+    wallColor: '#FBEAD1',
+    wallCapColor: '#1F8A70',
+    baseboardColor: '#6B4A32',
+    accentColor: '#E07A5F',
     hasRug: true,
-    rugColor: '#6E9E7E',
-    rugBorderColor: '#EFE7D6',
+    rugColor: '#4FA37A',
+    rugBorderColor: '#F6E7C8',
     rugSize: [3.2, 2.0],
     rugPos: [0.5, 0.0, -0.2],
     hasClock: true,
@@ -505,11 +506,12 @@ const SECTOR_THEMES = {
   },
   CONS: {
     floorType: 'porcelain',
-    wallColor: '#DCE9E2',
+    wallColor: '#E3F0E8',
     wallCapColor: '#8D6E63',
     baseboardColor: '#5C4033',
+    accentColor: '#3D8B7D',
     hasRug: true,
-    rugColor: '#84A98C',
+    rugColor: '#7FB98A',
     rugBorderColor: '#DAD7CD',
     rugSize: [2.6, 1.8],
     rugPos: [0.6, 0.0, 0.6],
@@ -596,6 +598,19 @@ function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLab
   const themeConfig = getSectorTheme(sector, variant);
   const wallHeight = 1.45;
   const wallThickness = 0.18;
+  // Vãos reais de janela: o pano de parede é dividido em faixas, deixando abertura
+  // de verdade (não um adesivo colado na parede).
+  const winHalf = 0.65;
+  const winXs = [-width / 3.4, width / 3.4];
+  const winSillY = -0.155; // base do vão, em coordenada local da parede
+  const winTopY = 0.595; // topo do vão
+  const midSegments = [
+    [-width / 2, winXs[0] - winHalf],
+    [winXs[0] + winHalf, winXs[1] - winHalf],
+    [winXs[1] + winHalf, width / 2],
+  ]
+    .map(([a, b]) => ({ w: b - a, c: (a + b) / 2 }))
+    .filter((s) => s.w > 0.02);
 
   const isNorth = baseZ < 0;
   const hasWestNeighbor = allSectors.some((other) => {
@@ -683,10 +698,23 @@ function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLab
       {isNorth ? (
         /* Parede Externa dos Fundos do Prédio (Altura Total com 2 Janelas e Decorações) */
         <group position={[0, wallHeight / 2, -depth / 2 + wallThickness / 2]}>
-          <mesh receiveShadow>
-            <boxGeometry args={[width, wallHeight, wallThickness]} />
+          {/* Faixa inferior (peitoril): parede contínua até a base dos vãos */}
+          <mesh receiveShadow position={[0, -wallHeight / 2 + 0.285, 0]}>
+            <boxGeometry args={[width, 0.57, wallThickness]} />
             <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
           </mesh>
+          {/* Faixa superior (verga): parede contínua acima dos vãos */}
+          <mesh receiveShadow position={[0, wallHeight / 2 - 0.065, 0]}>
+            <boxGeometry args={[width, 0.13, wallThickness]} />
+            <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
+          </mesh>
+          {/* Faixa intermediária: dividida em segmentos para abrir os dois vãos reais */}
+          {midSegments.map((seg, idx) => (
+            <mesh key={`wall-n-mid-${idx}`} receiveShadow position={[seg.c, 0.22, 0]}>
+              <boxGeometry args={[seg.w, 0.75, wallThickness]} />
+              <meshStandardMaterial color={themeConfig.wallColor} roughness={0.85} />
+            </mesh>
+          ))}
           <mesh position={[0, -wallHeight / 2 + 0.06, wallThickness / 2 + 0.01]}>
             <boxGeometry args={[width + 0.02, 0.12, 0.02]} />
             <meshStandardMaterial color={themeConfig.baseboardColor} roughness={0.55} />
@@ -696,28 +724,60 @@ function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLab
             <meshStandardMaterial color={themeConfig.wallCapColor} roughness={0.5} />
           </mesh>
 
-          {/* Duas Janelas Arquitetônicas com vidro translúcido voltadas para o jardim */}
-          {[-width / 3.4, width / 3.4].map((winX, idx) => (
+          {/* Fundo de jardim atrás dos vãos: dá profundidade real à janela */}
+          <mesh position={[0, 0.22, -wallThickness / 2 - 0.22]}>
+            <planeGeometry args={[width, 1.5]} />
+            <meshBasicMaterial color="#CFE9F7" />
+          </mesh>
+          <mesh position={[0, -0.30, -wallThickness / 2 - 0.21]}>
+            <planeGeometry args={[width, 0.55]} />
+            <meshBasicMaterial color="#9CCFA8" />
+          </mesh>
+
+          {/* Duas janelas com vão real: moldura, vidro, travessas e peitoril saliente */}
+          {winXs.map((winX, idx) => (
             <group key={`win-n-${idx}`} position={[winX, 0.22, 0]}>
-              <mesh position={[0, 0, wallThickness / 2 + 0.015]}>
-                <boxGeometry args={[1.3, 0.75, 0.03]} />
-                <meshStandardMaterial color="#5C4033" roughness={0.55} />
+              {/* Moldura em quatro barras, embutida na espessura da parede */}
+              <mesh position={[0, 0.345, 0]} castShadow>
+                <boxGeometry args={[1.3, 0.06, wallThickness + 0.02]} />
+                <meshStandardMaterial color="#7A5230" roughness={0.5} />
               </mesh>
-              <mesh position={[0, 0, wallThickness / 2 + 0.02]}>
-                <boxGeometry args={[1.14, 0.61, 0.01]} />
-                <meshStandardMaterial color="#D1E8FA" transparent opacity={0.65} roughness={0.1} />
+              <mesh position={[0, -0.345, 0]} castShadow>
+                <boxGeometry args={[1.3, 0.06, wallThickness + 0.02]} />
+                <meshStandardMaterial color="#7A5230" roughness={0.5} />
               </mesh>
-              <mesh position={[0, 0, wallThickness / 2 + 0.025]}>
-                <boxGeometry args={[0.04, 0.61, 0.012]} />
-                <meshStandardMaterial color="#4A3326" />
+              <mesh position={[-0.62, 0, 0]} castShadow>
+                <boxGeometry args={[0.06, 0.75, wallThickness + 0.02]} />
+                <meshStandardMaterial color="#7A5230" roughness={0.5} />
               </mesh>
-              <mesh position={[0, 0, wallThickness / 2 + 0.025]}>
-                <boxGeometry args={[1.14, 0.04, 0.012]} />
-                <meshStandardMaterial color="#4A3326" />
+              <mesh position={[0.62, 0, 0]} castShadow>
+                <boxGeometry args={[0.06, 0.75, wallThickness + 0.02]} />
+                <meshStandardMaterial color="#7A5230" roughness={0.5} />
               </mesh>
-              <mesh position={[0, -0.40, wallThickness / 2 + 0.03]}>
-                <boxGeometry args={[1.4, 0.05, 0.08]} />
-                <meshStandardMaterial color="#4A3326" roughness={0.5} />
+              {/* Vidro translúcido dentro do vão */}
+              <mesh position={[0, 0, 0]}>
+                <boxGeometry args={[1.18, 0.63, 0.02]} />
+                <meshStandardMaterial
+                  color="#BFE6FA"
+                  transparent
+                  opacity={0.34}
+                  roughness={0.06}
+                  metalness={0.15}
+                />
+              </mesh>
+              {/* Travessas internas */}
+              <mesh position={[0, 0, 0.014]}>
+                <boxGeometry args={[0.035, 0.63, 0.012]} />
+                <meshStandardMaterial color="#7A5230" />
+              </mesh>
+              <mesh position={[0, 0, 0.014]}>
+                <boxGeometry args={[1.18, 0.035, 0.012]} />
+                <meshStandardMaterial color="#7A5230" />
+              </mesh>
+              {/* Peitoril saliente, para dentro e para fora */}
+              <mesh position={[0, -0.40, wallThickness / 2 + 0.03]} castShadow>
+                <boxGeometry args={[1.42, 0.05, 0.16]} />
+                <meshStandardMaterial color="#8A5F38" roughness={0.45} />
               </mesh>
             </group>
           ))}
@@ -726,7 +786,7 @@ function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLab
           {themeConfig.hasPanel && (
             <mesh position={[0, 0.05, wallThickness / 2 + 0.015]}>
               <boxGeometry args={[1.8, 0.85, 0.02]} />
-              <meshStandardMaterial color="#DDB892" roughness={0.5} />
+              <meshStandardMaterial color={themeConfig.accentColor || '#DDB892'} roughness={0.5} />
             </mesh>
           )}
 
@@ -1355,8 +1415,8 @@ function computeMachineLayout(machines, sectors) {
         // Posto 1: Atendimento Principal (Piloto machine.id = 9) na bancada interna do balcão em L
         // Derivado das constantes do balcão: nunca flutua se bounds_x/bounds_z mudarem via CRUD
         {
-          x: RECEPTION_COUNTER.x + 0.45,
-          z: RECEPTION_COUNTER.z + 0.30,
+          x: bx + RECEPTION_COUNTER.x + 0.45,
+          z: bz + RECEPTION_COUNTER.z + 0.30,
           rotY: Math.PI,
           hideDesk: true,
           surfaceY: RECEPTION_COUNTER.topY,
