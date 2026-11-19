@@ -12,6 +12,7 @@ import { StorageCabinetModel } from './models/StorageCabinetModel';
 import { ThermalPrinterModel } from './models/ThermalPrinterModel';
 import { WaitingBenchModel } from './models/WaitingBenchModel';
 import { PlantModel } from './models/PlantModel';
+import { WaterDispenserModel } from './models/WaterDispenserModel';
 import {
   RefinedReceptionCounter,
   RefinedThermalPrinter,
@@ -1095,33 +1096,8 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ, refined = true }) {  if 
         {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS */}
         <RefinedStorageCabinet position={[-3.82, 0, -halfD + 0.42]} rotation={[0, Math.PI, 0]} />
 
-        {/* 4. BEBEDOURO DE COLUNA HOSPITALAR */}
-        <group position={[halfW - 0.65, 0, -halfD + 0.42]}>
-          <RoundedBox args={[0.38, 0.96, 0.38]} radius={0.05} smoothness={4} position={[0, 0.48, 0]} castShadow receiveShadow>
-            <meshStandardMaterial color="#ECEEF0" roughness={0.4} />
-          </RoundedBox>
-          <RoundedBox args={[0.26, 0.04, 0.1]} radius={0.012} position={[0, 0.62, 0.18]}>
-            <meshStandardMaterial color="#374151" roughness={0.8} />
-          </RoundedBox>
-          <RoundedBox args={[0.03, 0.06, 0.04]} radius={0.008} position={[-0.06, 0.72, 0.18]}>
-            <meshStandardMaterial color="#3B82F6" />
-          </RoundedBox>
-          <RoundedBox args={[0.03, 0.06, 0.04]} radius={0.008} position={[0.06, 0.72, 0.18]}>
-            <meshStandardMaterial color="#EF4444" />
-          </RoundedBox>
-          <mesh position={[0, 0.99, 0]}>
-            <cylinderGeometry args={[0.16, 0.16, 0.06, 20]} />
-            <meshStandardMaterial color="#CBD5E1" />
-          </mesh>
-          <mesh position={[0, 1.24, 0]} castShadow>
-            <cylinderGeometry args={[0.15, 0.15, 0.44, 20]} />
-            <meshStandardMaterial color="#60A5FA" transparent opacity={0.78} roughness={0.15} metalness={0.1} />
-          </mesh>
-          <mesh position={[0, 1.48, 0]}>
-            <cylinderGeometry args={[0.05, 0.05, 0.05, 12]} />
-            <meshStandardMaterial color="#1D4ED8" />
-          </mesh>
-        </group>
+        {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (water_dispenser.glb) */}
+        <WaterDispenserModel position={[halfW - 0.65, 0, -halfD + 0.42]} isActive={true} />
 
         {/* 5. PLANTA DECORATIVA COM FOLHAGEM CURVA */}
         <RefinedPlant position={[halfW - 0.55, 0, halfD - 0.6]} />
@@ -1148,48 +1124,8 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ, refined = true }) {  if 
         rotation={[0, Math.PI, 0]}
       />
 
-      {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (WaterDispenserHabblaude) */}
-      <group position={[halfW - 0.65, 0, -halfD + 0.42]}>
-        <mesh position={[0, 0.48, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.38, 0.96, 0.38]} />
-          <meshStandardMaterial color="#ECEEF0" roughness={0.4} />
-        </mesh>
-        {/* Pingadeira preta */}
-        <mesh position={[0, 0.62, 0.18]}>
-          <boxGeometry args={[0.26, 0.04, 0.1]} />
-          <meshStandardMaterial color="#374151" roughness={0.8} />
-        </mesh>
-        {/* Torneiras quente/fria */}
-        <mesh position={[-0.06, 0.72, 0.18]}>
-          <boxGeometry args={[0.03, 0.06, 0.04]} />
-          <meshStandardMaterial color="#3B82F6" />
-        </mesh>
-        <mesh position={[0.06, 0.72, 0.18]}>
-          <boxGeometry args={[0.03, 0.06, 0.04]} />
-          <meshStandardMaterial color="#EF4444" />
-        </mesh>
-        {/* Suporte do galão */}
-        <mesh position={[0, 0.99, 0]}>
-          <cylinderGeometry args={[0.16, 0.16, 0.06, 16]} />
-          <meshStandardMaterial color="#CBD5E1" />
-        </mesh>
-        {/* Galão de 20L de água mineral azul cristalina */}
-        <mesh position={[0, 1.24, 0]} castShadow>
-          <cylinderGeometry args={[0.15, 0.15, 0.44, 16]} />
-          <meshStandardMaterial
-            color="#60A5FA"
-            transparent
-            opacity={0.78}
-            roughness={0.15}
-            metalness={0.1}
-          />
-        </mesh>
-        {/* Tampa do galão */}
-        <mesh position={[0, 1.48, 0]}>
-          <cylinderGeometry args={[0.05, 0.05, 0.05, 10]} />
-          <meshStandardMaterial color="#1D4ED8" />
-        </mesh>
-      </group>
+      {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (water_dispenser.glb) - bevel e subsurf no Blender */}
+      <WaterDispenserModel position={[halfW - 0.65, 0, -halfD + 0.42]} isActive={true} />
 
       {/* 5. PLANTA DECORATIVA EM VASO DE CERÂMICA (decorative_plant.glb, folhagem orgânica) */}
       <PlantModel position={[halfW - 0.55, 0, halfD - 0.6]} />
@@ -1672,6 +1608,7 @@ export function DigitalTwin3D({
 
         <OrbitControls
           ref={controlsRef}
+          makeDefault
           enablePan
           enableZoom
           enableDamping

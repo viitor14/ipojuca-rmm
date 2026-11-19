@@ -142,6 +142,8 @@ def mats():
         "leaf_dark": material("LeafDark", (0.106, 0.478, 0.259), 0.72, 0.0),
         "leaf_light": material("LeafLight", (0.243, 0.686, 0.361), 0.70, 0.0),
         "teal": material("Teal", (0.129, 0.494, 0.443), 0.48, 0.0),
+        "water": material("Water", (0.376, 0.647, 0.980), 0.08, 0.04),
+        "steel": material("Steel", (0.804, 0.827, 0.851), 0.18, 0.96),
     }
 
 
@@ -329,6 +331,69 @@ def build_decorative_plant(M):
         )
 
 
+def build_water_dispenser(M):
+    """Bebedouro de coluna hospitalar com gabinete chanfrado e galao de 20 L.
+
+    Substitui o bebedouro feito de caixas puras. Pegada 0.38 x 0.38 m,
+    altura total ~1.56 m, mesma ocupacao do objeto anterior.
+    """
+    # Gabinete com chanfro real e cantos suavizados
+    body = box("DispenserBody", (0.38, 0.38, 0.96), (0, 0, 0.48), M["white"], bevel=0.022, segments=4)
+    subsurf(body, 1)
+
+    # Painel frontal rebaixado, com moldura
+    box("DispenserPanel", (0.30, 0.022, 0.60), (0, -0.192, 0.44), M["laminate"], bevel=0.010, segments=3)
+    box("DispenserPanelTrim", (0.32, 0.010, 0.62), (0, -0.186, 0.44), M["steel"], bevel=0.004, segments=2)
+
+    # Pingadeira em inox com grade
+    box("DispenserDripTray", (0.26, 0.105, 0.030), (0, -0.180, 0.615), M["steel"], bevel=0.006, segments=3)
+    for i in range(5):
+        box(
+            f"DispenserDripBar_{i}",
+            (0.235, 0.008, 0.008),
+            (0, -0.205 + i * 0.012, 0.632),
+            M["metal_dark"],
+            bevel=0.002,
+            segments=2,
+        )
+
+    # Torneiras quente/fria com alavanca
+    for i, (dx, mat_key) in enumerate(((-0.062, "water"), (0.062, "accent"))):
+        cyl(f"DispenserTap_{i}", 0.014, 0.055, (dx, -0.205, 0.700), M[mat_key], verts=20, bevel=0.003)
+        cyl(
+            f"DispenserLever_{i}",
+            0.010,
+            0.048,
+            (dx, -0.228, 0.735),
+            M["steel"],
+            rot=(math.radians(90), 0, 0),
+            verts=16,
+            bevel=0.002,
+        )
+
+    # Colar de apoio do galao
+    cyl("DispenserCollar", 0.162, 0.055, (0, 0, 0.985), M["steel"], verts=40, bevel=0.008)
+    cyl("DispenserCollarInner", 0.120, 0.030, (0, 0, 1.010), M["metal_dark"], verts=32, bevel=0.004)
+
+    # Galao de 20 L com silhueta suavizada
+    bottle = cyl("DispenserBottle", 0.150, 0.440, (0, 0, 1.245), M["water"], verts=40, bevel=0.020)
+    subsurf(bottle, 2)
+    cyl("DispenserBottleNeck", 0.058, 0.090, (0, 0, 1.500), M["water"], verts=28, bevel=0.010)
+    cyl("DispenserBottleCap", 0.050, 0.048, (0, 0, 1.556), M["teal"], verts=28, bevel=0.008)
+
+    # LED de status no painel
+    cyl(
+        "StatusLed_Dispenser",
+        0.011,
+        0.010,
+        (0.118, -0.200, 0.760),
+        M["accent"],
+        rot=(math.radians(90), 0, 0),
+        verts=16,
+        bevel=0.002,
+    )
+
+
 BUILDERS = {
     "office_desk": build_office_desk,
     "ergonomic_chair": build_ergonomic_chair,
@@ -338,6 +403,7 @@ BUILDERS = {
     "storage_cabinet": build_storage_cabinet,
     "waiting_bench": build_waiting_bench,
     "decorative_plant": build_decorative_plant,
+    "water_dispenser": build_water_dispenser,
 }
 
 
