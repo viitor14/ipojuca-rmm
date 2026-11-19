@@ -5,6 +5,7 @@ import { GlobalStyles } from './styles/GlobalStyles';
 import { rmmApi, connectDashboardSocket } from './services/api';
 import { DigitalTwin3D } from './components/DigitalTwin3D';
 import { PixelArtTwin } from './components/PixelArtTwin';
+import ModelShowcase from './components/twin/ModelShowcase';
 import { RECEPTION_VARIANTS, DEFAULT_VARIANT, getReceptionVariant } from './components/twin/receptionThemes';
 import { DiagnosticDrawer } from './components/DiagnosticDrawer';
 import { UnitSectorManagerModal } from './components/UnitSectorManagerModal';
@@ -549,6 +550,19 @@ const DEMO_PROFILES = [
 ];
 
 export default function App() {
+  // Cena isolada de homologacao: /?showcase=1&angle=iso|front|close
+  const showcase = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('showcase') !== '1') return null;
+    return { angle: params.get('angle') || 'iso' };
+  }, []);
+
+  if (showcase) return <ModelShowcase angle={showcase.angle} />;
+
+  return <DashboardApp />;
+}
+
+function DashboardApp() {
   const [auth, setAuth] = useState({ token: null, user: null });
   const [selectedProfileIdx, setSelectedProfileIdx] = useState(0);
   const [units, setUnits] = useState([]);

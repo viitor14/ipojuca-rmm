@@ -221,3 +221,27 @@ Era o tapete de 3,2 × 2,0 no centro da recepção. Havia ainda um segundo eleme
 ## 11. Decisão pendente
 
 A implementação dos demais ambientes depende de aprovação explícita desta direção visual. Até lá, o escopo permanece: uma recepção em pixel art, alternância com o 3D e correção da paleta.
+
+---
+
+## Ciclo #35 — Cena isolada de homologação e GLBs refinados (`@lead`/`@designer`/`@engineer`)
+
+**Causa raiz confirmada:** `DigitalTwin3D.jsx:1023` declara `ReceptionPilotFurniture({ ..., refined = true })` e, com o padrão verdadeiro, retorna `RefinedFurniture` sem montar os GLBs. O call site em `:1179` não passa a prop. Os 7 GLBs carregavam na rede e eram descartados na renderização.
+
+**Cena isolada:** `frontend/src/components/twin/ModelShowcase.jsx`, acessível em `/?showcase=1&angle=iso|front|close`. Mesa, cadeira, computador e impressora, sem paredes e sem geometria de caixa. Câmera aplicada por `useThree` + `useLayoutEffect` (a versão com `ref` não fixava a posição e o quadro ficava com 2,64% de área ocupada; passou a 76,06%).
+
+**GLBs refinados:** `frontend/tools/build-refined-glbs.mjs` gera `frontend/public/models/refined/*.glb` com `ExtrudeGeometry` de perfil arredondado (bevel real), `CylinderGeometry` suavizado e materiais PBR. Sem Blender no ambiente, o gerador é a fonte de verdade e pode ser reexecutado.
+
+| Peça | Malhas | Triângulos | Materiais |
+| :--- | ---: | ---: | ---: |
+| office_desk | 19 | 6.884 | 6 |
+| ergonomic_chair | 22 | 8.528 | 5 |
+| workstation_pc | 17 | 8.692 | 6 |
+| thermal_printer | 6 | 2.924 | 4 |
+| reception_counter | 8 | 3.544 | 5 |
+| storage_cabinet | 8 | 3.004 | 3 |
+| waiting_bench | 6 | 3.432 | 3 |
+
+**Orientação da cadeira:** medida nos GLBs — mesa com gavetas em `-Z` e painel de modéstia em `+Z`; monitor com tela em `+Z` e teclado/mouse em `-Z`; cadeira com encosto em `+Z` por padrão. Logo o usuário senta em `-Z` e a cadeira precisa de `rotation.y = PI`. A cena isolada usa `position=[-0.12, 0, -0.62]` com `rotation=[0, PI, 0]`; o `ComputerAvatarVoxel` do painel já usava `[-0.15, 0, -0.52]` com `PI`, portanto estava correto — o erro aparecia apenas no harness anterior, que posicionava a cadeira em `+0.15`.
+
+**Evidências:** `production_artifacts/evidence/showcase_iso.png`, `showcase_front.png`, `showcase_close.png`.
