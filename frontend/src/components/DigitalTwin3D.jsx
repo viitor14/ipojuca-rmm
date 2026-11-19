@@ -1078,8 +1078,13 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ, refined = true }) {
       {/* 2. IMPRESSORA TÉRMICA DE PRONTUÁRIO NO BALCÃO (thermal_printer.glb) - tampo em 0.99 */}
       <ThermalPrinterModel position={[-2.95, 1.04, 0.40]} isActive={true} />
 
-      {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (storage_cabinet.glb) - afastado do rodapé norte/oeste */}
-      <StorageCabinetModel position={[-3.70, 0, -halfD + 0.55]} rotation={[0, Math.PI, 0]} />
+      {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS (storage_cabinet.glb)
+          Posicionado a partir de halfW/halfD reais do setor: o rodapé projeta 0.11
+          além da face interna da parede, e o armário tem 0.464 de meio-largura. */}
+      <StorageCabinetModel
+        position={[-halfW + 0.80, 0, -halfD + 0.60]}
+        rotation={[0, Math.PI, 0]}
+      />
 
       {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (WaterDispenserHabblaude) */}
       <group position={[halfW - 0.65, 0, -halfD + 0.42]}>
