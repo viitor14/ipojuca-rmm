@@ -11,6 +11,7 @@ import { ReceptionCounterModel } from './models/ReceptionCounterModel';
 import { StorageCabinetModel } from './models/StorageCabinetModel';
 import { ThermalPrinterModel } from './models/ThermalPrinterModel';
 import { WaitingBenchModel } from './models/WaitingBenchModel';
+import { PlantModel } from './models/PlantModel';
 import {
   RefinedReceptionCounter,
   RefinedThermalPrinter,
@@ -490,12 +491,12 @@ function IsometricBoard({ sectors = [], boardBounds }) {
 const SECTOR_THEMES = {
   REC: {
     floorType: 'parquet',
-    wallColor: '#F5EBE0',
-    wallCapColor: '#8D6E63',
+    wallColor: '#F2E3CE',
+    wallCapColor: '#2E7D6B',
     baseboardColor: '#5C4033',
     hasRug: true,
-    rugColor: '#A3B18A',
-    rugBorderColor: '#DAD7CD',
+    rugColor: '#6E9E7E',
+    rugBorderColor: '#EFE7D6',
     rugSize: [3.2, 2.0],
     rugPos: [0.5, 0.0, -0.2],
     hasClock: true,
@@ -1020,8 +1021,9 @@ function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLab
 /* =========================================================================
  * SALA-PILOTO (RECEPÇÃO): MOBILIÁRIO E AMBIENTAÇÃO DE ALTA FIDELIDADE
  * ========================================================================= */
-function ReceptionPilotFurniture({ halfW, halfD, backZ, refined = true }) {
-  if (refined) {
+const RECEPTION_COUNTER = { x: -2.2, z: 0.55, topY: 1.02 };
+
+function ReceptionPilotFurniture({ halfW, halfD, backZ, refined = true }) {  if (refined) {
     return (
       <group>
         {/* 1. BALCÃO DE ATENDIMENTO EM L com tampo em balanço e chanfro real */}
@@ -1073,7 +1075,7 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ, refined = true }) {
   return (
     <group>
       {/* 1. BALCÃO DE ATENDIMENTO EM L (reception_counter.glb) - Ponto focal na entrada */}
-      <ReceptionCounterModel position={[-2.2, 0, 0.55]} />
+      <ReceptionCounterModel position={[RECEPTION_COUNTER.x, 0, RECEPTION_COUNTER.z]} />
 
       {/* 2. IMPRESSORA TÉRMICA DE PRONTUÁRIO NO BALCÃO (thermal_printer.glb) - tampo em 0.99 */}
       <ThermalPrinterModel position={[-2.95, 1.04, 0.40]} isActive={true} />
@@ -1129,32 +1131,8 @@ function ReceptionPilotFurniture({ halfW, halfD, backZ, refined = true }) {
         </mesh>
       </group>
 
-      {/* 5. PLANTA DECORATIVA EM VASO DE CERÂMICA (IndoorPlantHabblaude) */}
-      <group position={[halfW - 0.55, 0, halfD - 0.6]}>
-        {/* Vaso cerâmico fosco esmaltado */}
-        <mesh position={[0, 0.28, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.22, 0.17, 0.56, 16]} />
-          <meshStandardMaterial color="#DFD7CB" roughness={0.7} />
-        </mesh>
-        {/* Terra vegetal escura */}
-        <mesh position={[0, 0.56, 0]}>
-          <cylinderGeometry args={[0.21, 0.21, 0.04, 16]} />
-          <meshStandardMaterial color="#3D2817" roughness={0.9} />
-        </mesh>
-        {/* Folhagem volumétrica escalonada */}
-        <mesh position={[0, 0.72, 0]} castShadow>
-          <boxGeometry args={[0.28, 0.28, 0.28]} />
-          <meshStandardMaterial color="#2D6A4F" roughness={0.75} />
-        </mesh>
-        <mesh position={[0.14, 0.88, 0.08]} castShadow>
-          <boxGeometry args={[0.22, 0.20, 0.22]} />
-          <meshStandardMaterial color="#40916C" roughness={0.75} />
-        </mesh>
-        <mesh position={[-0.12, 0.84, -0.09]} castShadow>
-          <boxGeometry args={[0.20, 0.22, 0.20]} />
-          <meshStandardMaterial color="#52B788" roughness={0.75} />
-        </mesh>
-      </group>
+      {/* 5. PLANTA DECORATIVA EM VASO DE CERÂMICA (decorative_plant.glb, folhagem orgânica) */}
+      <PlantModel position={[halfW - 0.55, 0, halfD - 0.6]} />
 
       {/* 6. LONGARINA DE ESPERA PARA PACIENTES (waiting_bench.glb) - Parede oeste, assentos voltados para a sala (+X) */}
       <WaitingBenchModel position={[-halfW + 0.55, 0, -0.35]} rotation={[0, -Math.PI / 2, 0]} />
@@ -1375,8 +1353,15 @@ function computeMachineLayout(machines, sectors) {
       // Layout ergonômico e 100% livre de colisões da Recepção (Ciclo #24)
       const receptionSlots = [
         // Posto 1: Atendimento Principal (Piloto machine.id = 9) na bancada interna do balcão em L
-        // surfaceY 1.02 = tampo do balcão (0.99) + base do GLB do PC (0.028)
-        { x: bx - 1.85, z: bz + 0.78, rotY: Math.PI, hideDesk: true, surfaceY: 1.02, showPrinter: false },
+        // Derivado das constantes do balcão: nunca flutua se bounds_x/bounds_z mudarem via CRUD
+        {
+          x: RECEPTION_COUNTER.x + 0.45,
+          z: RECEPTION_COUNTER.z + 0.30,
+          rotY: Math.PI,
+          hideDesk: true,
+          surfaceY: RECEPTION_COUNTER.topY,
+          showPrinter: false,
+        },
         // Posto 2: Atendimento Secundário / Apoio (Mesa executiva sul, atendente voltado para o norte)
         { x: bx + 2.20, z: bz + 0.85, rotY: Math.PI, surfaceY: 0.84, showPrinter: false },
         // Posto 3: Triagem Clínica (Quadrante norte, atendente voltado para o sul/circulação)
@@ -1539,15 +1524,15 @@ export function DigitalTwin3D({
         {/* ILUMINAÇÃO SUAVE DE MAQUETE FÍSICA CONTROLADA (ESTÚDIO) */}
         {/* 1. Luz ambiente difusa uniforme */}
         <ambientLight
-          intensity={variantLight?.ambient?.intensity ?? 0.92}
-          color={variantLight?.ambient?.color || '#FFFDF9'}
+          intensity={variantLight?.ambient?.intensity ?? 0.82}
+          color={variantLight?.ambient?.color || '#FFF8EE'}
         />
 
         {/* 2. Luz de hemisfério para preenchimento de faces verticais */}
         <hemisphereLight
-          skyColor={variantLight?.hemisphere?.sky || '#FFFDF7'}
-          groundColor={variantLight?.hemisphere?.ground || '#DCE3DA'}
-          intensity={variantLight?.hemisphere?.intensity ?? 0.4}
+          skyColor={variantLight?.hemisphere?.sky || '#FFF6E8'}
+          groundColor={variantLight?.hemisphere?.ground || '#C9D6C4'}
+          intensity={variantLight?.hemisphere?.intensity ?? 0.5}
         />
 
         {/* 3. Luz direcional principal com sombras suaves (Soft Contact Shadows) */}
@@ -1557,8 +1542,8 @@ export function DigitalTwin3D({
             22 * Math.min(1.6, boardBounds?.scale || 1),
             (boardBounds?.centerZ || 0) + 12 * (boardBounds?.scale || 1),
           ]}
-          intensity={variantLight?.key?.intensity ?? 1.15}
-          color={variantLight?.key?.color || '#FFFFFF'}
+          intensity={variantLight?.key?.intensity ?? 1.42}
+          color={variantLight?.key?.color || '#FFF6E6'}
           castShadow
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}

@@ -86,12 +86,13 @@ def cyl(name, radius, depth, loc, mat, rot=(0, 0, 0), verts=32, bevel=0.004, smo
     return _finish(obj, mat, bevel, 2, smooth)
 
 
-def sphere(name, radius, loc, mat, scale=(1, 1, 1)):
+def sphere(name, radius, loc, mat, scale=(1, 1, 1), rot=(0, 0, 0)):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=radius, location=loc)
     obj = bpy.context.object
     obj.name = name
     obj.scale = scale
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    obj.rotation_euler = rot
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
     return _finish(obj, mat, 0, 0, True)
 
 
@@ -123,19 +124,24 @@ def export(name):
 # ---------------------------------------------------------------- materiais
 def mats():
     return {
-        "wood": material("WoodLight", (0.784, 0.624, 0.447), 0.55, 0.0),
-        "wood_dark": material("WoodDark", (0.545, 0.369, 0.235), 0.52, 0.0),
-        "laminate": material("Laminate", (0.949, 0.937, 0.914), 0.38, 0.02),
-        "metal": material("Metal", (0.718, 0.745, 0.776), 0.26, 0.92),
-        "metal_dark": material("MetalDark", (0.290, 0.314, 0.345), 0.34, 0.85),
-        "graphite": material("Graphite", (0.173, 0.192, 0.220), 0.44, 0.35),
-        "plastic": material("Plastic", (0.910, 0.902, 0.882), 0.52, 0.02),
-        "fabric": material("Fabric", (0.255, 0.376, 0.478), 0.94, 0.0),
-        "fabric_dark": material("FabricDark", (0.184, 0.275, 0.341), 0.94, 0.0),
-        "screen": material("Screen", (0.043, 0.078, 0.125), 0.18, 0.1, emission=(0.06, 0.16, 0.28)),
-        "accent": material("Accent", (0.063, 0.725, 0.506), 0.35, 0.0, emission=(0.06, 0.72, 0.5)),
-        "white": material("White", (0.965, 0.969, 0.976), 0.42, 0.0),
-        "glass": material("Glass", (0.639, 0.749, 0.812), 0.12, 0.05),
+        "wood": material("WoodLight", (0.831, 0.588, 0.353), 0.52, 0.0),
+        "wood_dark": material("WoodDark", (0.545, 0.322, 0.176), 0.50, 0.0),
+        "laminate": material("Laminate", (0.965, 0.945, 0.906), 0.36, 0.02),
+        "metal": material("Metal", (0.741, 0.769, 0.800), 0.24, 0.94),
+        "metal_dark": material("MetalDark", (0.259, 0.286, 0.322), 0.32, 0.88),
+        "graphite": material("Graphite", (0.145, 0.165, 0.196), 0.42, 0.38),
+        "plastic": material("Plastic", (0.929, 0.918, 0.894), 0.50, 0.02),
+        "fabric": material("Fabric", (0.106, 0.435, 0.541), 0.92, 0.0),
+        "fabric_dark": material("FabricDark", (0.063, 0.302, 0.396), 0.92, 0.0),
+        "screen": material("Screen", (0.035, 0.071, 0.125), 0.16, 0.1, emission=(0.06, 0.18, 0.32)),
+        "accent": material("Accent", (0.043, 0.769, 0.518), 0.32, 0.0, emission=(0.05, 0.78, 0.52)),
+        "white": material("White", (0.973, 0.976, 0.980), 0.40, 0.0),
+        "glass": material("Glass", (0.588, 0.729, 0.804), 0.10, 0.05),
+        "terracotta": material("Terracotta", (0.769, 0.412, 0.247), 0.68, 0.0),
+        "soil": material("Soil", (0.239, 0.157, 0.090), 0.95, 0.0),
+        "leaf_dark": material("LeafDark", (0.106, 0.478, 0.259), 0.72, 0.0),
+        "leaf_light": material("LeafLight", (0.243, 0.686, 0.361), 0.70, 0.0),
+        "teal": material("Teal", (0.129, 0.494, 0.443), 0.48, 0.0),
     }
 
 
@@ -290,6 +296,39 @@ def build_waiting_bench(M):
     box("BenchRail", (1.60, 0.03, 0.04), (0, 0.02, 0.14), M["metal_dark"], bevel=0.006)
 
 
+def build_decorative_plant(M):
+    """Planta de vaso com folhagem organica (substitui os blocos quadrados).
+
+    Altura total ~1.05 m. Folhas sao elipsoides achatados inclinados para fora,
+    com subdivision surface, em vez de cubos.
+    """
+    cyl("PlantPot", 0.22, 0.54, (0, 0, 0.27), M["terracotta"], verts=32, bevel=0.012)
+    cyl("PlantPotRim", 0.238, 0.055, (0, 0, 0.535), M["terracotta"], verts=32, bevel=0.010)
+    cyl("PlantSoil", 0.205, 0.035, (0, 0, 0.552), M["soil"], verts=32, bevel=0.004)
+    cyl("PlantStem", 0.018, 0.30, (0, 0, 0.70), M["leaf_dark"], verts=16, bevel=0.004)
+
+    leaves = [
+        (0.00, 0.00, 0.78, 0.150, 0.055, 34, 0.0, "leaf_dark"),
+        (0.00, 0.00, 0.86, 0.130, 0.048, 22, 0.0, "leaf_light"),
+        (0.00, 0.00, 0.94, 0.110, 0.042, 12, 0.0, "leaf_dark"),
+    ]
+    for i in range(8):
+        a = math.radians(i * 45 + 12)
+        r = 0.135 + 0.035 * (i % 3)
+        h = 0.72 + 0.055 * (i % 4)
+        leaves.append((math.cos(a) * r, math.sin(a) * r, h, 0.155, 0.052, 46, a, "leaf_light" if i % 2 else "leaf_dark"))
+
+    for i, (x, y, z, length, width, tilt, yaw, mat_key) in enumerate(leaves):
+        sphere(
+            f"PlantLeaf_{i}",
+            1.0,
+            (x, y, z),
+            M[mat_key],
+            scale=(width, length, width * 0.42),
+            rot=(math.radians(tilt), 0, yaw),
+        )
+
+
 BUILDERS = {
     "office_desk": build_office_desk,
     "ergonomic_chair": build_ergonomic_chair,
@@ -298,6 +337,7 @@ BUILDERS = {
     "reception_counter": build_reception_counter,
     "storage_cabinet": build_storage_cabinet,
     "waiting_bench": build_waiting_bench,
+    "decorative_plant": build_decorative_plant,
 }
 
 
