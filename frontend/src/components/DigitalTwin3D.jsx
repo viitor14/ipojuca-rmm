@@ -247,32 +247,64 @@ function getHabblaudeTexture(type, p1, p2) {
       }
     }
   } else if (type === 'porcelain') {
-    canvas.width = 128;
-    canvas.height = 128;
-    ctx.fillStyle = '#E2DED4';
-    ctx.fillRect(0, 0, 128, 128);
-    const size = 64;
-    for (let y = 0; y < 128; y += size) {
-      for (let x = 0; x < 128; x += size) {
-        ctx.fillStyle = '#F7F6F2';
+    // Porcelanato de grande formato: tonalidade uniforme, veio discreto e rejunte fino.
+    // Evita o aspecto de tabuleiro do xadrez e a repeticao visivel.
+    canvas.width = 512;
+    canvas.height = 512;
+    ctx.fillStyle = '#EDEAE3';
+    ctx.fillRect(0, 0, 512, 512);
+    const size = 256;
+    const shades = ['#F2F0EA', '#EDEAE3', '#E8E4DC'];
+    for (let y = 0; y < 512; y += size) {
+      for (let x = 0; x < 512; x += size) {
+        const tone = Math.abs((x / size) * 7 + (y / size) * 13) % shades.length;
+        ctx.fillStyle = shades[tone];
         ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-        ctx.fillRect(x + 2, y + 2, size - 4, 1);
+
+        // Veio mineral sutil, sem contraste
+        ctx.strokeStyle = 'rgba(176, 168, 154, 0.10)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x + size * 0.12, y + size * 0.72);
+        ctx.bezierCurveTo(
+          x + size * 0.34, y + size * 0.54,
+          x + size * 0.62, y + size * 0.82,
+          x + size * 0.88, y + size * 0.58
+        );
+        ctx.stroke();
       }
     }
+    // Rejunte fino
+    ctx.strokeStyle = 'rgba(150, 143, 130, 0.30)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i <= 512; i += size) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, 512);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, i);
+      ctx.lineTo(512, i);
+      ctx.stroke();
+    }
   } else if (type === 'grass') {
-    // Gramado aveludado e suave de maquete, sem estática agressiva
-    canvas.width = 128;
-    canvas.height = 128;
-    ctx.fillStyle = '#5A874B';
-    ctx.fillRect(0, 0, 128, 128);
-    const softColors = ['#5F8E50', '#568247', '#649554', '#527C43'];
-    for (let y = 0; y < 128; y += 16) {
-      for (let x = 0; x < 128; x += 16) {
-        const idx = (Math.floor(x / 16) + Math.floor(y / 16)) % softColors.length;
-        ctx.fillStyle = softColors[idx];
-        ctx.fillRect(x, y, 16, 16);
-      }
+    // Gramado aveludado e uniforme de maquete: sem blocos quadriculados.
+    canvas.width = 256;
+    canvas.height = 256;
+    const grad = ctx.createLinearGradient(0, 0, 256, 256);
+    grad.addColorStop(0, '#6E9A5C');
+    grad.addColorStop(0.5, '#628F52');
+    grad.addColorStop(1, '#6A9758');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 256, 256);
+    // Variação tonal muito discreta, sem formar padrão
+    for (let i = 0; i < 900; i += 1) {
+      const x = (i * 97) % 256;
+      const y = (i * 61) % 256;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.035)' : 'rgba(40,70,35,0.045)';
+      ctx.beginPath();
+      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
     }
   } else if (type === 'deck') {
     canvas.width = 128;
@@ -491,7 +523,7 @@ function IsometricBoard({ sectors = [], boardBounds }) {
 /* Configurações visuais aconchegantes por setor */
 const SECTOR_THEMES = {
   REC: {
-    floorType: 'parquet',
+    floorType: 'porcelain',
     wallColor: '#FBEAD1',
     wallCapColor: '#1F8A70',
     baseboardColor: '#6B4A32',
@@ -633,35 +665,32 @@ function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLab
     return sameZBand && Math.abs(ox - ohw - (baseX + width / 2)) < 0.35;
   });
 
-  // Textura suave e refinada sem ruído
+  // Textura suave e refinada sem ruído.
+  // A repetição é calculada em metros para manter a escala real das placas,
+  // em vez de multiplicar a dimensão da sala por um fator arbitrário.
   const floorTexture = useMemo(() => {
-    let tex = null;
+    const cloneWithRepeat = (tex, rx, rz) => {
+      if (!tex) return null;
+      const cloned = tex.clone();
+      cloned.wrapS = THREE.RepeatWrapping;
+      cloned.wrapT = THREE.RepeatWrapping;
+      cloned.repeat.set(Math.max(1, Math.round(rx)), Math.max(1, Math.round(rz)));
+      cloned.needsUpdate = true;
+      return cloned;
+    };
+
     if (themeConfig.floorType === 'parquet') {
-      tex = getHabblaudeTexture('parquet');
-      if (tex) {
-        const cloned = tex.clone();
-        cloned.repeat.set(Math.round(width * 0.8), Math.round(depth * 0.8));
-        cloned.needsUpdate = true;
-        return cloned;
-      }
-    } else if (themeConfig.floorType === 'checker') {
-      tex = getHabblaudeTexture('checker', themeConfig.checkerColor1, themeConfig.checkerColor2);
-      if (tex) {
-        const cloned = tex.clone();
-        cloned.repeat.set(Math.round(width * 0.8), Math.round(depth * 0.8));
-        cloned.needsUpdate = true;
-        return cloned;
-      }
-    } else {
-      tex = getHabblaudeTexture('porcelain');
-      if (tex) {
-        const cloned = tex.clone();
-        cloned.repeat.set(Math.round(width * 0.8), Math.round(depth * 0.8));
-        cloned.needsUpdate = true;
-        return cloned;
-      }
+      return cloneWithRepeat(getHabblaudeTexture('parquet'), width / 1.6, depth / 1.6);
     }
-    return null;
+    if (themeConfig.floorType === 'checker') {
+      return cloneWithRepeat(
+        getHabblaudeTexture('checker', themeConfig.checkerColor1, themeConfig.checkerColor2),
+        width / 1.2,
+        depth / 1.2
+      );
+    }
+    // Porcelanato: 2 placas por textura, placa final de ~1,2 m
+    return cloneWithRepeat(getHabblaudeTexture('porcelain'), width / 2.4, depth / 2.4);
   }, [themeConfig, width, depth]);
 
   const doorWidth = 1.2;
@@ -1512,15 +1541,19 @@ export function DigitalTwin3D({
           antialias: true,
           powerPreference: 'high-performance',
           alpha: false,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.05,
+          outputColorSpace: THREE.SRGBColorSpace,
         }}
         camera={{ position: [-11.2, 10.0, 11.2], fov: 34 }}
       >
         <color attach="background" args={[variantLight?.background || '#EAECE8']} />
 
-        {/* ILUMINAÇÃO SUAVE DE MAQUETE FÍSICA CONTROLADA (ESTÚDIO) */}
+        {/* ILUMINAÇÃO DE MAQUETE ARQUITETÔNICA: ambiente baixo, chave definida,
+            preenchimento suave. Evita o aspecto lavado de ambiente alto + chave baixa. */}
         {/* 1. Luz ambiente difusa uniforme */}
         <ambientLight
-          intensity={variantLight?.ambient?.intensity ?? 0.82}
+          intensity={variantLight?.ambient?.intensity ?? 0.42}
           color={variantLight?.ambient?.color || '#FFF8EE'}
         />
 
@@ -1528,7 +1561,7 @@ export function DigitalTwin3D({
         <hemisphereLight
           skyColor={variantLight?.hemisphere?.sky || '#FFF6E8'}
           groundColor={variantLight?.hemisphere?.ground || '#C9D6C4'}
-          intensity={variantLight?.hemisphere?.intensity ?? 0.5}
+          intensity={variantLight?.hemisphere?.intensity ?? 0.34}
         />
 
         {/* 3. Luz direcional principal com sombras suaves (Soft Contact Shadows) */}
@@ -1538,7 +1571,7 @@ export function DigitalTwin3D({
             22 * Math.min(1.6, boardBounds?.scale || 1),
             (boardBounds?.centerZ || 0) + 12 * (boardBounds?.scale || 1),
           ]}
-          intensity={variantLight?.key?.intensity ?? 1.42}
+          intensity={variantLight?.key?.intensity ?? 2.15}
           color={variantLight?.key?.color || '#FFF6E6'}
           castShadow
           shadow-mapSize-width={2048}
@@ -1550,13 +1583,13 @@ export function DigitalTwin3D({
           shadow-camera-bottom={-12 * (boardBounds?.scale || 1)}
           shadow-bias={-0.00004}
           shadow-normalBias={0.025}
-          shadow-radius={2.5}
+          shadow-radius={4.5}
         />
 
         {/* 4. Luz secundária de preenchimento (Fill Light) para eliminar faixas escuras */}
         <directionalLight
           position={[-12, 12, -10]}
-          intensity={variantLight?.fill?.intensity ?? 0.35}
+          intensity={variantLight?.fill?.intensity ?? 0.26}
           color={variantLight?.fill?.color || '#E2E7E2'}
         />
 

@@ -3,6 +3,10 @@
  *
  * Cada variante altera apenas apresentação: paleta de piso, paredes, tapete,
  * luz e fundo. Nenhum dado de telemetria, seleção ou interação é tocado.
+ *
+ * Balanço de luz (Modern Stylized Architectural Diorama): ambiente baixo,
+ * chave definida e preenchimento discreto. Ambiente alto com chave baixa
+ * produzia o aspecto lavado e sem profundidade das versões anteriores.
  */
 
 export const RECEPTION_VARIANTS = {
@@ -19,15 +23,15 @@ export const RECEPTION_VARIANTS = {
       rugColor: '#A3B18A',
       rugBorderColor: '#DAD7CD',
       hasRug: true,
-      rugSize: [3.2, 2.0],
+      rugSize: [2.4, 1.5],
       rugPos: [0.5, 0.0, -0.2],
     },
     lighting: {
       background: '#EDE7DA',
-      ambient: { intensity: 0.86, color: '#FFF6E8' },
-      hemisphere: { sky: '#FFF8EC', ground: '#DCE3DA', intensity: 0.42 },
-      key: { intensity: 1.22, color: '#FFF1DC' },
-      fill: { intensity: 0.34, color: '#DCE7E0' },
+      ambient: { intensity: 0.44, color: '#FFF6E8' },
+      hemisphere: { sky: '#FFF8EC', ground: '#DCE3DA', intensity: 0.32 },
+      key: { intensity: 2.05, color: '#FFF1DC' },
+      fill: { intensity: 0.24, color: '#DCE7E0' },
     },
   },
   B: {
@@ -37,22 +41,22 @@ export const RECEPTION_VARIANTS = {
     swatches: ['#F6F8F3', '#CFE3DC', '#2E8B74', '#1F5F8B'],
     room: {
       wallColor: '#F6F8F3',
-      wallCapColor: '#1F6F8B',
+      wallCapColor: '#2E6B7A',
       baseboardColor: '#2C5F73',
       accentColor: '#E4A11B',
       floorType: 'porcelain',
-      rugColor: '#2E8B74',
+      rugColor: '#6FA88F',
       rugBorderColor: '#EAF2EC',
       hasRug: true,
-      rugSize: [3.2, 2.0],
+      rugSize: [2.4, 1.5],
       rugPos: [0.5, 0.0, -0.2],
     },
     lighting: {
       background: '#E9F0EA',
-      ambient: { intensity: 0.92, color: '#FFFFFF' },
-      hemisphere: { sky: '#F7FBFF', ground: '#D6E4DC', intensity: 0.46 },
-      key: { intensity: 1.26, color: '#FFF6E6' },
-      fill: { intensity: 0.42, color: '#DCEBF2' },
+      ambient: { intensity: 0.42, color: '#FFFFFF' },
+      hemisphere: { sky: '#F7FBFF', ground: '#D6E4DC', intensity: 0.34 },
+      key: { intensity: 2.15, color: '#FFF6E6' },
+      fill: { intensity: 0.26, color: '#DCEBF2' },
     },
   },
   C: {
@@ -64,21 +68,19 @@ export const RECEPTION_VARIANTS = {
       wallColor: '#F6E7D8',
       wallCapColor: '#A9714B',
       baseboardColor: '#8A5636',
-      floorType: 'checker',
-      checkerColor1: '#D9A57F',
-      checkerColor2: '#CE9871',
+      floorType: 'porcelain',
       rugColor: '#C97B5A',
       rugBorderColor: '#F0DCC8',
       hasRug: true,
-      rugSize: [3.2, 2.0],
+      rugSize: [2.4, 1.5],
       rugPos: [0.5, 0.0, -0.2],
     },
     lighting: {
       background: '#F0E2D2',
-      ambient: { intensity: 0.8, color: '#FFEFD9' },
-      hemisphere: { sky: '#FFE9CE', ground: '#E8D2BE', intensity: 0.46 },
-      key: { intensity: 1.34, color: '#FFD9A8' },
-      fill: { intensity: 0.44, color: '#F2D9C4' },
+      ambient: { intensity: 0.4, color: '#FFEFD9' },
+      hemisphere: { sky: '#FFE9CE', ground: '#E8D2BE', intensity: 0.34 },
+      key: { intensity: 2.1, color: '#FFD9A8' },
+      fill: { intensity: 0.26, color: '#F2D9C4' },
     },
   },
 };
