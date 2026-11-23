@@ -420,7 +420,7 @@ test('9. Ciclo #26 (CA-107 a CA-113): CRUD Completo de Unidades e Setores, Aloca
   });
   assert.equal(sec5Res.status, 201);
   assert.equal(sec5Res.data.sector.bounds_x, 13.5);
-  assert.equal(sec5Res.data.sector.bounds_z, -3.5);
+  assert.equal(sec5Res.data.sector.bounds_z, -2.5);
 
   const sec6Res = await requestJson('POST', '/api/units/1/sectors', {
     headers: { Authorization: `Bearer ${adminLogin.data.token}` },
@@ -432,7 +432,7 @@ test('9. Ciclo #26 (CA-107 a CA-113): CRUD Completo de Unidades e Setores, Aloca
   });
   assert.equal(sec6Res.status, 201);
   assert.equal(sec6Res.data.sector.bounds_x, 13.5);
-  assert.equal(sec6Res.data.sector.bounds_z, 3.5);
+  assert.equal(sec6Res.data.sector.bounds_z, 2.5);
 
   // Bloqueio de sigla duplicada na mesma unidade
   const dupSecRes = await requestJson('POST', '/api/units/1/sectors', {
@@ -753,4 +753,64 @@ test('12. Ciclo #29 (CA-136 a CA-139): catalogo de impressoras homologadas e par
     body: { machine_id: machine.id, task_code: 'REBOOT_WORKSTATION', parameters: {} },
   });
   assert.ok([200, 202].includes(reboot.status));
+});
+
+test('13. Ciclo #45 (CA-140 a CA-143): tamanho automatico do setor e planta sem vao entre salas', async () => {
+  repository.resetMemoryStore();
+
+  const adminLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+  });
+  const auth = { Authorization: `Bearer ${adminLogin.data.token}` };
+
+  const before = await requestJson('GET', '/api/units', { headers: auth });
+  assert.equal(before.status, 200);
+  const unit1 = before.data.units.find((u) => Number(u.id) === 1);
+  assert.ok(unit1, 'unidade 1 nao encontrada');
+  const existing = unit1.sectors;
+  assert.equal(existing.length, 4);
+
+  // CA-140: sem width_3d/depth_3d, o setor assume a medida predominante da unidade
+  const autoRes = await requestJson('POST', '/api/units/1/sectors', {
+    headers: auth,
+    body: { name: 'Sala de Curativos', room_theme: 'CONS', auto_size: true },
+  });
+  assert.equal(autoRes.status, 201);
+  assert.equal(Number(autoRes.data.sector.width_3d), 9);
+  assert.equal(Number(autoRes.data.sector.depth_3d), 5);
+
+  // CA-141: o novo setor encosta na malha existente, sem vao horizontal
+  const rightEdge = Math.max(
+    ...existing.map((s) => Number(s.bounds_x) + Number(s.width_3d) / 2)
+  );
+  const newLeftEdge =
+    Number(autoRes.data.sector.bounds_x) - Number(autoRes.data.sector.width_3d) / 2;
+  assert.equal(Number(newLeftEdge.toFixed(2)), Number(rightEdge.toFixed(2)));
+
+  // CA-142: nenhuma sobreposicao entre setores da mesma unidade
+  const after = await requestJson('GET', '/api/units', { headers: auth });
+  const unit1After = after.data.units.find((u) => Number(u.id) === 1);
+  const sectors = unit1After.sectors;
+  for (let i = 0; i < sectors.length; i += 1) {
+    for (let j = i + 1; j < sectors.length; j += 1) {
+      const a = sectors[i];
+      const b = sectors[j];
+      const overlapX =
+        Math.abs(Number(a.bounds_x) - Number(b.bounds_x)) <
+        (Number(a.width_3d) + Number(b.width_3d)) / 2 - 0.01;
+      const overlapZ =
+        Math.abs(Number(a.bounds_z) - Number(b.bounds_z)) <
+        (Number(a.depth_3d) + Number(b.depth_3d)) / 2 - 0.01;
+      assert.equal(overlapX && overlapZ, false, `setores ${a.code} e ${b.code} se sobrepoem`);
+    }
+  }
+
+  // CA-143: medida explicita continua sendo respeitada
+  const explicitRes = await requestJson('POST', '/api/units/1/sectors', {
+    headers: auth,
+    body: { name: 'Sala de Exames', room_theme: 'CONS', width_3d: 6, depth_3d: 4 },
+  });
+  assert.equal(explicitRes.status, 201);
+  assert.equal(Number(explicitRes.data.sector.width_3d), 6);
+  assert.equal(Number(explicitRes.data.sector.depth_3d), 4);
 });

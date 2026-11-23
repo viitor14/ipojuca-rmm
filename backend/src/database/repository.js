@@ -116,13 +116,13 @@ class RmmRepository {
     ];
 
     this.sectors = [
-      { id: 1, unit_id: 1, code: 'REC', name: 'Recepção e Triagem', room_theme: 'REC', bounds_x: -4.5, bounds_z: -3.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 2, unit_id: 1, code: 'CONS-01', name: 'Consultório Médico 01', room_theme: 'CONS', bounds_x: 4.5, bounds_z: -3.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 3, unit_id: 1, code: 'FARM', name: 'Farmácia e Vacinação', room_theme: 'FARM', bounds_x: -4.5, bounds_z: 3.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 4, unit_id: 1, code: 'ADM', name: 'Coordenação / Enfermagem', room_theme: 'ADM', bounds_x: 4.5, bounds_z: 3.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 5, unit_id: 2, code: 'REC-POLI', name: 'Recepção Central Policlínica', room_theme: 'REC', bounds_x: -4.5, bounds_z: -3.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 6, unit_id: 2, code: 'LAB-POLI', name: 'Laboratório e Exames', room_theme: 'ADM', bounds_x: 4.5, bounds_z: -3.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 7, unit_id: 2, code: 'REG-POLI', name: 'Regulação Médica', room_theme: 'ADM', bounds_x: 0.0, bounds_z: 3.5, width_3d: 18.0, depth_3d: 5.0 },
+      { id: 1, unit_id: 1, code: 'REC', name: 'Recepção e Triagem', room_theme: 'REC', bounds_x: -4.5, bounds_z: -2.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 2, unit_id: 1, code: 'CONS-01', name: 'Consultório Médico 01', room_theme: 'CONS', bounds_x: 4.5, bounds_z: -2.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 3, unit_id: 1, code: 'FARM', name: 'Farmácia e Vacinação', room_theme: 'FARM', bounds_x: -4.5, bounds_z: 2.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 4, unit_id: 1, code: 'ADM', name: 'Coordenação / Enfermagem', room_theme: 'ADM', bounds_x: 4.5, bounds_z: 2.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 5, unit_id: 2, code: 'REC-POLI', name: 'Recepção Central Policlínica', room_theme: 'REC', bounds_x: -4.5, bounds_z: -2.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 6, unit_id: 2, code: 'LAB-POLI', name: 'Laboratório e Exames', room_theme: 'ADM', bounds_x: 4.5, bounds_z: -2.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 7, unit_id: 2, code: 'REG-POLI', name: 'Regulação Médica', room_theme: 'ADM', bounds_x: 0.0, bounds_z: 2.5, width_3d: 18.0, depth_3d: 5.0 },
       { id: 8, unit_id: 3, code: 'ACOLH', name: 'Acolhimento e Prontuário CAPS', room_theme: 'TI', bounds_x: -4.5, bounds_z: 0.0, width_3d: 9.0, depth_3d: 10.0 },
       { id: 9, unit_id: 3, code: 'PSI-01', name: 'Consultório Multiprofissional', room_theme: 'CONS', bounds_x: 4.5, bounds_z: 0.0, width_3d: 9.0, depth_3d: 10.0 },
     ];
@@ -1515,7 +1515,9 @@ class RmmRepository {
       });
 
     const candidateCols = [-4.5, 4.5, 13.5, -13.5, 22.5, -22.5, 31.5, -31.5, 40.5, -40.5];
-    const zOffset = Math.max(3.5, 1.0 + halfD);
+    // As linhas ficam encostadas: o centro de cada linha dista meia profundidade
+    // da divisa, de modo que as salas se tocam sem vão entre elas.
+    const zOffset = halfD;
     for (const colX of candidateCols) {
       for (const zSign of [-1, 1]) {
         const candZ = Number((zSign * zOffset).toFixed(2));
@@ -1532,6 +1534,39 @@ class RmmRepository {
     return {
       bounds_x: Number((maxRightEdge + halfW).toFixed(2)),
       bounds_z: Number((-zOffset).toFixed(2)),
+    };
+  }
+
+  /**
+   * Tamanho automático do novo setor: usa a medida predominante da unidade,
+   * para que a sala nova encaixe na malha existente em vez de criar um bloco
+   * de dimensão arbitrária. Sem setores, cai no padrão 9 x 5.
+   */
+  computeAutoSectorSize(existingSectors = []) {
+    const mode = (values, fallback) => {
+      if (!values.length) return fallback;
+      const counts = new Map();
+      for (const v of values) {
+        const key = Number(v).toFixed(2);
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      let best = null;
+      let bestCount = -1;
+      for (const [key, count] of counts) {
+        if (count > bestCount) {
+          best = Number(key);
+          bestCount = count;
+        }
+      }
+      return Number.isFinite(best) ? best : fallback;
+    };
+
+    const widths = existingSectors.map((s) => Number(s.width_3d)).filter((v) => Number.isFinite(v) && v > 0);
+    const depths = existingSectors.map((s) => Number(s.depth_3d)).filter((v) => Number.isFinite(v) && v > 0);
+
+    return {
+      width: mode(widths, 9.0),
+      depth: mode(depths, 5.0),
     };
   }
 
@@ -1801,7 +1836,7 @@ class RmmRepository {
 
   async createSector(
     unitId,
-    { name, code = '', roomTheme, boundsX, boundsZ, width3d = 9.0, depth3d = 5.0 } = {}
+    { name, code = '', roomTheme, boundsX, boundsZ, width3d, depth3d, autoSize = false } = {}
   ) {
     const uid = Number(unitId);
     const unit = await this.findUnitById(uid);
@@ -1838,8 +1873,20 @@ class RmmRepository {
       }
     }
 
-    const resolvedW = Math.min(24, Math.max(4, Number(width3d || 9.0) || 9.0));
-    const resolvedD = Math.min(16, Math.max(3.5, Number(depth3d || 5.0) || 5.0));
+    const autoSizeValues = this.computeAutoSectorSize(existingSectors);
+    const wantsAutoSize =
+      autoSize === true ||
+      width3d === undefined ||
+      width3d === null ||
+      width3d === '' ||
+      depth3d === undefined ||
+      depth3d === null ||
+      depth3d === '';
+
+    const rawW = wantsAutoSize ? autoSizeValues.width : width3d;
+    const rawD = wantsAutoSize ? autoSizeValues.depth : depth3d;
+    const resolvedW = Math.min(24, Math.max(4, Number(rawW || 9.0) || 9.0));
+    const resolvedD = Math.min(16, Math.max(3.5, Number(rawD || 5.0) || 5.0));
 
     const hasManualX =
       boundsX !== undefined && boundsX !== null && boundsX !== '' && Number.isFinite(Number(boundsX));

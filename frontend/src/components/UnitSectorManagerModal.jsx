@@ -397,6 +397,7 @@ export function UnitSectorManagerModal({
   const [sectorCodeTouched, setSectorCodeTouched] = useState(false);
   const [roomTheme, setRoomTheme] = useState('CONS');
   const [autoPosition3d, setAutoPosition3d] = useState(true);
+  const [autoSize3d, setAutoSize3d] = useState(true);
   const [showAdvancedLayout, setShowAdvancedLayout] = useState(false);
   const [boundsX, setBoundsX] = useState('');
   const [boundsZ, setBoundsZ] = useState('');
@@ -454,6 +455,7 @@ export function UnitSectorManagerModal({
       setSectorCodeTouched(false);
       setRoomTheme('CONS');
       setAutoPosition3d(true);
+      setAutoSize3d(true);
       setShowAdvancedLayout(false);
       setBoundsX('');
       setBoundsZ('');
@@ -503,6 +505,7 @@ export function UnitSectorManagerModal({
       setSectorCodeTouched(false);
       setRoomTheme('CONS');
       setAutoPosition3d(true);
+      setAutoSize3d(true);
       setShowAdvancedLayout(false);
       setBoundsX('');
       setBoundsZ('');
@@ -553,8 +556,13 @@ export function UnitSectorManagerModal({
           name: sectorName,
           code: sectorCode,
           room_theme: roomTheme,
-          width_3d: Number(width3d || 9),
-          depth_3d: Number(depth3d || 5),
+          auto_size: autoSize3d,
+          ...(autoSize3d
+            ? {}
+            : {
+                width_3d: Number(width3d || 9),
+                depth_3d: Number(depth3d || 5),
+              }),
           ...(autoPosition3d
             ? {}
             : {
@@ -860,6 +868,20 @@ export function UnitSectorManagerModal({
                     </ToggleBox>
                   )}
 
+                  {mode === 'CREATE_SECTOR' && (
+                    <ToggleBox style={{ background: '#FFFFFF' }}>
+                      <input
+                        type="checkbox"
+                        checked={autoSize3d}
+                        onChange={(e) => setAutoSize3d(e.target.checked)}
+                      />
+                      <span>
+                        Tamanho automático — a sala assume a medida predominante da unidade e
+                        encaixa na malha existente
+                      </span>
+                    </ToggleBox>
+                  )}
+
                   <FieldRow $cols="repeat(2, 1fr)">
                     <FieldGroup>
                       <label>Largura da Sala (m)</label>
@@ -869,6 +891,7 @@ export function UnitSectorManagerModal({
                         min="4"
                         max="24"
                         value={width3d}
+                        disabled={mode === 'CREATE_SECTOR' && autoSize3d}
                         onChange={(e) => setWidth3d(e.target.value)}
                       />
                     </FieldGroup>
@@ -880,6 +903,7 @@ export function UnitSectorManagerModal({
                         min="3.5"
                         max="16"
                         value={depth3d}
+                        disabled={mode === 'CREATE_SECTOR' && autoSize3d}
                         onChange={(e) => setDepth3d(e.target.value)}
                       />
                     </FieldGroup>

@@ -532,6 +532,7 @@ router.post(
         bounds_z,
         width_3d,
         depth_3d,
+        auto_size,
       } = req.body || {};
 
       const sector = await repository.createSector(req.params.unitId, {
@@ -542,6 +543,7 @@ router.post(
         boundsZ: bounds_z,
         width3d: width_3d,
         depth3d: depth_3d,
+        autoSize: auto_size === true,
       });
 
       await repository.recordAuditLog({
