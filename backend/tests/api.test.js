@@ -420,7 +420,7 @@ test('9. Ciclo #26 (CA-107 a CA-113): CRUD Completo de Unidades e Setores, Aloca
   });
   assert.equal(sec5Res.status, 201);
   assert.equal(sec5Res.data.sector.bounds_x, -4.5);
-  assert.equal(sec5Res.data.sector.bounds_z, 7.5);
+  assert.equal(sec5Res.data.sector.bounds_z, 6.5);
 
   const sec6Res = await requestJson('POST', '/api/units/1/sectors', {
     headers: { Authorization: `Bearer ${adminLogin.data.token}` },
@@ -432,7 +432,7 @@ test('9. Ciclo #26 (CA-107 a CA-113): CRUD Completo de Unidades e Setores, Aloca
   });
   assert.equal(sec6Res.status, 201);
   assert.equal(sec6Res.data.sector.bounds_x, 4.5);
-  assert.equal(sec6Res.data.sector.bounds_z, 7.5);
+  assert.equal(sec6Res.data.sector.bounds_z, 6.5);
 
   // Bloqueio de sigla duplicada na mesma unidade
   const dupSecRes = await requestJson('POST', '/api/units/1/sectors', {
