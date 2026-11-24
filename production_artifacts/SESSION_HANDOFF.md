@@ -10,7 +10,7 @@
 
 ---
 
-## 1. Status Atual do Projeto (Atualizado no Ciclo #51 — 2026-11-24)
+## 1. Status Atual do Projeto (Atualizado no Ciclo #52 — 2026-11-24)
 
 1. **Implantação na VPS (`31.97.86.253` / `root@srv912524`):**
    - Repositório Oficial: `https://github.com/viitor14/ipojuca-rmm.git` (branch `main`, produção ativa no commit `ca896fd` após deploy bem-sucedido do Ciclo #48 + correção 3D da mesa e `docker-compose.yml`).
@@ -28,10 +28,11 @@
      - Todos os endpoints de agente (`/api/agent/pending`, `/api/agent/task-result`, `/api/agent/disconnect`, `/api/agent/message`) protegidos por `requireAgentAuth` (`X-Agent-Uuid` + `X-Agent-Token` SHA-256 `timingSafeEqual` + `!is_revoked`) e validação de propriedade da tarefa (`machine_id`).
      - Fim da simulação falsa em `POST /api/command`: quando o agente não responde dentro do timeout, a tarefa permanece honestamente como `DISPATCHED` (`delivery_mode: "queued_for_agent"`) até confirmação real ou expiração automática (`EXPIRED`).
      - Chat bidirecional persistido em banco (`machine_messages`), envio restrito a `TECH_N1`/`ADMIN_N2`, alerta automático de inatividade `>24h` (`INACTIVITY_24H`) e auditoria completa em realocação/exclusão de máquinas, mensagens e desconexões.
-3. **Agente Windows Nativo Oficial (`v2.5.0-native-exe` — Ciclos #50 e #51 prontos localmente):**
+3. **Agente Windows Nativo Oficial (`v2.5.1-native-exe` — Ciclo #52 pronto localmente):**
    - Código-fonte oficial: `agent/native/IpojucaAgent.cs` (`.NET Framework 4.x`, zero dependências externas).
-   - Binário único versionado: `backend/public/IpojucaRMM-Setup.exe` (`88.576 B`, FileVersion `2.5.0.0`, SHA-256 `e71766a1d545d0009e111f8520d5b553ac69f98fa5126d20d95bb6250ff81bd2`, servido via `GET /api/agent/download` e `GET /api/agent/version`).
-   - Evoluções dos Ciclos #50 e #51:
+   - Binário único versionado: `backend/public/IpojucaRMM-Setup.exe` (`89.088 B`, FileVersion `2.5.1.0`, SHA-256 `85dc5add9c188c6a631d6fd750b3a7ef690b15d493aeb924b2c7a365c947f322`, servido via `GET /api/agent/download` e `GET /api/agent/version`).
+   - Evoluções dos Ciclos #50, #51 e #52:
+     - **Identificação do Usuário no Chat TI (`ResolveLoggedUserSender`, Ciclo #52):** mensagens enviadas pelo usuário exibem seu Nome de Exibição real do Windows/AD (`secur32.dll` `GetUserNameEx`, fallback `Environment.UserName`) em vez de `"Estação <HOSTNAME>"`, mantendo heartbeats/telemetria livres de dados pessoais (LGPD). Bump para `2.5.1-native-exe` aciona OTA silencioso automático nas máquinas em `2.5.0`.
      - **Novo Layout Editorial Claro (`SuperAgentForm`, `EditorialMenuRenderer`, ícone de escudo verde `#2D6A4F`):** interface alinhada ao Design System do painel web (`#F4F5F2`/`#FFFFFF`/`#242925`), cabeçalho limpo exibindo apenas `v2.5.0`, 4 cartões de telemetria rápida (`CPU`, `RAM`, `DISCO C:`, `IPv4`), botão **Sincronizar Agora**, **Chat formatado (`RichTextBox`)** com saudação limpa (sem sufixo técnico) + envio via tecla `Enter` e botão `X` minimizando para a bandeja sem encerrar.
      - **Atualização OTA 100% Silenciosa + Proteção Anti-Downgrade SemVer:** removidos `UpdateProgressForm`, balões de OTA/boot/tarefas e `MessageBox` pós-OTA; download, conferência SemVer anti-downgrade (`IsRemoteVersionNewer` e `compareAgentSemVer`), verificação obrigatória SHA-256 (64 hex), substituição (`--ota-update --silent`) e reinício (`--background --silent-restart`) executados em segundo plano com log em `agent.log`. Balão de bandeja mantido exclusivamente para mensagens da Central de TI.
      - **Proteção de Encerramento via UAC Nativo do Windows (`WindowsAdminAuthenticator`):** encerrar pela bandeja (`Encerrar Agente`) dispara a tela nativa de **Controle de Conta de Usuário (UAC)** do Windows (`Verb = "runas"` + `--verify-admin-exit`), compatível nativamente com contas Administradoras **de rede/domínio (Active Directory / Entra ID)** e **locais**, sem senhas hardcoded; tarefa agendada configurada com `/RL LIMITED` (menor privilégio) e fallback nativo `credui.dll` (`CredUIPromptForWindowsCredentials`) caso o processo já tenha sido aberto elevado.

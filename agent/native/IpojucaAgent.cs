@@ -25,14 +25,14 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA Silencioso e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.5.0.0")]
+[assembly: AssemblyVersion("2.5.1.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.5.0-native-exe";
-        public const string DISPLAY_VERSION = "2.5.0";
+        public const string CURRENT_VERSION = "2.5.1-native-exe";
+        public const string DISPLAY_VERSION = "2.5.1";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -910,12 +910,62 @@ namespace IpojucaRMM
             }
         }
 
+        [DllImport("secur32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern byte GetUserNameEx(int nameFormat, StringBuilder userName, ref uint userNameSize);
+
+        private const int EXTENDED_NAME_DISPLAY = 3;
+
+        /// <summary>
+        /// Resolve o nome do usuario logado no Windows para identificacao exclusiva no chat de suporte TI.
+        /// Prioriza Nome de Exibicao (AD/perfil via secur32.dll), com fallback para Environment.UserName.
+        /// </summary>
+        public static string ResolveLoggedUserSender()
+        {
+            string resolved = "";
+            try
+            {
+                StringBuilder sb = new StringBuilder(256);
+                uint size = (uint)sb.Capacity;
+                if (GetUserNameEx(EXTENDED_NAME_DISPLAY, sb, ref size) != 0)
+                {
+                    resolved = sb.ToString().Trim();
+                }
+            }
+            catch { }
+
+            if (string.IsNullOrEmpty(resolved))
+            {
+                try
+                {
+                    resolved = (Environment.UserName ?? "").Trim();
+                }
+                catch { }
+            }
+
+            if (!string.IsNullOrEmpty(resolved))
+            {
+                resolved = Regex.Replace(resolved, @"[\r\n\t]+", " ").Trim();
+            }
+
+            if (string.IsNullOrEmpty(resolved))
+            {
+                resolved = "Estação " + Environment.MachineName;
+            }
+
+            if (resolved.Length > 80)
+            {
+                resolved = resolved.Substring(0, 80).Trim();
+            }
+            return resolved;
+        }
+
         private void SendClientMessageAsync(string text)
         {
             lock (_chatHistory)
             {
                 _chatHistory.Add(new ChatEntry("Você", text, true, false));
             }
+            string senderName = ResolveLoggedUserSender();
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
@@ -925,7 +975,7 @@ namespace IpojucaRMM
                     {
                         { "agent_uuid", _config.AgentUuid },
                         { "hostname", Environment.MachineName },
-                        { "sender", "Estação " + Environment.MachineName },
+                        { "sender", senderName },
                         { "message", text }
                     });
 

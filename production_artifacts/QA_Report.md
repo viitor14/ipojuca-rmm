@@ -755,3 +755,18 @@ Verificado no navegador (Vite dev em `10.200.33.30:5181` apontando para backend 
 | Suíte automatizada backend (Testes #1 a #18) | `npm --prefix backend test` | **18/18 APROVADO** (`fail 0`, `3.99s`), incluindo proteção anti-downgrade SemVer no Teste #8. |
 
 **Parecer do Gate de Qualidade — Ciclo #51:** **APROVADO PELO `@qa`**.
+
+---
+
+## Ciclo #52 — Identificação do Usuário Logado no Chat TI (`v2.5.1-native-exe`) (`@qa` + `@security`)
+
+**Data:** 2026-11-24  
+**Escopo:** Resolução do nome real do usuário logado no Windows (`secur32.dll` `GetUserNameEx(NameDisplay=3)` com fallback para `Environment.UserName`) exclusivamente no remetente de mensagens enviadas voluntariamente pelo chat de suporte (`POST /api/agent/message`), mantendo heartbeats e telemetria livres de dados pessoais (LGPD), e bump para **`v2.5.1-native-exe`** habilitando OTA silencioso automático a partir da `v2.5.0`.
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Compilação Agente Windows C# `v2.5.1` | `csc.exe /optimize+ /target:winexe ... agent/native/IpojucaAgent.cs` | **APROVADO** — `backend/public/IpojucaRMM-Setup.exe` (`89.088 B`, FileVersion `2.5.1.0`, SHA-256 `85dc5add9c188c6a631d6fd750b3a7ef690b15d493aeb924b2c7a365c947f322`, `0` erros/avisos). |
+| Resolução de remetente (`ResolveLoggedUserSender`) | Reflexão em PowerShell sobre `IpojucaRMM-Setup.exe` | **APROVADO** — Retornou o Nome de Exibição real do usuário logado no Active Directory via `secur32.dll` (`Length=35`, sanitizado e ≤ 80 caracteres). |
+| Suíte automatizada backend (Testes #1 a #18) | `npm --prefix backend test` | **18/18 APROVADO** (`fail 0`, `4.93s`), validando `latest_version: "2.5.1-native-exe"` + SHA-256 64 hex + anti-downgrade SemVer. |
+
+**Parecer do Gate de Qualidade — Ciclo #52:** **APROVADO PELO `@qa`**.
