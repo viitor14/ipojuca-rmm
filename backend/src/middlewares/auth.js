@@ -37,6 +37,16 @@ function verifyJwtToken(token) {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   const [encodedHeader, encodedBody, signature] = parts;
+
+  try {
+    const header = JSON.parse(base64UrlDecode(encodedHeader));
+    if (!header || header.alg !== 'HS256' || header.typ !== 'JWT') {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
   const signingInput = `${encodedHeader}.${encodedBody}`;
   const expectedSig = crypto
     .createHmac('sha256', env.jwtSecret)
@@ -54,15 +64,45 @@ function verifyJwtToken(token) {
   try {
     const payload = JSON.parse(base64UrlDecode(encodedBody));
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) return null;
+    if (typeof payload.exp !== 'number' || payload.exp < now) return null;
     return payload;
   } catch {
     return null;
   }
 }
 
-function hashPassword(password, salt = 'ipojuca_rmm_salt_v1') {
-  return crypto.scryptSync(String(password), salt, 64).toString('hex');
+/**
+ * Hash seguro de senha com salt aleatorio individual por usuario (scrypt).
+ * Formato: scrypt$<saltHex>$<derivedHex>
+ */
+function hashPassword(password, explicitSalt = null) {
+  const salt = explicitSalt || crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(String(password), salt, 64).toString('hex');
+  return `scrypt$${salt}$${derived}`;
+}
+
+function isLegacyPasswordHash(storedHash) {
+  return Boolean(storedHash && typeof storedHash === 'string' && !storedHash.startsWith('scrypt$'));
+}
+
+function verifyPassword(password, storedHash) {
+  if (!password || !storedHash || typeof storedHash !== 'string') return false;
+
+  if (storedHash.startsWith('scrypt$')) {
+    const parts = storedHash.split('$');
+    if (parts.length !== 3 || !parts[1] || !parts[2]) return false;
+    const [, salt, expectedHex] = parts;
+    const candidateHex = crypto.scryptSync(String(password), salt, 64).toString('hex');
+    if (candidateHex.length !== expectedHex.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(candidateHex), Buffer.from(expectedHex));
+  }
+
+  // Compatibilidade transparente com hashes legados ja persistidos no MySQL da VPS
+  const legacyCandidate = crypto
+    .scryptSync(String(password), 'ipojuca_rmm_salt_v1', 64)
+    .toString('hex');
+  if (legacyCandidate.length !== storedHash.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(legacyCandidate), Buffer.from(storedHash));
 }
 
 function hashAgentToken(rawToken) {
@@ -97,12 +137,93 @@ function requireRole(allowedRoles = []) {
   };
 }
 
-// Rate limiter simples por IP/Agente em memória para proteção DoS (TM-05)
+/**
+ * Autenticacao individual obrigatoria para endpoints do Agente Windows (@security).
+ * Valida X-Agent-Uuid + X-Agent-Token (SHA-256 timingSafeEqual) e status is_revoked.
+ */
+function createRequireAgentAuth(repository) {
+  return async (req, res, next) => {
+    try {
+      const agentUuid = String(
+        req.headers['x-agent-uuid'] || req.query?.agent_uuid || req.body?.agent_uuid || ''
+      ).trim();
+      const agentToken = String(
+        req.headers['x-agent-token'] || req.body?.agent_token || ''
+      ).trim();
+
+      if (!agentUuid || !agentToken) {
+        return res
+          .status(401)
+          .json({ error: 'Identidade ou credencial do agente ausente.' });
+      }
+
+      const machine = await repository.findMachineByAgentUuid(agentUuid);
+      if (!machine) {
+        return res.status(401).json({ error: 'Agente não reconhecido.' });
+      }
+      if (machine.is_revoked) {
+        return res
+          .status(403)
+          .json({ error: 'Credencial do agente foi revogada pelo @security.' });
+      }
+
+      const incomingHash = hashAgentToken(agentToken);
+      if (
+        !machine.agent_token_hash ||
+        incomingHash.length !== machine.agent_token_hash.length ||
+        !crypto.timingSafeEqual(
+          Buffer.from(incomingHash),
+          Buffer.from(machine.agent_token_hash)
+        )
+      ) {
+        await repository.recordAuditLog({
+          machineId: machine.id,
+          actionType: 'AGENT_AUTH_FAILED',
+          ipAddress: req.ip,
+          details: { agentUuid, path: req.path },
+        });
+        return res.status(401).json({ error: 'Token do agente inválido.' });
+      }
+
+      req.machine = machine;
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  };
+}
+
+/** Wrapper para rotas async no Express 4: evita UnhandledPromiseRejection */
+function asyncHandler(fn) {
+  return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+}
+
+// Rate limiter em memoria com limpeza periodica e teto de chaves (TM-05)
 const rateBuckets = new Map();
+const MAX_RATE_BUCKETS = 10000;
+
+const bucketCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [k, b] of rateBuckets.entries()) {
+    if (now > b.resetAt) rateBuckets.delete(k);
+  }
+}, 60000);
+bucketCleanupTimer.unref();
+
 function createRateLimiter({ windowMs = 60000, maxRequests = 120 } = {}) {
   return (req, res, next) => {
     const key = `${req.ip}:${req.path}`;
     const now = Date.now();
+    if (!rateBuckets.has(key) && rateBuckets.size >= MAX_RATE_BUCKETS) {
+      for (const [k, b] of rateBuckets.entries()) {
+        if (now > b.resetAt) rateBuckets.delete(k);
+      }
+      if (rateBuckets.size >= MAX_RATE_BUCKETS) {
+        const oldestKey = rateBuckets.keys().next().value;
+        if (oldestKey) rateBuckets.delete(oldestKey);
+      }
+    }
+
     const bucket = rateBuckets.get(key) || { count: 0, resetAt: now + windowMs };
     if (now > bucket.resetAt) {
       bucket.count = 0;
@@ -123,9 +244,12 @@ module.exports = {
   createJwtToken,
   verifyJwtToken,
   hashPassword,
+  verifyPassword,
+  isLegacyPasswordHash,
   hashAgentToken,
   requireAuth,
   requireRole,
+  createRequireAgentAuth,
+  asyncHandler,
   createRateLimiter,
 };
-

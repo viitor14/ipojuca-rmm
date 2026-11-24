@@ -6,13 +6,19 @@ agent/node_modules/
 
 # Local runtime secrets & machine identity
 .env
+.env.local
 backend/.env
 frontend/.env
+frontend/.env.local
 agent/.env
 agent/.agent-identity.json
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
 
 # OS / Editor logs
 .DS_Store
 Thumbs.db
 *.log
-

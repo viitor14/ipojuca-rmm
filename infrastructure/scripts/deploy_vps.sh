@@ -1,42 +1,50 @@
 #!/usr/bin/env bash
 # =============================================================================
-# RMM IPOJUCA - SCRIPT DE DEPLOY PARA A VPS srv912524
+# RMM IPOJUCA - SCRIPT DE DEPLOY PARA A VPS srv912524 (Hardening Ciclo #48)
 # Portas calibradas conforme containers ativos da VPS:
 #  - Frontend RMM : 8095 (8082=relatorios, 8090=mdm)
 #  - Backend RMM  : 4005 (4000=api-chamados-node)
-#  - MySQL RMM    : 3309 (3306=mensageria, 3307=visitas, 3308=chamados)
+#  - MySQL RMM    : 127.0.0.1:3309 (restrito a loopback)
 #  - n8n e Evolution API : Reutiliza os containers ja ativos (5678 e 8080)
 # =============================================================================
-set -e
+set -eu
 
 FRONTEND_PORT="${FRONTEND_PORT:-8095}"
 BACKEND_PORT="${BACKEND_PORT:-4005}"
 MYSQL_EXTERNAL_PORT="${MYSQL_EXTERNAL_PORT:-3309}"
+PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-http://31.97.86.253:${FRONTEND_PORT}}"
 
 echo "======================================================================"
-echo "  RMM IPOJUCA - DEPLOY NA VPS srv912524 (SEM CONFLITO DE PORTAS)"
+echo "  RMM IPOJUCA - DEPLOY NA VPS srv912524 (HARDENING COMPLETO)"
 echo "======================================================================"
 
 if [ ! -f ".env" ]; then
-  echo "[1/3] Gerando arquivo .env calibrado para a VPS 31.97.86.253..."
-  PUBLIC_IP="31.97.86.253"
+  echo "[1/3] Gerando arquivo .env com segredos fortes aleatorios..."
+  umask 077
   cat <<EOF > .env
-MYSQL_ROOT_PASSWORD=$(openssl rand -hex 16)
+MYSQL_ROOT_PASSWORD=$(openssl rand -hex 20)
 DB_NAME=ipojuca_rmm
 DB_USER=rmm_user
-DB_PASSWORD=$(openssl rand -hex 16)
+DB_PASSWORD=$(openssl rand -hex 20)
 JWT_SECRET=$(openssl rand -hex 32)
 TASK_SIGNING_SECRET=$(openssl rand -hex 32)
 N8N_WEBHOOK_SECRET=$(openssl rand -hex 32)
-AGENT_ENROLLMENT_KEY=rmm-ipojuca-enroll-2026
+AGENT_ENROLLMENT_KEY=$(openssl rand -hex 24)
+CORS_ORIGIN=${PUBLIC_ORIGIN}
+TRUST_PROXY=1
 OFFLINE_THRESHOLD_SECONDS=15000
 FRONTEND_PORT=${FRONTEND_PORT}
 BACKEND_PORT=${BACKEND_PORT}
 MYSQL_EXTERNAL_PORT=${MYSQL_EXTERNAL_PORT}
 N8N_WEBHOOK_URL=http://host.docker.internal:5678/webhook/rmm-alert
-DASHBOARD_PUBLIC_URL=http://${PUBLIC_IP}:${FRONTEND_PORT}
+DASHBOARD_PUBLIC_URL=${PUBLIC_ORIGIN}
+# Defina senhas iniciais fortes antes do primeiro boot se o banco estiver vazio:
+SEED_ADMIN_PASSWORD=
+SEED_TECH_PASSWORD=
+SEED_VIEWER_PASSWORD=
 EOF
-  echo "Arquivo .env criado com sucesso."
+  chmod 600 .env
+  echo "Arquivo .env criado (permissao 600). Defina SEED_ADMIN_PASSWORD se for o primeiro boot."
 else
   echo "[1/3] Arquivo .env existente preservado."
 fi
@@ -50,8 +58,8 @@ docker compose ps
 echo ""
 echo "======================================================================"
 echo "  DEPLOY CONCLUIDO COM SUCESSO NA VPS srv912524!"
-echo "  - Dashboard & Digital Twin 3D : http://${PUBLIC_IP:-<IP_VPS>}:${FRONTEND_PORT}/"
-echo "  - API & Socket.io Agentes     : http://${PUBLIC_IP:-<IP_VPS>}:${BACKEND_PORT}"
-echo "  - MySQL RMM                   : Porta ${MYSQL_EXTERNAL_PORT}"
-echo "  - Integrado ao n8n existente  : Porta 5678 (bot-whatsapp-chamados-sms-n8n-1)"
+echo "  - Dashboard & Digital Twin : ${PUBLIC_ORIGIN}"
+echo "  - API & Socket.io Agentes  : porta ${BACKEND_PORT}"
+echo "  - MySQL RMM                : 127.0.0.1:${MYSQL_EXTERNAL_PORT} (loopback)"
+echo "  - HTTPS/WSS (Recomendado)  : infrastructure/nginx/vps-https.conf.example"
 echo "======================================================================"

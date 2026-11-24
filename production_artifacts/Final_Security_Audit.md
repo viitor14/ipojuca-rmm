@@ -82,3 +82,31 @@ Revisão do diff (`repository.js`, `api.js`, `hardwareIdentity.js`, `hardwareInv
 - **MÉDIO (herdado, fora do escopo):** valores padrão de segredos no `docker-compose.yml` e sal fixo no hash de senhas.
 
 Parecer: sem vulnerabilidade crítica nova. O risco alto de S1 exige decisão do usuário antes da implantação.
+
+---
+
+## 7. Adendo de Auditoria e Remediação Completa — Ciclo #48 (`@security` + `@qa`)
+
+**Data:** 2026-11-24  
+**Responsável:** `@security` (validação automatizada por `@qa`)  
+**Escopo:** Remediação completa dos achados críticos, altos e médios identificados no diagnóstico de pré-ciclo (`backend/`, `agent/native/IpojucaAgent.cs`, `frontend/`, `docker-compose.yml`, `infrastructure/`).
+
+### 7.1. Controles Remediados e Verificados
+
+| Achado / Controle | Remediação Aplicada | Evidência de Verificação | Status |
+| :--- | :--- | :--- | :--- |
+| **RCE / PowerShell Injection no Agente C#** | `InstallApprovedPrinter` em `agent/native/IpojucaAgent.cs` passou a validar IPv4 estritamente privado (`IsPrivateIpv4Strict`), aplicar whitelist `[a-zA-Z0-9 _().-]` (max 64) em `SanitizePrinterName` e escapar strings com `EscapePsSingleQuoted` via variáveis PowerShell. | Revisão de código + compilação `csc.exe` v`2.4.0.0` (`backend/public/IpojucaRMM-Setup.exe`). | **REMEDIADO** |
+| **Endpoints de Agente Sem Autenticação (`pending`, `task-result`, `disconnect`, `message`)** | Criado middleware `createRequireAgentAuth(repository)` exigindo `X-Agent-Uuid` + `X-Agent-Token` (SHA-256 `timingSafeEqual`) e `!is_revoked`. Verificação estrita de ownership (`existingTask.machine_id === req.machine.id`) em `POST /api/agent/task-result` e Socket.io `task:result`. | Teste #14 (`401` sem/com token inválido, `403` revogado, `403` spoof + `SECURITY_BLOCKED_TASK_RESULT_SPOOF`). | **REMEDIADO** |
+| **Assinatura HMAC + TTL + Anti-Replay no Polling C#** | Backend assina cada tarefa da fila HTTP com `machine.agent_token_hash` + `expires_at` (120s). Agente C# valida HMAC-SHA256 (`VerifyTaskHmac`), TTL UTC e conjunto `_executedTaskIds` antes de executar. | Testes #5, #12 e #14 (`verifyTaskSignature` positivo para a máquina alvo e negativo para outra máquina). | **REMEDIADO** |
+| **OTA Update Sem Verificação SHA-256 Obrigatória** | `UpdateProgressForm.RunUpdatePipeline` agora aborta a atualização caso `/api/agent/version` falhe, não retorne hash SHA-256 válido (64 hex) ou haja divergência com o binário baixado (removendo o `.tmp`). | Revisão de `agent/native/IpojucaAgent.cs` + Teste #8 validando `sha256` em `/api/agent/version`. | **REMEDIADO** |
+| **Credenciais Hardcoded no Bundle Frontend** | Removido `DEMO_PROFILES`, `<RoleSelect>` e auto-login de `frontend/src/App.jsx`; criada tela real obrigatória `LoginScreen.jsx` autenticando contra `POST /api/auth/login` e validando sessão em `GET /api/auth/me`. | Varredura automatizada em `frontend/dist/assets/*.js`: **0 ocorrências** de senhas ou perfis demo. | **REMEDIADO** |
+| **Salt Fixo de Senhas e Fail-Fast de Segredos** | `hashPassword` migrado para `scrypt$<salt16bytes>$<hash>` com upgrade transparente de hashes legados no login. `validateProductionConfig()` bloqueia boot em produção com segredos fracos/placeholder ou `CORS_ORIGIN=*`. | Teste #15 (`scrypt$` com salt único, upgrade de hash legado e subprocesso `NODE_ENV=production`). | **REMEDIADO** |
+| **Exposição MySQL, CORS, Headers e Webhook n8n** | MySQL vinculado a `127.0.0.1:3309` no `docker-compose.yml`; variáveis obrigatórias (`:?`); `Permissions-Policy` e `trust proxy` no Express/Nginx; `rmm_whatsapp_ticket_workflow.json` exige HMAC `X-RMM-Signature` e deduplica por `x-idempotency-key` sem telefone fallback hardcoded. | Teste #17 (headers reais via Express HTTP), `JSON.parse` no workflow n8n e `npm audit` = **0 vulnerabilidades** em todos os pacotes. | **REMEDIADO** |
+| **LGPD no Agente C# e Auditoria Completa** | Removido envio de `Environment.UserName` em `SendClientMessageAsync` (usa `"Estação " + MachineName`); adicionada auditoria para `MACHINE_RELOCATED`, `MACHINE_DELETED`, `AGENT_MESSAGE_SENT`, `AGENT_DISCONNECTED`, `REMOTE_TASK_RESULT` e `SECURITY_BLOCKED_TASK_RESULT_SPOOF`. | Testes #14 e #16 + revisão de `IpojucaAgent.cs`. | **REMEDIADO** |
+
+### 7.2. Riscos Residuais Abertos (Dependem de Ação Operacional na VPS)
+
+1. **TLS/HTTPS na VPS (Operacional):** O template `infrastructure/nginx/vps-https.conf.example` está pronto, mas a ativação de HTTPS/WSS depende de DNS institucional e emissão de certificado Let's Encrypt na VPS.
+2. **Rotação da `AGENT_ENROLLMENT_KEY` (Herdado S1):** `deploy_vps.sh` já gera chave aleatória para novas implantações e `docker-compose.yml` não embute default inseguro, porém máquinas já instaladas com a chave antiga precisarão de janela planejada de rotação/recompilação ou mecanismo de chave por unidade em ciclo futuro.
+
+- **Parecer do Gate de Segurança (Ciclo #48):** **APROVADO PARA HOMOLOGAÇÃO E PREPARO DE DEPLOY** (0 vulnerabilidades críticas/altas de código ou dependências; pendências exclusivamente operacionais de infraestrutura VPS documentadas acima).

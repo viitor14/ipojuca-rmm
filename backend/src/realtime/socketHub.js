@@ -61,6 +61,17 @@ class SocketHub {
         const { task_id, status, exit_code, output_summary } = payload;
         if (!task_id) return;
 
+        const existingTask = await repository.findRemoteTaskById(String(task_id));
+        if (!existingTask || Number(existingTask.machine_id) !== Number(machineId)) {
+          await repository.recordAuditLog({
+            machineId,
+            actionType: 'SECURITY_BLOCKED_TASK_RESULT_SPOOF',
+            ipAddress: socket.handshake.address,
+            details: { task_id: String(task_id), via: 'socket' },
+          });
+          return;
+        }
+
         const validStatus = status === 'COMPLETED' ? 'COMPLETED' : 'FAILED';
         const updatedTask = await repository.completeRemoteTask({
           taskId: String(task_id),

@@ -1,14 +1,18 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import styled, { ThemeProvider, keyframes } from 'styled-components';
-import { theme, STATUS_LABELS, fixTextEncoding } from './styles/theme';
+import { theme, STATUS_LABELS, fixTextEncoding, isAgentOutdated } from './styles/theme';
 import { GlobalStyles } from './styles/GlobalStyles';
 import { rmmApi, connectDashboardSocket } from './services/api';
-import { DigitalTwin3D } from './components/DigitalTwin3D';
 import { PixelArtTwin } from './components/PixelArtTwin';
-import ModelShowcase from './components/twin/ModelShowcase';
-import { RECEPTION_VARIANTS, DEFAULT_VARIANT, getReceptionVariant } from './components/twin/receptionThemes';
+import { LoginScreen } from './components/LoginScreen';
+import { getReceptionVariant } from './components/twin/receptionThemes';
 import { DiagnosticDrawer } from './components/DiagnosticDrawer';
 import { UnitSectorManagerModal } from './components/UnitSectorManagerModal';
+
+const DigitalTwin3D = lazy(() =>
+  import('./components/DigitalTwin3D').then((m) => ({ default: m.DigitalTwin3D }))
+);
+const ModelShowcase = lazy(() => import('./components/twin/ModelShowcase'));
 
 const pulseDot = keyframes`
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -28,11 +32,45 @@ const HudOverlay = styled.div`
 
 const TopCommandDeck = styled.header`
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  pointer-events: none;
+`;
+
+const TopHeaderRow = styled.div`
+  display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
   pointer-events: none;
   flex-wrap: wrap;
+`;
+
+const CenterControlShell = styled.div`
+  align-self: center;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+  border: 1px solid #e4e8e3;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  padding: ${({ $collapsed }) => ($collapsed ? '4px 10px' : '5px 8px')};
+  max-width: 100%;
+  transition: all 0.2s ease;
+`;
+
+const ControlDivider = styled.span`
+  width: 1px;
+  height: 18px;
+  background: #e4e8e3;
+  margin: 0 3px;
+  display: inline-block;
 `;
 
 const MastheadPod = styled.div`
@@ -144,16 +182,15 @@ const UnitSwitchBtn = styled.button`
   }
 `;
 
-const RightControlPod = styled.div`
+const UserSessionPod = styled.div`
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 6px;
   background: #ffffff;
   border: 1px solid #e4e8e3;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-  padding: 4px 8px;
+  padding: 4px 6px;
 `;
 
 const CamModeBtn = styled.button`
@@ -174,21 +211,112 @@ const CamModeBtn = styled.button`
   }
 `;
 
-const RoleSelect = styled.select`
+const UserSessionPill = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
   background: #f4f5f2;
-  color: #242925;
   border: 1px solid #e4e8e3;
   border-radius: 6px;
-  padding: 5px 8px;
   font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.7rem;
-  font-weight: 600;
-  cursor: pointer;
-  outline: none;
+  font-size: 0.68rem;
+  color: #242925;
 
-  &:focus {
-    border-color: #52796b;
+  .u-role {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #52796b;
   }
+
+  .u-logout {
+    background: #ffffff;
+    border: 1px solid #cbd3cb;
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: #737b75;
+    cursor: pointer;
+
+    &:hover {
+      border-color: #dc2626;
+      color: #dc2626;
+      background: #fef2f2;
+    }
+  }
+`;
+
+const AlertMiniRow = styled.div`
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: ${({ $severity }) =>
+    $severity === 'CRITICAL' ? '#FEF2F2' : '#FFFBEB'};
+  border: 1px solid
+    ${({ $severity }) => ($severity === 'CRITICAL' ? '#FECACA' : '#FDE68A')};
+  margin-bottom: 5px;
+  font-size: 0.68rem;
+  line-height: 1.35;
+
+  .a-top {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    color: ${({ $severity }) =>
+      $severity === 'CRITICAL' ? '#991B1B' : '#92400E'};
+  }
+
+  .a-msg {
+    color: #3f4741;
+    margin-top: 2px;
+  }
+
+  .a-meta {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.6rem;
+    color: #737b75;
+    margin-top: 2px;
+  }
+`;
+
+const ConfirmBackdrop = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(36, 41, 37, 0.42);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+`;
+
+const ConfirmCard = styled.div`
+  width: 100%;
+  max-width: 460px;
+  background: #ffffff;
+  border: 1px solid #e4e8e3;
+  border-radius: 10px;
+  padding: 18px 20px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: ${({ theme }) => theme.fonts.sans};
+  color: #242925;
+`;
+
+const StageFallback = styled.div`
+  position: fixed;
+  inset: 0;
+  background: #eaece8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.8rem;
+  color: #52796b;
 `;
 
 const MiddleWorkspace = styled.div`
@@ -543,11 +671,56 @@ const NodeKeycap = styled.button`
   }
 `;
 
-const DEMO_PROFILES = [
-  { label: 'ADMIN_N2 // Vitor França', email: 'admin@ipojuca.pe.gov.br', pass: 'Admin@Rmm2026' },
-  { label: 'TECH_N1 // Carlos Mendes', email: 'suporte@ipojuca.pe.gov.br', pass: 'Suporte@Rmm2026' },
-  { label: 'VIEWER // Dra. Helena', email: 'gestao@ipojuca.pe.gov.br', pass: 'Gestao@Rmm2026' },
-];
+const INACTIVITY_ALERT_SECONDS = 86400; // 24 horas
+
+function getInactivityInfo(machine, nowMs) {
+  if (!machine) return { isInactive24h: false, mode: null, seconds: 0 };
+  const isOffline = machine.health_status === 'OFFLINE';
+  const offSec = machine.last_seen_at
+    ? Math.max(0, Math.floor((nowMs - new Date(machine.last_seen_at).getTime()) / 1000))
+    : 0;
+  const idleSec = Math.max(0, Math.floor(Number(machine.idle_seconds || 0)));
+
+  if (isOffline && offSec >= INACTIVITY_ALERT_SECONDS) {
+    return { isInactive24h: true, mode: 'OFFLINE', seconds: offSec };
+  }
+  if (!isOffline && idleSec >= INACTIVITY_ALERT_SECONDS) {
+    return { isInactive24h: true, mode: 'IDLE', seconds: idleSec };
+  }
+  return { isInactive24h: false, mode: null, seconds: isOffline ? offSec : idleSec };
+}
+
+function formatShortDuration(totalSeconds) {
+  const s = Math.max(0, Math.floor(Number(totalSeconds || 0)));
+  if (s < 60) return `${s}s`;
+  const mins = Math.floor(s / 60);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ${mins % 60}m`;
+  return `${Math.floor(hrs / 24)}d ${hrs % 24}h`;
+}
+
+const AUTH_TOKEN_KEY = 'rmm.authToken';
+
+function readSavedToken() {
+  try {
+    return window.sessionStorage.getItem(AUTH_TOKEN_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSessionToken(token) {
+  try {
+    if (token) {
+      window.sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+    } else {
+      window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+  } catch {
+    /* sessionStorage indisponível */
+  }
+}
 
 export default function App() {
   // Cena isolada de homologacao: /?showcase=1&angle=iso|front|close
@@ -557,14 +730,24 @@ export default function App() {
     return { angle: params.get('angle') || 'iso' };
   }, []);
 
-  if (showcase) return <ModelShowcase angle={showcase.angle} />;
+  if (showcase) {
+    return (
+      <ThemeProvider theme={theme}>
+        <GlobalStyles />
+        <Suspense fallback={<StageFallback>Carregando cena de homologação 3D...</StageFallback>}>
+          <ModelShowcase angle={showcase.angle} />
+        </Suspense>
+      </ThemeProvider>
+    );
+  }
 
   return <DashboardApp />;
 }
 
 function DashboardApp() {
-  const [auth, setAuth] = useState({ token: null, user: null });
-  const [selectedProfileIdx, setSelectedProfileIdx] = useState(0);
+  const [auth, setAuth] = useState({ token: null, user: null, checking: true });
+  const [sessionNotice, setSessionNotice] = useState('');
+  const [updateAllConfirm, setUpdateAllConfirm] = useState({ open: false, busy: false, resultMsg: '' });
   const [units, setUnits] = useState([]);
   const [selectedUnitId, setSelectedUnitId] = useState(1);
   const [machines, setMachines] = useState([]);
@@ -577,7 +760,13 @@ function DashboardApp() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [cameraMode, setCameraMode] = useState('ISO');
   const [twinMode, setTwinMode] = useState('PIXEL');
-  const [roomVariantId, setRoomVariantId] = useState(DEFAULT_VARIANT);
+  const [topControlsCollapsed, setTopControlsCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem('rmm.topControlsCollapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [dockCollapsed, setDockCollapsed] = useState(() => {
     try {
@@ -606,6 +795,17 @@ function DashboardApp() {
     }
   }, [dockCollapsed]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        'rmm.topControlsCollapsed',
+        topControlsCollapsed ? '1' : '0'
+      );
+    } catch {
+      /* armazenamento indisponível */
+    }
+  }, [topControlsCollapsed]);
+
   const [nowTimestamp, setNowTimestamp] = useState(Date.now());
   const [sceneLayers, setSceneLayers] = useState({
     furniture: true,
@@ -616,6 +816,44 @@ function DashboardApp() {
     mode: 'CREATE_UNIT',
     targetSector: null,
   });
+
+  const handleLogout = useCallback((notice = '') => {
+    saveSessionToken(null);
+    setAuth({ token: null, user: null, checking: false });
+    setSocketConnected(false);
+    setUnits([]);
+    setMachines([]);
+    setDiagnostics(null);
+    setChatMessages([]);
+    setAlerts([]);
+    setSessionNotice(notice);
+  }, []);
+
+  const handleLoginSubmit = useCallback(async (email, password) => {
+    const res = await rmmApi.login(email, password);
+    saveSessionToken(res.token);
+    setSessionNotice('');
+    setAuth({ token: res.token, user: res.user, checking: false });
+    return res;
+  }, []);
+
+  // Restaura sessão válida a partir de sessionStorage via GET /api/auth/me
+  useEffect(() => {
+    const saved = readSavedToken();
+    if (!saved) {
+      setAuth({ token: null, user: null, checking: false });
+      return;
+    }
+    rmmApi
+      .getMe(saved)
+      .then((res) => {
+        setAuth({ token: saved, user: res.user, checking: false });
+      })
+      .catch(() => {
+        saveSessionToken(null);
+        setAuth({ token: null, user: null, checking: false });
+      });
+  }, []);
 
   const canManageStructure =
     auth.user?.role === 'ADMIN_N2' || auth.user?.role === 'TECH_N1';
@@ -638,139 +876,146 @@ function DashboardApp() {
   };
 
   const loadAllData = useCallback(async (token, unitId, machineId) => {
-    const [unitsRes, machinesRes, catalogRes, alertsRes] = await Promise.all([
-      rmmApi.getUnits(token),
-      rmmApi.getMachines(token, { unitId }),
-      rmmApi.getTaskCatalog(token),
-      rmmApi.getAlerts(token),
-    ]);
-    const loadedMachines = machinesRes.machines || [];
-    setUnits(unitsRes.units || []);
-    setMachines(loadedMachines);
-    setTaskCatalog(catalogRes.tasks || []);
-    setAlerts(alertsRes.alerts || []);
-
-    const targetId =
-      machineId && loadedMachines.some((m) => m.id === Number(machineId))
-        ? machineId
-        : loadedMachines[0]?.id || null;
-
-    if (targetId) {
-      const [diagRes, msgRes] = await Promise.all([
-        rmmApi.getMachineDiagnostics(token, targetId),
-        rmmApi.getMachineMessages(token, targetId).catch(() => ({ messages: [] })),
+    try {
+      const [unitsRes, machinesRes, catalogRes, alertsRes] = await Promise.all([
+        rmmApi.getUnits(token),
+        rmmApi.getMachines(token, { unitId }),
+        rmmApi.getTaskCatalog(token),
+        rmmApi.getAlerts(token),
       ]);
-      setDiagnostics(diagRes);
-      setChatMessages(msgRes.messages || []);
-    } else {
-      setDiagnostics(null);
-      setChatMessages([]);
+      const loadedMachines = machinesRes.machines || [];
+      setUnits(unitsRes.units || []);
+      setMachines(loadedMachines);
+      setTaskCatalog(catalogRes.tasks || []);
+      setAlerts(alertsRes.alerts || []);
+
+      const targetId =
+        machineId && loadedMachines.some((m) => m.id === Number(machineId))
+          ? machineId
+          : loadedMachines[0]?.id || null;
+
+      if (targetId) {
+        const [diagRes, msgRes] = await Promise.all([
+          rmmApi.getMachineDiagnostics(token, targetId),
+          rmmApi.getMachineMessages(token, targetId).catch(() => ({ messages: [] })),
+        ]);
+        setDiagnostics(diagRes);
+        setChatMessages(msgRes.messages || []);
+      } else {
+        setDiagnostics(null);
+        setChatMessages([]);
+      }
+    } catch (err) {
+      if (err?.status === 401) {
+        handleLogout('Sua sessão expirou. Faça login novamente.');
+        return;
+      }
+      throw err;
     }
-  }, []);
+  }, [handleLogout]);
 
   useEffect(() => {
-    let activeSocket = null;
-    const profile = DEMO_PROFILES[selectedProfileIdx];
+    if (!auth.token) return undefined;
+    const token = auth.token;
 
-    rmmApi
-      .login(profile.email, profile.pass)
-      .then((res) => {
-        setAuth({ token: res.token, user: res.user });
-        loadAllData(res.token, selectedUnitId, selectedMachineId);
+    const activeSocket = connectDashboardSocket(token, {
+      onConnect: () => setSocketConnected(true),
+      onDisconnect: () => setSocketConnected(false),
+      onMachineUpdated: (updatedMachine) => {
+        const currentUnitId = Number(selectedUnitIdRef.current);
+        const machineUnitId = Number(updatedMachine.unit_id);
+        const isForCurrentUnit = currentUnitId > 0 && machineUnitId === currentUnitId;
 
-        activeSocket = connectDashboardSocket(res.token, {
-          onConnect: () => setSocketConnected(true),
-          onDisconnect: () => setSocketConnected(false),
-          onMachineUpdated: (updatedMachine) => {
-            const currentUnitId = Number(selectedUnitIdRef.current);
-            const machineUnitId = Number(updatedMachine.unit_id);
-            const isForCurrentUnit = currentUnitId > 0 && machineUnitId === currentUnitId;
-
-            setMachines((prev) => {
-              const exists = prev.some((m) => m.id === updatedMachine.id);
-              if (isForCurrentUnit) {
-                if (exists) {
-                  return prev.map((m) =>
-                    m.id === updatedMachine.id ? updatedMachine : m
-                  );
-                }
-                return [...prev, updatedMachine];
-              }
-              // Se a máquina não pertence a esta unidade, remove se estiver presente
-              return exists ? prev.filter((m) => m.id !== updatedMachine.id) : prev;
-            });
-
-            setDiagnostics((prev) => {
-              if (!prev || !prev.machine) return prev;
-              if (prev.machine.id === updatedMachine.id) {
-                if (!isForCurrentUnit) {
-                  // Máquina aberta foi transferida ou não pertence à unidade ativa: fechar drawer
-                  return null;
-                }
-                return { ...prev, machine: updatedMachine };
-              }
-              return prev;
-            });
-
-            rmmApi.getUnits(res.token).then((uRes) => setUnits(uRes.units || [])).catch(() => {});
-          },
-          onMachineDeleted: ({ id }) => {
-            setMachines((prev) => prev.filter((m) => m.id !== Number(id)));
-            setDiagnostics((prev) => (prev?.machine?.id === Number(id) ? null : prev));
-            rmmApi.getUnits(res.token).then((uRes) => setUnits(uRes.units || [])).catch(() => {});
-          },
-          onAlertTriggered: (newAlert) => {
-            setAlerts((prev) => [newAlert, ...prev.slice(0, 19)]);
-          },
-          onTaskUpdated: (updatedTask) => {
-            const currentSelectedMachineId = selectedMachineIdRef.current;
-            if (updatedTask && updatedTask.machine_id) {
-              setDiagnostics((prev) => {
-                if (!prev || Number(prev.machine?.id) !== Number(updatedTask.machine_id)) {
-                  return prev;
-                }
-                const prevTasks = prev.tasks || [];
-                const exists = prevTasks.some((t) => t.task_id === updatedTask.task_id);
-                const nextTasks = exists
-                  ? prevTasks.map((t) => (t.task_id === updatedTask.task_id ? updatedTask : t))
-                  : [updatedTask, ...prevTasks];
-                return { ...prev, tasks: nextTasks };
-              });
+        setMachines((prev) => {
+          const exists = prev.some((m) => m.id === updatedMachine.id);
+          if (isForCurrentUnit) {
+            if (exists) {
+              return prev.map((m) =>
+                m.id === updatedMachine.id ? updatedMachine : m
+              );
             }
-            if (
-              updatedTask?.machine_id &&
-              Number(updatedTask.machine_id) === Number(currentSelectedMachineId)
-            ) {
-              rmmApi
-                .getMachineDiagnostics(res.token, updatedTask.machine_id)
-                .then((diagRes) => {
-                  if (Number(selectedMachineIdRef.current) === Number(updatedTask.machine_id)) {
-                    setDiagnostics(diagRes);
-                  }
-                })
-                .catch(() => {});
-            }
-          },
-          onAgentMessage: (newMsg) => {
-            setChatMessages((prev) => [...prev, newMsg]);
-          },
-          onUnitsUpdated: (payload) => {
-            if (Array.isArray(payload?.units)) {
-              setUnits(payload.units);
-            }
-          },
+            return [...prev, updatedMachine];
+          }
+          return exists ? prev.filter((m) => m.id !== updatedMachine.id) : prev;
         });
-      })
-      .catch((err) => console.error('Falha de autenticação:', err));
+
+        setDiagnostics((prev) => {
+          if (!prev || !prev.machine) return prev;
+          if (prev.machine.id === updatedMachine.id) {
+            if (!isForCurrentUnit) {
+              return null;
+            }
+            return { ...prev, machine: updatedMachine };
+          }
+          return prev;
+        });
+
+        rmmApi.getUnits(token).then((uRes) => setUnits(uRes.units || [])).catch(() => {});
+      },
+      onMachineDeleted: ({ id }) => {
+        setMachines((prev) => prev.filter((m) => m.id !== Number(id)));
+        setDiagnostics((prev) => (prev?.machine?.id === Number(id) ? null : prev));
+        rmmApi.getUnits(token).then((uRes) => setUnits(uRes.units || [])).catch(() => {});
+      },
+      onAlertTriggered: (newAlert) => {
+        setAlerts((prev) => [newAlert, ...prev.filter((a) => a.id !== newAlert.id).slice(0, 19)]);
+      },
+      onTaskUpdated: (updatedTask) => {
+        const currentSelectedMachineId = selectedMachineIdRef.current;
+        if (updatedTask && updatedTask.machine_id) {
+          setDiagnostics((prev) => {
+            if (!prev || Number(prev.machine?.id) !== Number(updatedTask.machine_id)) {
+              return prev;
+            }
+            const prevTasks = prev.tasks || [];
+            const exists = prevTasks.some((t) => t.task_id === updatedTask.task_id);
+            const nextTasks = exists
+              ? prevTasks.map((t) => (t.task_id === updatedTask.task_id ? updatedTask : t))
+              : [updatedTask, ...prevTasks];
+            return { ...prev, tasks: nextTasks };
+          });
+        }
+        if (
+          updatedTask?.machine_id &&
+          Number(updatedTask.machine_id) === Number(currentSelectedMachineId)
+        ) {
+          rmmApi
+            .getMachineDiagnostics(token, updatedTask.machine_id)
+            .then((diagRes) => {
+              if (Number(selectedMachineIdRef.current) === Number(updatedTask.machine_id)) {
+                setDiagnostics(diagRes);
+              }
+            })
+            .catch(() => {});
+        }
+      },
+      onAgentMessage: (newMsg) => {
+        const currentId = Number(selectedMachineIdRef.current);
+        if (!newMsg || !currentId || Number(newMsg.machine_id) !== currentId) {
+          return;
+        }
+        setChatMessages((prev) => {
+          if (newMsg.id !== undefined && prev.some((m) => m.id === newMsg.id)) {
+            return prev;
+          }
+          return [...prev, newMsg];
+        });
+      },
+      onUnitsUpdated: (payload) => {
+        if (Array.isArray(payload?.units)) {
+          setUnits(payload.units);
+        }
+      },
+    });
 
     return () => {
-      if (activeSocket) activeSocket.close();
+      activeSocket.close();
     };
-  }, [selectedProfileIdx]);
+  }, [auth.token]);
 
   useEffect(() => {
     if (!auth.token) return;
-    loadAllData(auth.token, selectedUnitId, selectedMachineId);
+    loadAllData(auth.token, selectedUnitId, selectedMachineId).catch(() => {});
     const syncTimer = setInterval(() => {
       loadAllData(auth.token, selectedUnitId, selectedMachineId).catch(() => {});
     }, 12000);
@@ -840,11 +1085,23 @@ function DashboardApp() {
     return res;
   }
 
-  async function handleUpdateAllAgents() {
-    const res = await rmmApi.updateAllAgents(auth.token);
-    window.alert(res.message || 'Ordem de atualização enviada para todas as máquinas.');
-    await loadAllData(auth.token, selectedUnitId, selectedMachineId);
-    return res;
+  async function handleConfirmUpdateAllAgents() {
+    setUpdateAllConfirm((prev) => ({ ...prev, busy: true, resultMsg: '' }));
+    try {
+      const res = await rmmApi.updateAllAgents(auth.token);
+      await loadAllData(auth.token, selectedUnitId, selectedMachineId);
+      setUpdateAllConfirm({
+        open: true,
+        busy: false,
+        resultMsg: res.message || 'Ordem de atualização enviada para todas as máquinas.',
+      });
+    } catch (err) {
+      setUpdateAllConfirm({
+        open: true,
+        busy: false,
+        resultMsg: `Falha ao enviar atualização: ${err.message}`,
+      });
+    }
   }
 
   async function handleSendMessage(machineId, text) {
@@ -929,6 +1186,24 @@ function DashboardApp() {
     return res;
   }
 
+  if (auth.checking) {
+    return (
+      <ThemeProvider theme={theme}>
+        <GlobalStyles />
+        <StageFallback>Validando sessão RMM Ipojuca...</StageFallback>
+      </ThemeProvider>
+    );
+  }
+
+  if (!auth.token || !auth.user) {
+    return (
+      <ThemeProvider theme={theme}>
+        <GlobalStyles />
+        <LoginScreen onAuthenticated={handleLoginSubmit} sessionNotice={sessionNotice} />
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <GlobalStyles />
@@ -946,181 +1221,225 @@ function DashboardApp() {
           }}
         />
       ) : (
-      <DigitalTwin3D
-        activeUnit={activeUnit}
-        machines={machines}
-        selectedMachine={selectedMachine}
-        selectedSector={selectedSector}
-        cameraMode={cameraMode}
-        roomVariant={getReceptionVariant(roomVariantId)}
-        sceneLayers={sceneLayers}
-        onUserOrbit={() => {
-          if (cameraMode !== 'FREE') setCameraMode('FREE');
-        }}
-        onSelectMachine={(m) => {
-          setSelectedMachineId(m.id);
-          setSelectedSectorId(null);
-          setCameraMode('FOCUS');
-        }}
-      />
+        <Suspense fallback={<StageFallback>Carregando Gêmeo Digital 3D...</StageFallback>}>
+          <DigitalTwin3D
+            activeUnit={activeUnit}
+            machines={machines}
+            selectedMachine={selectedMachine}
+            selectedSector={selectedSector}
+            cameraMode={cameraMode}
+            roomVariant={getReceptionVariant()}
+            sceneLayers={sceneLayers}
+            onUserOrbit={() => {
+              if (cameraMode !== 'FREE') setCameraMode('FREE');
+            }}
+            onSelectMachine={(m) => {
+              setSelectedMachineId(m.id);
+              setSelectedSectorId(null);
+              setCameraMode('FOCUS');
+            }}
+          />
+        </Suspense>
       )}
 
       {/* INTERFACE ADMINISTRATIVA EDITORIAL MINIMALISTA */}
       <HudOverlay>
         <TopCommandDeck>
-          <MastheadPod>
-            <div className="brand-group">
-              <div className="brand-title">RMM // Saúde Ipojuca</div>
-              <div className="brand-sub">
-                <LiveBeacon $online={socketConnected} />
-                <span>Gêmeo Digital &amp; Telemetria</span>
+          <TopHeaderRow>
+            <MastheadPod>
+              <div className="brand-group">
+                <div className="brand-title">RMM // Saúde Ipojuca</div>
+                <div className="brand-sub">
+                  <LiveBeacon $online={socketConnected} />
+                  <span>Gêmeo Digital &amp; Telemetria</span>
+                </div>
               </div>
-            </div>
-          </MastheadPod>
+            </MastheadPod>
 
-          <UnitSwitcherPod>
-            {units.map((u) => (
-              <UnitSwitchBtn
-                key={u.id}
-                $active={u.id === Number(selectedUnitId)}
-                onClick={() => {
-                  setSelectedUnitId(u.id);
-                  setSelectedMachineId(null);
-                  setSelectedSectorId(null);
-                  setDiagnostics(null);
-                  setCameraMode('ISO');
-                }}
-              >
-                <span className="u-code">[{u.code}] • {u.summary?.total || 0} PCs</span>
-                <span className="u-name">{fixTextEncoding(u.name)}</span>
-              </UnitSwitchBtn>
-            ))}
-            {canManageStructure && (
-              <>
-                <UnitActionBtn
-                  type="button"
-                  $tone="primary"
-                  onClick={() => openManagerModal('CREATE_UNIT')}
-                  title="Cadastrar nova Unidade de Saúde"
-                >
-                  + Unidade
-                </UnitActionBtn>
-                {activeUnit && (
-                  <UnitActionBtn
-                    type="button"
-                    onClick={() => openManagerModal('EDIT_UNIT')}
-                    title="Editar ou excluir unidade selecionada"
-                  >
-                    ✎ Unidade
-                  </UnitActionBtn>
-                )}
-              </>
-            )}
-          </UnitSwitcherPod>
-
-          <RightControlPod>
-            <CamModeBtn
-              $active={twinMode === 'PIXEL'}
-              onClick={() => setTwinMode('PIXEL')}
-              title="Maquete isométrica em pixel art (Canvas 2D)"
-            >
-              PIXEL
-            </CamModeBtn>
-            <CamModeBtn
-              $active={twinMode === '3D'}
-              onClick={() => setTwinMode('3D')}
-              title="Inspeção tridimensional (Three.js)"
-            >
-              3D
-            </CamModeBtn>
-
-            {twinMode === '3D' && (
-              <>
-                <CamModeBtn
-                  $active={cameraMode === 'ISO'}
+            <UnitSwitcherPod>
+              {units.map((u) => (
+                <UnitSwitchBtn
+                  key={u.id}
+                  $active={u.id === Number(selectedUnitId)}
                   onClick={() => {
+                    setSelectedUnitId(u.id);
+                    setSelectedMachineId(null);
                     setSelectedSectorId(null);
+                    setDiagnostics(null);
                     setCameraMode('ISO');
                   }}
                 >
-                  ISO 3D
+                  <span className="u-code">[{u.code}] • {u.summary?.total || 0} PCs</span>
+                  <span className="u-name">{fixTextEncoding(u.name)}</span>
+                </UnitSwitchBtn>
+              ))}
+              {canManageStructure && (
+                <>
+                  <UnitActionBtn
+                    type="button"
+                    $tone="primary"
+                    onClick={() => openManagerModal('CREATE_UNIT')}
+                    title="Cadastrar nova Unidade de Saúde"
+                  >
+                    + Unidade
+                  </UnitActionBtn>
+                  {activeUnit && (
+                    <UnitActionBtn
+                      type="button"
+                      onClick={() => openManagerModal('EDIT_UNIT')}
+                      title="Editar ou excluir unidade selecionada"
+                    >
+                      ✎ Unidade
+                    </UnitActionBtn>
+                  )}
+                </>
+              )}
+            </UnitSwitcherPod>
+
+            <UserSessionPod>
+              <UserSessionPill title={auth.user.email}>
+                <span className="u-role">{auth.user.role}</span>
+                <span>{auth.user.name}</span>
+                <button
+                  type="button"
+                  className="u-logout"
+                  onClick={() => handleLogout('')}
+                  title="Encerrar sessão"
+                >
+                  Sair
+                </button>
+              </UserSessionPill>
+            </UserSessionPod>
+          </TopHeaderRow>
+
+          <CenterControlShell $collapsed={topControlsCollapsed}>
+            {topControlsCollapsed ? (
+              <>
+                <span
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    color: '#52796B',
+                    padding: '0 4px',
+                  }}
+                >
+                  {twinMode === 'PIXEL' ? 'PIXEL ART' : `3D • ${cameraMode}`}
+                </span>
+                <CamModeBtn
+                  type="button"
+                  onClick={() => setTopControlsCollapsed(false)}
+                  title="Expandir barra de controles e downloads"
+                  aria-expanded="false"
+                >
+                  ▼ Controles
+                </CamModeBtn>
+              </>
+            ) : (
+              <>
+                <CamModeBtn
+                  type="button"
+                  $active={twinMode === 'PIXEL'}
+                  onClick={() => setTwinMode('PIXEL')}
+                  title="Maquete isométrica em pixel art (Canvas 2D)"
+                >
+                  PIXEL
                 </CamModeBtn>
                 <CamModeBtn
-                  $active={cameraMode === 'TOP'}
-                  onClick={() => setCameraMode('TOP')}
+                  type="button"
+                  $active={twinMode === '3D'}
+                  onClick={() => setTwinMode('3D')}
+                  title="Inspeção tridimensional (Three.js)"
                 >
-                  CAD TOPO
+                  3D
                 </CamModeBtn>
+
+                {twinMode === '3D' && (
+                  <>
+                    <ControlDivider aria-hidden="true" />
+                    <CamModeBtn
+                      type="button"
+                      $active={cameraMode === 'ISO'}
+                      onClick={() => {
+                        setSelectedSectorId(null);
+                        setCameraMode('ISO');
+                      }}
+                    >
+                      ISO 3D
+                    </CamModeBtn>
+                    <CamModeBtn
+                      type="button"
+                      $active={cameraMode === 'TOP'}
+                      onClick={() => setCameraMode('TOP')}
+                    >
+                      CAD TOPO
+                    </CamModeBtn>
+                    <CamModeBtn
+                      type="button"
+                      $active={cameraMode === 'FOCUS'}
+                      onClick={() => setCameraMode('FOCUS')}
+                    >
+                      FOCO
+                    </CamModeBtn>
+                    <CamModeBtn
+                      type="button"
+                      $active={cameraMode === 'ORBIT'}
+                      onClick={() =>
+                        setCameraMode((prev) => (prev === 'ORBIT' ? 'ISO' : 'ORBIT'))
+                      }
+                      title="Giro orbital suave ao redor da maquete"
+                    >
+                      360°
+                    </CamModeBtn>
+                  </>
+                )}
+
+                <ControlDivider aria-hidden="true" />
+
                 <CamModeBtn
-                  $active={cameraMode === 'FOCUS'}
-                  onClick={() => setCameraMode('FOCUS')}
+                  as="a"
+                  href="/api/agent/download"
+                  download="IpojucaRMM-Setup.exe"
+                  style={{
+                    textDecoration: 'none',
+                    color: '#52796B',
+                    background: 'rgba(82, 121, 107, 0.1)',
+                    fontWeight: 700,
+                  }}
+                  title="Baixar instalador oficial do Agente Windows (.exe)"
                 >
-                  FOCO
+                  ↓ AGENTE (.EXE)
                 </CamModeBtn>
+
+                {auth.user?.role === 'ADMIN_N2' && (
+                  <CamModeBtn
+                    type="button"
+                    onClick={() => setUpdateAllConfirm({ open: true, busy: false, resultMsg: '' })}
+                    style={{
+                      color: '#2D6A4F',
+                      background: 'rgba(45, 106, 79, 0.08)',
+                      fontWeight: 700,
+                    }}
+                    title="Atualizar agentes via OTA"
+                  >
+                    ↑ ATUALIZAR TODOS
+                  </CamModeBtn>
+                )}
+
+                <ControlDivider aria-hidden="true" />
+
                 <CamModeBtn
-                  $active={cameraMode === 'ORBIT'}
-                  onClick={() =>
-                    setCameraMode((prev) => (prev === 'ORBIT' ? 'ISO' : 'ORBIT'))
-                  }
-                  title="Giro orbital suave ao redor da maquete"
+                  type="button"
+                  onClick={() => setTopControlsCollapsed(true)}
+                  title="Recolher barra de controles"
+                  aria-expanded="true"
+                  style={{ color: '#52796B', padding: '6px 8px' }}
                 >
-                  360°
+                  ▲
                 </CamModeBtn>
               </>
             )}
-
-            {twinMode === '3D' &&
-              Object.values(RECEPTION_VARIANTS).map((v) => (
-                <CamModeBtn
-                  key={v.id}
-                  $active={roomVariantId === v.id}
-                  onClick={() => setRoomVariantId(v.id)}
-                  title={`${v.name} — ${v.tagline}`}
-                >
-                  {v.id}
-                </CamModeBtn>
-              ))}
-
-            <CamModeBtn
-              as="a"
-              href="/IpojucaRMM-Setup.exe"
-              download="IpojucaRMM-Setup.exe"
-              style={{
-                textDecoration: 'none',
-                color: '#52796B',
-                background: 'rgba(82, 121, 107, 0.1)',
-                fontWeight: 700,
-              }}
-              title="Baixar instalador do Agente Windows (.exe)"
-            >
-              ↓ AGENTE (.EXE)
-            </CamModeBtn>
-
-            {auth.user?.role === 'ADMIN_N2' && (
-              <CamModeBtn
-                onClick={handleUpdateAllAgents}
-                style={{
-                  color: '#2D6A4F',
-                  background: 'rgba(45, 106, 79, 0.08)',
-                  fontWeight: 700,
-                }}
-                title="Atualizar agentes via OTA"
-              >
-                ↑ ATUALIZAR TODOS
-              </CamModeBtn>
-            )}
-
-            <RoleSelect
-              value={selectedProfileIdx}
-              onChange={(e) => setSelectedProfileIdx(Number(e.target.value))}
-            >
-              {DEMO_PROFILES.map((p, idx) => (
-                <option key={p.email} value={idx}>
-                  {p.label}
-                </option>
-              ))}
-            </RoleSelect>
-          </RightControlPod>
+          </CenterControlShell>
         </TopCommandDeck>
 
         <MiddleWorkspace>
@@ -1272,6 +1591,82 @@ function DashboardApp() {
                 );
               })}
             </RadarCard>
+
+            <RadarCard>
+              {(() => {
+                const liveInactivityAlerts = machines
+                  .map((m) => ({ machine: m, info: getInactivityInfo(m, nowTimestamp) }))
+                  .filter(({ info }) => info.isInactive24h)
+                  .filter(
+                    ({ machine }) =>
+                      !alerts.some(
+                        (a) =>
+                          Number(a.machine_id) === Number(machine.id) &&
+                          a.metric_name === 'INACTIVITY_24H' &&
+                          a.status !== 'RESOLVED'
+                      )
+                  )
+                  .map(({ machine, info }) => ({
+                    id: `live-inact-${machine.id}`,
+                    machine_id: machine.id,
+                    hostname: machine.hostname,
+                    unit_name: machine.unit_name || activeUnit?.name || '',
+                    severity: 'WARNING',
+                    metric_name: 'INACTIVITY_24H',
+                    status: 'INATIVO >24H',
+                    message:
+                      info.mode === 'OFFLINE'
+                        ? `Estação desligada/sem comunicação há ${formatShortDuration(info.seconds)} (>24h).`
+                        : `Estação ligada sem interação há ${formatShortDuration(info.seconds)} (>24h).`,
+                  }));
+
+                const combinedAlerts = [...liveInactivityAlerts, ...alerts];
+                const activeCount = combinedAlerts.filter((a) => a.status !== 'RESOLVED').length;
+
+                return (
+                  <>
+                    <div className="card-tag">
+                      <span>ALERTAS RECENTES</span>
+                      <span>{activeCount} ATIVO(S)</span>
+                    </div>
+                    {combinedAlerts.length === 0 ? (
+                      <div style={{ fontSize: '0.69rem', color: '#737B75', padding: '4px 0' }}>
+                        Nenhum alerta crítico ou de inatividade (&gt;24h) no momento.
+                      </div>
+                    ) : (
+                      combinedAlerts.slice(0, 5).map((al) => (
+                        <AlertMiniRow
+                          key={al.id || al.incident_key}
+                          $severity={al.severity}
+                          onClick={() => {
+                            if (al.machine_id) {
+                              setSelectedMachineId(Number(al.machine_id));
+                              setCameraMode('FOCUS');
+                            }
+                          }}
+                          style={{ cursor: al.machine_id ? 'pointer' : 'default' }}
+                          title="Clique para focar esta estação"
+                        >
+                          <div className="a-top">
+                            <span>{fixTextEncoding(al.hostname || `PC #${al.machine_id}`)}</span>
+                            <span>
+                              {al.metric_name === 'INACTIVITY_24H' && al.status !== 'RESOLVED'
+                                ? 'INATIVO >24H'
+                                : al.status || al.severity}
+                            </span>
+                          </div>
+                          <div className="a-msg">{fixTextEncoding(al.message)}</div>
+                          <div className="a-meta">
+                            {fixTextEncoding(al.unit_name || '')}
+                            {al.external_ticket_id ? ` • #${al.external_ticket_id}` : ''}
+                          </div>
+                        </AlertMiniRow>
+                      ))
+                    )}
+                  </>
+                );
+              })()}
+            </RadarCard>
           </LeftRadarColumn>
 
           <DiagnosticDrawer
@@ -1279,7 +1674,7 @@ function DashboardApp() {
             units={units}
             chatMessages={chatMessages}
             taskCatalog={taskCatalog}
-            currentUser={auth.user || { name: 'Operador', role: 'ADMIN_N2' }}
+            currentUser={auth.user || { name: 'Operador', role: 'VIEWER' }}
             onDispatchTask={handleDispatchTask}
             onLoadPrinters={handleLoadPrinters}
             onRefreshTelemetryNow={handleRefreshTelemetryNow}
@@ -1331,7 +1726,7 @@ function DashboardApp() {
               >
                 <span>Nenhuma máquina cadastrada nesta unidade.</span>
                 <a
-                  href="/IpojucaRMM-Setup.exe"
+                  href="/api/agent/download"
                   download="IpojucaRMM-Setup.exe"
                   style={{
                     color: '#52796B',
@@ -1352,34 +1747,32 @@ function DashboardApp() {
               const ram = Math.min(100, Math.max(0, Number(m.ram_usage_pct || 0)));
               const dsk = Math.min(100, Math.max(0, Number(m.disk_usage_pct || 0)));
               const idleSec = Math.max(0, Math.floor(Number(m.idle_seconds || 0)));
-              const isLegacy = Boolean(m.agent_version) && !m.agent_version.startsWith('2.3');
+              const isLegacy = isAgentOutdated(m.agent_version, '2.3.0');
+              const inact = getInactivityInfo(m, nowTimestamp);
               const offSec = m.last_seen_at
                 ? Math.max(0, Math.floor((nowTimestamp - new Date(m.last_seen_at).getTime()) / 1000))
                 : 0;
 
-              const fmtShort = (s) => {
-                if (s < 60) return `${s}s`;
-                const mins = Math.floor(s / 60);
-                if (mins < 60) return `${mins}m`;
-                const hrs = Math.floor(mins / 60);
-                if (hrs < 24) return `${hrs}h ${mins % 60}m`;
-                return `${Math.floor(hrs / 24)}d ${hrs % 24}h`;
-              };
-
-              const activityLabel =
-                m.health_status === 'OFFLINE'
-                  ? `Desligado há ${fmtShort(offSec)}`
+              const activityLabel = inact.isInactive24h
+                ? `⚠ Inativo >24h (${formatShortDuration(inact.seconds)})`
+                : m.health_status === 'OFFLINE'
+                  ? `Desligado há ${formatShortDuration(offSec)}`
                   : isLegacy
                     ? `Ativo (${m.agent_version || '2.2.0'})`
                     : idleSec < 180
-                      ? `Em uso (${fmtShort(idleSec)})`
-                      : `Ocioso há ${fmtShort(idleSec)}`;
+                      ? `Em uso (${formatShortDuration(idleSec)})`
+                      : `Ocioso há ${formatShortDuration(idleSec)}`;
 
               return (
                 <NodeKeycap
                   key={m.id}
                   $selected={isSel}
                   $color={stColor}
+                  style={
+                    inact.isInactive24h && !isSel
+                      ? { borderColor: '#F59E0B', background: '#FFFDF5' }
+                      : undefined
+                  }
                   onClick={() => {
                     setSelectedMachineId(m.id);
                     setCameraMode('FOCUS');
@@ -1410,14 +1803,15 @@ function DashboardApp() {
                   <div
                     style={{
                       fontSize: '0.64rem',
-                      color:
-                        m.health_status === 'OFFLINE'
+                      color: inact.isInactive24h
+                        ? '#B91C1C'
+                        : m.health_status === 'OFFLINE'
                           ? '#718096'
                           : idleSec < 180
                             ? '#2D6A4F'
                             : '#D97706',
                       marginBottom: '5px',
-                      fontWeight: 600,
+                      fontWeight: inact.isInactive24h ? 700 : 600,
                     }}
                   >
                     {activityLabel}
@@ -1455,6 +1849,64 @@ function DashboardApp() {
         onUpdateSector={handleUpdateSector}
         onDeleteSector={handleDeleteSector}
       />
+
+      {updateAllConfirm.open && (
+        <ConfirmBackdrop
+          onClick={() =>
+            !updateAllConfirm.busy &&
+            setUpdateAllConfirm({ open: false, busy: false, resultMsg: '' })
+          }
+        >
+          <ConfirmCard onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+              Confirmar Atualização Global de Agentes (OTA)
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: '#4A524C', lineHeight: 1.45 }}>
+              Esta operação enviará ordem de atualização automática (verificada via SHA-256) para
+              todas as <strong>{totalSummary.total} estação(ões)</strong> cadastradas na rede de
+              saúde.
+            </p>
+            {updateAllConfirm.resultMsg && (
+              <div
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '6px',
+                  background: '#F0FDF4',
+                  border: '1px solid #BBF7D0',
+                  color: '#166534',
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                }}
+              >
+                {updateAllConfirm.resultMsg}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <CamModeBtn
+                type="button"
+                disabled={updateAllConfirm.busy}
+                onClick={() => setUpdateAllConfirm({ open: false, busy: false, resultMsg: '' })}
+              >
+                {updateAllConfirm.resultMsg ? 'Fechar' : 'Cancelar'}
+              </CamModeBtn>
+              {!updateAllConfirm.resultMsg && (
+                <CamModeBtn
+                  type="button"
+                  disabled={updateAllConfirm.busy}
+                  onClick={handleConfirmUpdateAllAgents}
+                  style={{
+                    background: '#2D6A4F',
+                    color: '#FFFFFF',
+                    borderColor: '#2D6A4F',
+                  }}
+                >
+                  {updateAllConfirm.busy ? 'Enviando...' : 'Confirmar Atualização Global'}
+                </CamModeBtn>
+              )}
+            </div>
+          </ConfirmCard>
+        </ConfirmBackdrop>
+      )}
     </ThemeProvider>
   );
 }

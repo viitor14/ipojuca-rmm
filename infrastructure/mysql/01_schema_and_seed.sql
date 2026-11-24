@@ -101,7 +101,8 @@ CREATE TABLE IF NOT EXISTS approved_printers (
   INDEX idx_approved_printers_unit (unit_id, is_active)
 ) ENGINE=InnoDB;
 
--- 3.1 Historico de mudancas de hardware (Ciclo #27)CREATE TABLE IF NOT EXISTS machine_inventory_changes (
+-- 3.1 Historico de mudancas de hardware (Ciclo #27)
+CREATE TABLE IF NOT EXISTS machine_inventory_changes (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   machine_id INT NOT NULL,
   field_name VARCHAR(32) NOT NULL,
@@ -110,6 +111,43 @@ CREATE TABLE IF NOT EXISTS approved_printers (
   changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_inv_changes_machine FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
   INDEX idx_inv_changes_machine_time (machine_id, changed_at)
+) ENGINE=InnoDB;
+
+-- 3.3 Impressoras descobertas na LAN pelos agentes (Ciclo #30)
+CREATE TABLE IF NOT EXISTS discovered_printers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  machine_id INT NOT NULL,
+  unit_id INT NULL DEFAULT NULL,
+  ip_address VARCHAR(45) NOT NULL,
+  name VARCHAR(64) NOT NULL,
+  model VARCHAR(80) DEFAULT NULL,
+  port SMALLINT UNSIGNED DEFAULT NULL,
+  source ENUM('NETWORK','INSTALLED') NOT NULL DEFAULT 'NETWORK',
+  last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_discovered_printers_machine FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_discovered_printer_machine_ip (machine_id, ip_address),
+  INDEX idx_discovered_printers_unit (unit_id, last_seen_at)
+) ENGINE=InnoDB;
+
+-- 3.4 Mensagens persistidas entre Central de TI e Super Agente (Ciclo #48)
+CREATE TABLE IF NOT EXISTS machine_messages (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  machine_id INT NOT NULL,
+  agent_uuid VARCHAR(64) NOT NULL,
+  direction ENUM('CLIENT_TO_SERVER', 'SERVER_TO_CLIENT') NOT NULL,
+  sender VARCHAR(100) NOT NULL,
+  message VARCHAR(500) NOT NULL,
+  delivered_to_agent TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_machine_messages_machine FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+  INDEX idx_machine_messages_machine_time (machine_id, created_at DESC),
+  INDEX idx_machine_messages_pending (agent_uuid, direction, delivered_to_agent)
+) ENGINE=InnoDB;
+
+-- 3.5 Controle de migrations aplicadas (evita re-execucao de migrations de layout)
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version VARCHAR(64) PRIMARY KEY,
+  applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- 4. Historico de Telemetria (Serie Temporal)
@@ -195,13 +233,23 @@ INSERT IGNORE INTO health_units (id, code, name, unit_type, address) VALUES
   (2, 'POLI-CEN', 'Policlínica Municipal de Ipojuca', 'POLICLINICA', 'Centro, Ipojuca - PE'),
   (3, 'CAPS-IPO', 'CAPS Porto de Galinhas / Ipojuca', 'CAPS', 'Porto de Galinhas, Ipojuca - PE');
 
-INSERT IGNORE INTO sectors (id, unit_id, code, name, bounds_x, bounds_z, width_3d, depth_3d) VALUES
-  (1, 1, 'REC', 'Recepção e Triagem', -4.5, -2.5, 9.0, 5.0),
-  (2, 1, 'CONS-01', 'Consultório Médico 01', 4.5, -2.5, 9.0, 5.0),
-  (3, 1, 'FARM', 'Farmácia e Vacinação', -4.5, 2.5, 9.0, 5.0),
-  (4, 1, 'ADM', 'Coordenação / Enfermagem', 4.5, 2.5, 9.0, 5.0),
-  (5, 2, 'REC-POLI', 'Recepção Central Policlínica', -4.5, -2.5, 9.0, 5.0),
-  (6, 2, 'LAB-POLI', 'Laboratório e Exames', 4.5, -2.5, 9.0, 5.0),
-  (7, 2, 'REG-POLI', 'Regulação Médica', 0.0, 2.5, 18.0, 5.0),
-  (8, 3, 'ACOLH', 'Acolhimento e Prontuário CAPS', -4.5, 0.0, 9.0, 10.0),
-  (9, 3, 'PSI-01', 'Consultório Multiprofissional', 4.5, 0.0, 9.0, 10.0);
+INSERT IGNORE INTO sectors (id, unit_id, code, name, room_theme, bounds_x, bounds_z, width_3d, depth_3d) VALUES
+  (1, 1, 'REC', 'Recepção e Triagem', 'REC', -4.5, -5.5, 9.0, 5.0),
+  (2, 1, 'CONS-01', 'Consultório Médico 01', 'CONS', 4.5, -5.5, 9.0, 5.0),
+  (3, 1, 'FARM', 'Farmácia e Vacinação', 'FARM', -4.5, 1.5, 9.0, 5.0),
+  (4, 1, 'ADM', 'Coordenação / Enfermagem', 'ADM', 4.5, 1.5, 9.0, 5.0),
+  (5, 2, 'REC-POLI', 'Recepção Central Policlínica', 'REC', -4.5, -5.5, 9.0, 5.0),
+  (6, 2, 'LAB-POLI', 'Laboratório e Exames', 'ADM', 4.5, -5.5, 9.0, 5.0),
+  (7, 2, 'REG-POLI', 'Regulação Médica', 'ADM', 0.0, 1.5, 18.0, 5.0),
+  (8, 3, 'ACOLH', 'Acolhimento e Prontuário CAPS', 'TI', -4.5, 0.0, 9.0, 10.0),
+  (9, 3, 'PSI-01', 'Consultório Multiprofissional', 'CONS', 4.5, 0.0, 9.0, 10.0);
+
+-- Marca migrations ja incorporadas no schema inicial para bancos novos
+INSERT IGNORE INTO schema_migrations (version) VALUES
+  ('02_hardware_identity_upsert.sql'),
+  ('03_approved_printers.sql'),
+  ('04_discovered_printers.sql'),
+  ('05_sector_layout_contiguous.sql'),
+  ('06_sector_layout_compact.sql'),
+  ('07_sector_layout_corridor.sql'),
+  ('08_messages_and_migrations_control.sql');

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import styled from "styled-components";
-import { STATUS_LABELS, RISK_LABELS, fixTextEncoding, theme } from "../styles/theme";
+import { STATUS_LABELS, RISK_LABELS, fixTextEncoding, isAgentOutdated, theme } from "../styles/theme";
 
 const BladeContainer = styled.aside`
   width: ${({ $collapsed }) => ($collapsed ? "290px" : "440px")};
@@ -565,31 +565,14 @@ function parseDiagnosticSummary(rawText) {
   });
 }
 
-function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
+function TelemetryOscilloscope({ telemetryHistory = [] }) {
+  const hasRealSeries = Array.isArray(telemetryHistory) && telemetryHistory.length >= 2;
+
   const { cpuPath, ramPath } = useMemo(() => {
-    const baseCpu = Number(machine?.cpu_usage_pct || 18);
-    const baseRam = Number(machine?.ram_usage_pct || 42);
-
-    const samples =
-      telemetryHistory && telemetryHistory.length >= 2
-        ? telemetryHistory.slice(0, 12).reverse()
-        : Array.from({ length: 12 }).map((_, i) => ({
-            cpu_usage_pct: Math.max(
-              2,
-              Math.min(
-                100,
-                baseCpu + Math.sin(i * 0.9 + (machine?.id || 1)) * 4
-              )
-            ),
-            ram_usage_pct: Math.max(
-              5,
-              Math.min(
-                100,
-                baseRam + Math.cos(i * 0.7 + (machine?.id || 1)) * 2
-              )
-            ),
-          }));
-
+    if (!hasRealSeries) {
+      return { cpuPath: "", ramPath: "" };
+    }
+    const samples = telemetryHistory.slice(0, 12).reverse();
     const width = 360;
     const height = 44;
     const step = width / Math.max(1, samples.length - 1);
@@ -608,12 +591,12 @@ function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
       cpuPath: toPath("cpu_usage_pct"),
       ramPath: toPath("ram_usage_pct"),
     };
-  }, [machine, telemetryHistory]);
+  }, [hasRealSeries, telemetryHistory]);
 
   return (
     <OscilloscopeCard>
       <div className="osc-head">
-        <span>Histórico de Uso</span>
+        <span>Histórico de Uso ({telemetryHistory.length} leituras)</span>
         <div className="osc-legend">
           <span>
             <i style={{ background: "#2D6A4F" }} /> CPU
@@ -623,44 +606,35 @@ function TelemetryOscilloscope({ machine, telemetryHistory = [] }) {
           </span>
         </div>
       </div>
-      <svg
-        width="100%"
-        height="44"
-        viewBox="0 0 360 44"
-        preserveAspectRatio="none"
-      >
-        <line
-          x1="0"
-          y1="11"
-          x2="360"
-          y2="11"
-          stroke="#E4E8E3"
-          strokeDasharray="3 3"
-        />
-        <line
-          x1="0"
-          y1="22"
-          x2="360"
-          y2="22"
-          stroke="#E4E8E3"
-          strokeDasharray="3 3"
-        />
-        <line
-          x1="0"
-          y1="33"
-          x2="360"
-          y2="33"
-          stroke="#E4E8E3"
-          strokeDasharray="3 3"
-        />
-        <path
-          d={ramPath}
-          fill="none"
-          stroke="#52796B"
-          strokeWidth="1.8"
-        />
-        <path d={cpuPath} fill="none" stroke="#2D6A4F" strokeWidth="2" />
-      </svg>
+      {!hasRealSeries ? (
+        <div
+          style={{
+            height: "44px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "0.7rem",
+            color: "#737B75",
+            border: "1px dashed #E4E8E3",
+            borderRadius: "4px",
+          }}
+        >
+          Aguardando ao menos 2 leituras reais para traçar a série temporal.
+        </div>
+      ) : (
+        <svg
+          width="100%"
+          height="44"
+          viewBox="0 0 360 44"
+          preserveAspectRatio="none"
+        >
+          <line x1="0" y1="11" x2="360" y2="11" stroke="#E4E8E3" strokeDasharray="3 3" />
+          <line x1="0" y1="22" x2="360" y2="22" stroke="#E4E8E3" strokeDasharray="3 3" />
+          <line x1="0" y1="33" x2="360" y2="33" stroke="#E4E8E3" strokeDasharray="3 3" />
+          <path d={ramPath} fill="none" stroke="#52796B" strokeWidth="1.8" />
+          <path d={cpuPath} fill="none" stroke="#2D6A4F" strokeWidth="2" />
+        </svg>
+      )}
     </OscilloscopeCard>
   );
 }
@@ -692,6 +666,7 @@ export function DiagnosticDrawer({
   const [nowTimestamp, setNowTimestamp] = useState(Date.now());
   const [printerPicker, setPrinterPicker] = useState(null);
   const [rebootConfirm, setRebootConfirm] = useState({ open: false, task: null });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNowTimestamp(Date.now()), 1000);
@@ -767,7 +742,7 @@ export function DiagnosticDrawer({
   const displayTemp =
     Number(machine.temperature_c) > 0
       ? Number(machine.temperature_c)
-      : Number(latestSample?.temperature_c || 45);
+      : Number(latestSample?.temperature_c || 0);
 
   const statusColor =
     theme.colors.status[machine.health_status] || theme.colors.status.NORMAL;
@@ -786,10 +761,23 @@ export function DiagnosticDrawer({
     : 0;
 
   const liveIdleSeconds = !isOffline && baseIdle > 0 ? baseIdle + Math.min(secondsSinceSeen, 3) : baseIdle;
-  const isLegacyAgent = Boolean(machine.agent_version) && !machine.agent_version.startsWith("2.3");
+  const isLegacyAgent = isAgentOutdated(machine.agent_version, "2.3.0");
 
   const activityState = (() => {
+    const INACTIVITY_24H = 86400;
     if (isOffline) {
+      if (offlineSeconds >= INACTIVITY_24H) {
+        return {
+          badge: "⚠ INATIVO >24H",
+          color: "#B91C1C",
+          bg: "#FEF2F2",
+          border: "#FECACA",
+          headline: `Alerta: desligado há ${formatDurationPt(offlineSeconds)} (>24h)`,
+          subline: machine.last_seen_at
+            ? `Sem comunicação desde ${new Date(machine.last_seen_at).toLocaleString("pt-BR")}`
+            : "Sem comunicação há mais de 24 horas",
+        };
+      }
       return {
         badge: "DESLIGADO",
         color: "#718096",
@@ -799,6 +787,16 @@ export function DiagnosticDrawer({
         subline: machine.last_seen_at
           ? `Último contato: ${new Date(machine.last_seen_at).toLocaleString("pt-BR")}`
           : "Sem registro recente",
+      };
+    }
+    if (liveIdleSeconds >= INACTIVITY_24H) {
+      return {
+        badge: "⚠ INATIVO >24H",
+        color: "#B91C1C",
+        bg: "#FEF2F2",
+        border: "#FECACA",
+        headline: `Alerta: inativo há ${formatDurationPt(liveIdleSeconds)} (>24h)`,
+        subline: `Equipamento ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} sem interação de teclado/mouse.`,
       };
     }
     if (isLegacyAgent) {
@@ -984,19 +982,23 @@ export function DiagnosticDrawer({
         taskCode: task.code,
         parameters: params,
       });
+      const returnedStatus = res?.task?.status || "DISPATCHED";
+      const isQueued = returnedStatus === "DISPATCHED" || returnedStatus === "PENDING";
       setFeedback({
-        type: "ok",
-        text: `Ordem enviada para ${machine.hostname}. Aguardando retorno.`,
+        type: isQueued ? "busy" : returnedStatus === "FAILED" ? "err" : "ok",
+        text: isQueued
+          ? `Ordem enfileirada para ${machine.hostname} (aguardando execução real do agente).`
+          : `Retorno recebido de ${machine.hostname}: ${fixTextEncoding(res?.task?.output_summary || returnedStatus)}`,
       });
       if (res?.task) {
         setActiveReport({
           taskId: res.task.task_id,
           taskCode: res.task.task_code,
           title: cleanTitle,
-          status: res.task.status || "RUNNING",
+          status: returnedStatus,
           summary:
             fixTextEncoding(res.task.output_summary) ||
-            "Executando no computador cliente...",
+            "Ordem na fila do Agente Windows. O resultado real aparecerá assim que a estação responder (TTL 120s).",
           timestamp: new Date(res.task.issued_at || Date.now()).toLocaleTimeString("pt-BR"),
           taskRef: task,
         });
@@ -1133,7 +1135,7 @@ export function DiagnosticDrawer({
             {onDeleteMachine && currentUser?.role !== "VIEWER" && (
               <HeaderActionBtn
                 $variant="danger"
-                onClick={() => onDeleteMachine(machine.id)}
+                onClick={() => setDeleteConfirmOpen(true)}
               >
                 Remover PC
               </HeaderActionBtn>
@@ -1176,10 +1178,17 @@ export function DiagnosticDrawer({
             <MetricCard>
               <div className="m-head">
                 <span>TEMP</span>
-                <span className="m-val">{displayTemp.toFixed(0)}°C</span>
+                <span className="m-val">
+                  {displayTemp > 0 ? `${displayTemp.toFixed(0)}°C` : "N/D"}
+                </span>
               </div>
               <div className="m-track">
-                <i style={{ width: `${Math.min(100, (displayTemp / 90) * 100)}%`, background: '#D97706' }} />
+                <i
+                  style={{
+                    width: `${displayTemp > 0 ? Math.min(100, (displayTemp / 90) * 100) : 0}%`,
+                    background: "#D97706",
+                  }}
+                />
               </div>
             </MetricCard>
           </MetricsLinearGrid>
@@ -1269,21 +1278,17 @@ export function DiagnosticDrawer({
 
             {!collapsed && (
               <>
-                <TelemetryOscilloscope
-                  machine={{
-                    ...machine,
-                    cpu_usage_pct: displayCpu,
-                    ram_usage_pct: displayRam,
-                  }}
-                  telemetryHistory={activeTelemetryHistory}
-                />
+                <TelemetryOscilloscope telemetryHistory={activeTelemetryHistory} />
 
                 <SpecPlate>
                   <div className="spec-grid-2">
                     <div className="spec-cell">
                       <span>IPv4 / MAC</span>
                       <strong className="mono">
-                        {machine.ip_address}
+                        {machine.ip_address || "0.0.0.0"}
+                      </strong>
+                      <strong className="mono" style={{ fontSize: "0.66rem", color: "#737B75" }}>
+                        {machine.mac_address || "MAC N/D"}
                       </strong>
                     </div>
                     <div className="spec-cell">
@@ -1300,11 +1305,23 @@ export function DiagnosticDrawer({
 
                   <div className="spec-divider" />
 
-                  <div className="spec-cell">
-                    <span>Hardware</span>
-                    <strong>
-                      {fixTextEncoding(machine.manufacturer)} {fixTextEncoding(machine.model)}
-                    </strong>
+                  <div className="spec-grid-2">
+                    <div className="spec-cell">
+                      <span>Hardware</span>
+                      <strong>
+                        {fixTextEncoding(machine.manufacturer || "N/D")}{" "}
+                        {fixTextEncoding(machine.model || "")}
+                      </strong>
+                    </div>
+                    <div className="spec-cell">
+                      <span>Serial / Confiança</span>
+                      <strong className="mono">
+                        {machine.serial_number || "Não informado"}{" "}
+                        <span style={{ color: "#52796B", fontSize: "0.66rem" }}>
+                          [{machine.identity_confidence || "LOW"}]
+                        </span>
+                      </strong>
+                    </div>
                   </div>
 
                   <div className="spec-divider" />
@@ -1322,7 +1339,8 @@ export function DiagnosticDrawer({
                     <div className="spec-cell">
                       <span>Memória / Disco</span>
                       <strong className="mono">
-                        {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(0)} GB • {machine.disk_total_gb} GB SSD
+                        {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(0)} GB •{" "}
+                        {machine.disk_total_gb || 0} GB {machine.disk_type || "N/D"}
                       </strong>
                     </div>
                     <div className="spec-cell">
@@ -1396,42 +1414,48 @@ export function DiagnosticDrawer({
                   )}
                 </div>
 
-                <form
-                  onSubmit={handleSendChatMessage}
-                  style={{ display: "flex", gap: "6px" }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Digitar aviso..."
-                    value={chatText}
-                    onChange={(e) => setChatText(e.target.value)}
-                    style={{
-                      flex: 1,
-                      padding: "6px 10px",
-                      borderRadius: "6px",
-                      background: "#FFFFFF",
-                      border: "1px solid #E4E8E3",
-                      fontSize: "0.76rem",
-                      outline: "none",
-                    }}
-                  />
-                  <button
-                    type="submit"
-                    disabled={sendingChat || !chatText.trim()}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      background: "#52796B",
-                      color: "#FFFFFF",
-                      border: "none",
-                      fontWeight: 600,
-                      fontSize: "0.74rem",
-                      cursor: "pointer",
-                    }}
+                {currentUser?.role !== "VIEWER" ? (
+                  <form
+                    onSubmit={handleSendChatMessage}
+                    style={{ display: "flex", gap: "6px" }}
                   >
-                    Enviar
-                  </button>
-                </form>
+                    <input
+                      type="text"
+                      placeholder="Digitar aviso..."
+                      value={chatText}
+                      onChange={(e) => setChatText(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        background: "#FFFFFF",
+                        border: "1px solid #E4E8E3",
+                        fontSize: "0.76rem",
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={sendingChat || !chatText.trim()}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "6px",
+                        background: "#52796B",
+                        color: "#FFFFFF",
+                        border: "none",
+                        fontWeight: 600,
+                        fontSize: "0.74rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Enviar
+                    </button>
+                  </form>
+                ) : (
+                  <div style={{ fontSize: "0.7rem", color: "#737B75" }}>
+                    Modo somente leitura ({currentUser?.role}): apenas Suporte N1 ou Admin N2 pode enviar avisos.
+                  </div>
+                )}
               </div>
             )}
 
@@ -1743,22 +1767,28 @@ export function DiagnosticDrawer({
                   fontSize: "0.7rem",
                   fontWeight: 700,
                   background:
-                    activeReport.status === "FAILED"
+                    activeReport.status === "FAILED" || activeReport.status === "EXPIRED"
                       ? "#FEF2F2"
-                      : activeReport.status === "RUNNING"
-                        ? "#F0FDF4"
+                      : activeReport.status === "DISPATCHED" || activeReport.status === "PENDING"
+                        ? "#FFFBEB"
                         : "#F0FDF4",
                   color:
-                    activeReport.status === "FAILED"
+                    activeReport.status === "FAILED" || activeReport.status === "EXPIRED"
                       ? "#DC2626"
-                      : "#2D6A4F",
+                      : activeReport.status === "DISPATCHED" || activeReport.status === "PENDING"
+                        ? "#92400E"
+                        : "#2D6A4F",
                 }}
               >
                 {activeReport.status === "RUNNING"
                   ? "Em execução..."
-                  : activeReport.status === "FAILED"
-                    ? "Falha"
-                    : "Concluído"}
+                  : activeReport.status === "DISPATCHED" || activeReport.status === "PENDING"
+                    ? "Na fila (aguardando agente)"
+                    : activeReport.status === "EXPIRED"
+                      ? "Expirado"
+                      : activeReport.status === "FAILED"
+                        ? "Falha"
+                        : "Concluído"}
               </span>
             </div>
 
@@ -1793,6 +1823,74 @@ export function DiagnosticDrawer({
                 }}
               >
                 Fechar
+              </button>
+            </div>
+          </DiagnosticModalCard>
+        </DiagnosticModalBackdrop>
+      )}
+
+      {deleteConfirmOpen && (
+        <DiagnosticModalBackdrop onClick={() => setDeleteConfirmOpen(false)}>
+          <DiagnosticModalCard onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>
+                Confirmar Remoção de Equipamento
+              </h3>
+              <div style={{ fontSize: "0.75rem", color: "#737B75" }}>
+                Estação: {fixTextEncoding(machine.hostname)} ({machine.ip_address})
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "#FEF2F2",
+                border: "1px solid #FECACA",
+                borderRadius: "6px",
+                padding: "10px 12px",
+                fontSize: "0.78rem",
+                color: "#991B1B",
+                lineHeight: 1.4,
+              }}
+            >
+              Esta ação remove permanentemente o cadastro, histórico de telemetria e mensagens
+              desta estação do painel. A operação será registrada na trilha de auditoria.
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmOpen(false)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  background: "#F8FAF8",
+                  color: "#242925",
+                  border: "1px solid #E4E8E3",
+                  fontWeight: 600,
+                  fontSize: "0.76rem",
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setDeleteConfirmOpen(false);
+                  if (onDeleteMachine) await onDeleteMachine(machine.id);
+                }}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  background: "#DC2626",
+                  color: "#FFFFFF",
+                  border: "none",
+                  fontWeight: 600,
+                  fontSize: "0.76rem",
+                  cursor: "pointer",
+                }}
+              >
+                Confirmar remoção
               </button>
             </div>
           </DiagnosticModalCard>

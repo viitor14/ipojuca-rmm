@@ -136,34 +136,42 @@ class RmmRepository {
     this.inventoryChanges = [];
     this.discoveredPrinters = [];
     this.approvedPrinters = [];
+    this.machineMessages = [];
     this.lastBroadcastedIdleByMachine = new Map();
+    this.lastPresenceWriteByMachine = new Map();
 
-    this.users = [
-      {
+    const seedUsers = [];
+    if (env.seedPasswords?.admin) {
+      seedUsers.push({
         id: 1,
         name: 'Vitor França (Admin N2)',
         email: 'admin@ipojuca.pe.gov.br',
-        password_hash: hashPassword('Admin@Rmm2026'),
+        password_hash: hashPassword(env.seedPasswords.admin),
         role: 'ADMIN_N2',
         is_active: 1,
-      },
-      {
+      });
+    }
+    if (env.seedPasswords?.tech) {
+      seedUsers.push({
         id: 2,
         name: 'Carlos Mendes (Suporte N1)',
         email: 'suporte@ipojuca.pe.gov.br',
-        password_hash: hashPassword('Suporte@Rmm2026'),
+        password_hash: hashPassword(env.seedPasswords.tech),
         role: 'TECH_N1',
         is_active: 1,
-      },
-      {
+      });
+    }
+    if (env.seedPasswords?.viewer) {
+      seedUsers.push({
         id: 3,
         name: 'Dra. Helena Costa (Gestão Saúde)',
         email: 'gestao@ipojuca.pe.gov.br',
-        password_hash: hashPassword('Gestao@Rmm2026'),
+        password_hash: hashPassword(env.seedPasswords.viewer),
         role: 'VIEWER',
         is_active: 1,
-      },
-    ];
+      });
+    }
+    this.users = seedUsers;
   }
 
   async initialize() {
@@ -274,6 +282,23 @@ class RmmRepository {
         CONSTRAINT fk_discovered_printers_machine FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
         UNIQUE KEY uk_discovered_printer_machine_ip (machine_id, ip_address),
         INDEX idx_discovered_printers_unit (unit_id, last_seen_at)
+      ) ENGINE=InnoDB`,
+      `CREATE TABLE IF NOT EXISTS machine_messages (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        machine_id INT NOT NULL,
+        agent_uuid VARCHAR(64) NOT NULL,
+        direction ENUM('CLIENT_TO_SERVER', 'SERVER_TO_CLIENT') NOT NULL,
+        sender VARCHAR(100) NOT NULL,
+        message VARCHAR(500) NOT NULL,
+        delivered_to_agent TINYINT(1) NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_machine_messages_machine FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+        INDEX idx_machine_messages_machine_time (machine_id, created_at DESC),
+        INDEX idx_machine_messages_pending (agent_uuid, direction, delivered_to_agent)
+      ) ENGINE=InnoDB`,
+      `CREATE TABLE IF NOT EXISTS schema_migrations (
+        version VARCHAR(64) PRIMARY KEY,
+        applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB`,
     ];
     for (const ddl of identityMigrations) {
@@ -468,22 +493,7 @@ class RmmRepository {
            health_status, pos_x, pos_y, pos_z, last_seen_at,
            smbios_uuid, cpu_cores, cpu_threads, hardware_key, identity_confidence, inventory_collected_at)
          VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '1.0.0', 'NORMAL', ?, 0.65, ?, NOW(),
-                 ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           agent_uuid = VALUES(agent_uuid),
-           agent_token_hash = VALUES(agent_token_hash),
-           hostname = VALUES(hostname),
-           manufacturer = VALUES(manufacturer),
-           model = VALUES(model),
-           serial_number = VALUES(serial_number),
-           mac_address = VALUES(mac_address),
-           ip_address = VALUES(ip_address),
-           cpu_model = VALUES(cpu_model),
-           ram_total_mb = VALUES(ram_total_mb),
-           disk_type = VALUES(disk_type),
-           disk_total_gb = VALUES(disk_total_gb),
-           os_version = VALUES(os_version),
-           last_seen_at = NOW()`,
+                 ?, ?, ?, ?, ?, ?)`,
         [
           agentUuid,
           tokenHash,
@@ -671,16 +681,17 @@ class RmmRepository {
   }
 
   async listInventoryChanges(machineId, limit = 50) {
+    const safeLimit = Math.min(200, Math.max(1, Number(limit) || 50));
     if (this.mode === 'mysql') {
       const [rows] = await this.pool.query(
-        `SELECT * FROM machine_inventory_changes WHERE machine_id = ? ORDER BY changed_at DESC, id DESC LIMIT ${Number(limit) || 50}`,
-        [Number(machineId)]
+        'SELECT * FROM machine_inventory_changes WHERE machine_id = ? ORDER BY changed_at DESC, id DESC LIMIT ?',
+        [Number(machineId), safeLimit]
       );
       return rows;
     }
     return this.inventoryChanges
       .filter((c) => c.machine_id === Number(machineId))
-      .slice(-limit)
+      .slice(-safeLimit)
       .reverse();
   }
 
@@ -799,6 +810,17 @@ class RmmRepository {
       this.users.find((u) => u.email.toLowerCase() === normalized && u.is_active === 1) ||
       null
     );
+  }
+
+  async updateUserPasswordHash(userId, newHash) {
+    const id = Number(userId);
+    if (!id || !newHash) return;
+    if (this.mode === 'mysql') {
+      await this.pool.execute('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, id]);
+      return;
+    }
+    const user = this.users.find((u) => u.id === id);
+    if (user) user.password_hash = newHash;
   }
 
   async findMachineByAgentUuid(agentUuid) {
@@ -1158,17 +1180,99 @@ class RmmRepository {
     const nowIso = new Date().toISOString();
     if (this.mode === 'mysql') {
       await this.pool.execute(
-        `UPDATE alerts SET status = 'RESOLVED', resolved_at = NOW() WHERE machine_id = ? AND status IN ('OPEN', 'ACKNOWLEDGED')`,
+        `UPDATE alerts SET status = 'RESOLVED', resolved_at = NOW()
+          WHERE machine_id = ?
+            AND metric_name <> 'INACTIVITY_24H'
+            AND status IN ('OPEN', 'ACKNOWLEDGED')`,
         [machineId]
       );
       return;
     }
     for (const a of this.alerts) {
-      if (a.machine_id === Number(machineId) && a.status !== 'RESOLVED') {
+      if (
+        a.machine_id === Number(machineId) &&
+        a.metric_name !== 'INACTIVITY_24H' &&
+        a.status !== 'RESOLVED'
+      ) {
         a.status = 'RESOLVED';
         a.resolved_at = nowIso;
       }
     }
+  }
+
+  async resolveMachineAlertByMetric(machineId, metricName) {
+    const nowIso = new Date().toISOString();
+    if (this.mode === 'mysql') {
+      await this.pool.execute(
+        `UPDATE alerts SET status = 'RESOLVED', resolved_at = NOW()
+          WHERE machine_id = ? AND metric_name = ? AND status IN ('OPEN', 'ACKNOWLEDGED')`,
+        [Number(machineId), String(metricName)]
+      );
+      return;
+    }
+    for (const a of this.alerts) {
+      if (
+        a.machine_id === Number(machineId) &&
+        a.metric_name === String(metricName) &&
+        a.status !== 'RESOLVED'
+      ) {
+        a.status = 'RESOLVED';
+        a.resolved_at = nowIso;
+      }
+    }
+  }
+
+  async evaluateMachineInactivityAlert(
+    machine,
+    thresholdSeconds = env.inactivityAlertSeconds
+  ) {
+    if (!machine || !machine.id) return { alert: null, isNew: false };
+    const limitSec = Math.max(60, Number(thresholdSeconds || 86400));
+    const isOffline = machine.health_status === 'OFFLINE';
+    const lastSeenMs = machine.last_seen_at ? new Date(machine.last_seen_at).getTime() : 0;
+    const offlineSec =
+      lastSeenMs > 0 ? Math.max(0, Math.floor((Date.now() - lastSeenMs) / 1000)) : 0;
+    const idleSec = Math.max(0, Math.floor(Number(machine.idle_seconds || 0)));
+
+    const inactiveOffline = isOffline && offlineSec >= limitSec;
+    const inactiveIdle = !isOffline && idleSec >= limitSec;
+
+    if (!inactiveOffline && !inactiveIdle) {
+      await this.resolveMachineAlertByMetric(machine.id, 'INACTIVITY_24H');
+      return { alert: null, isNew: false, resolved: true };
+    }
+
+    const totalSec = inactiveOffline ? offlineSec : idleSec;
+    const totalHours = Math.floor(totalSec / 3600);
+    const days = Math.floor(totalHours / 24);
+    const remHours = totalHours % 24;
+    const durationText =
+      days > 0 ? (remHours > 0 ? `${days}d ${remHours}h` : `${days}d`) : `${totalHours}h`;
+
+    const hostname = machine.hostname || `PC #${machine.id}`;
+    const message = inactiveOffline
+      ? `Estação ${hostname} inativa (desligada/sem comunicação) há ${durationText} (limite: 24h).`
+      : `Estação ${hostname} inativa (sem interação de teclado/mouse) há ${durationText} (limite: 24h).`;
+
+    const { alert, isNew } = await this.findOrCreateActiveAlert({
+      machineId: machine.id,
+      severity: 'WARNING',
+      metricName: 'INACTIVITY_24H',
+      message,
+    });
+    return { alert, isNew, machine };
+  }
+
+  async checkInactiveMachinesAndAlert(thresholdSeconds = env.inactivityAlertSeconds) {
+    const allMachines = await this.listMachines();
+    const newlyTriggered = [];
+    for (const m of allMachines) {
+      const outcome = await this.evaluateMachineInactivityAlert(m, thresholdSeconds);
+      if (outcome.isNew && outcome.alert) {
+        newlyTriggered.push({ alert: outcome.alert, machine: m });
+      }
+    }
+    return newlyTriggered;
   }
 
   async getMachineDiagnostics(machineId) {
@@ -1248,6 +1352,150 @@ class RmmRepository {
 
     this.remoteTasks.unshift(record);
     return record;
+  }
+
+  async findRemoteTaskById(taskId) {
+    if (!taskId) return null;
+    if (this.mode === 'mysql') {
+      const [rows] = await this.pool.execute(
+        'SELECT * FROM remote_tasks WHERE task_id = ? LIMIT 1',
+        [String(taskId)]
+      );
+      return rows[0] || null;
+    }
+    return this.remoteTasks.find((t) => t.task_id === String(taskId)) || null;
+  }
+
+  async expireStaleRemoteTasks() {
+    const nowMs = Date.now();
+    const expired = [];
+
+    if (this.mode === 'mysql') {
+      const [rows] = await this.pool.execute(
+        `SELECT task_id FROM remote_tasks
+          WHERE status IN ('PENDING', 'DISPATCHED') AND expires_at < NOW()`
+      );
+      for (const row of rows) {
+        const updated = await this.completeRemoteTask({
+          taskId: row.task_id,
+          status: 'EXPIRED',
+          exitCode: 408,
+          outputSummary: 'Tarefa expirada sem confirmação do Agente Windows dentro do TTL.',
+        });
+        if (updated) expired.push(updated);
+      }
+      return expired;
+    }
+
+    for (const t of this.remoteTasks) {
+      if (
+        (t.status === 'PENDING' || t.status === 'DISPATCHED') &&
+        t.expires_at &&
+        new Date(t.expires_at).getTime() < nowMs
+      ) {
+        t.status = 'EXPIRED';
+        t.exit_code = 408;
+        t.output_summary = 'Tarefa expirada sem confirmação do Agente Windows dentro do TTL.';
+        t.completed_at = new Date().toISOString();
+        expired.push(t);
+      }
+    }
+    return expired;
+  }
+
+  async createMachineMessage({
+    machineId,
+    agentUuid,
+    direction,
+    sender,
+    message,
+    deliveredToAgent = false,
+  }) {
+    const cleanDir = direction === 'SERVER_TO_CLIENT' ? 'SERVER_TO_CLIENT' : 'CLIENT_TO_SERVER';
+    const cleanSender = String(sender || 'Sistema').trim().slice(0, 100);
+    const cleanMessage = String(message || '').trim().slice(0, 500);
+    const deliveredFlag = deliveredToAgent ? 1 : 0;
+
+    if (this.mode === 'mysql') {
+      const [result] = await this.pool.execute(
+        `INSERT INTO machine_messages
+          (machine_id, agent_uuid, direction, sender, message, delivered_to_agent)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [Number(machineId), String(agentUuid), cleanDir, cleanSender, cleanMessage, deliveredFlag]
+      );
+      const [rows] = await this.pool.execute(
+        'SELECT * FROM machine_messages WHERE id = ? LIMIT 1',
+        [result.insertId]
+      );
+      return rows[0];
+    }
+
+    const entry = {
+      id: this.machineMessages.length + 1,
+      machine_id: Number(machineId),
+      agent_uuid: String(agentUuid),
+      direction: cleanDir,
+      sender: cleanSender,
+      message: cleanMessage,
+      delivered_to_agent: deliveredFlag,
+      created_at: new Date().toISOString(),
+    };
+    this.machineMessages.push(entry);
+    if (this.machineMessages.length > 2000) {
+      this.machineMessages.shift();
+    }
+    return entry;
+  }
+
+  async listMachineMessages(machineId, limit = 100) {
+    const safeLimit = Math.min(200, Math.max(1, Number(limit) || 100));
+    if (this.mode === 'mysql') {
+      const [rows] = await this.pool.query(
+        `SELECT * FROM (
+           SELECT * FROM machine_messages
+            WHERE machine_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+         ) sub ORDER BY created_at ASC, id ASC`,
+        [Number(machineId), safeLimit]
+      );
+      return rows;
+    }
+    return this.machineMessages
+      .filter((m) => m.machine_id === Number(machineId))
+      .slice(-safeLimit);
+  }
+
+  async consumePendingAgentMessages(agentUuid) {
+    const uuid = String(agentUuid || '').trim();
+    if (!uuid) return [];
+    if (this.mode === 'mysql') {
+      const [rows] = await this.pool.execute(
+        `SELECT * FROM machine_messages
+          WHERE agent_uuid = ? AND direction = 'SERVER_TO_CLIENT' AND delivered_to_agent = 0
+          ORDER BY created_at ASC, id ASC`,
+        [uuid]
+      );
+      if (rows.length > 0) {
+        const ids = rows.map((r) => r.id);
+        await this.pool.query(
+          `UPDATE machine_messages SET delivered_to_agent = 1 WHERE id IN (${ids.map(() => '?').join(',')})`,
+          ids
+        );
+      }
+      return rows;
+    }
+
+    const pending = this.machineMessages.filter(
+      (m) =>
+        m.agent_uuid === uuid &&
+        m.direction === 'SERVER_TO_CLIENT' &&
+        !m.delivered_to_agent
+    );
+    for (const m of pending) {
+      m.delivered_to_agent = 1;
+    }
+    return pending;
   }
 
   async completeRemoteTask({ taskId, status, exitCode, outputSummary }) {
@@ -1385,17 +1633,25 @@ class RmmRepository {
         (parsedIdle >= 180 && prevIdle < 180) ||
         (parsedIdle >= 1800 && prevIdle < 1800));
 
+    const nowMs = Date.now();
+    const lastWriteMs = this.lastPresenceWriteByMachine.get(machine.id) || 0;
+    const needsDbWrite =
+      wasOffline || versionChanged || idleChangedSignificantly || nowMs - lastWriteMs >= 15000;
+
     if (idleChangedSignificantly) {
       this.lastBroadcastedIdleByMachine.set(machine.id, parsedIdle);
     }
 
     if (this.mode === 'mysql') {
-      const nextStatus = wasOffline ? 'NORMAL' : machine.health_status;
-      const resolvedVer = versionChanged ? nextVersion : machine.agent_version;
-      await this.pool.execute(
-        `UPDATE machines SET health_status = ?, agent_version = ?, idle_seconds = ?, last_seen_at = NOW() WHERE id = ?`,
-        [nextStatus, resolvedVer, parsedIdle, machine.id]
-      );
+      if (needsDbWrite) {
+        const nextStatus = wasOffline ? 'NORMAL' : machine.health_status;
+        const resolvedVer = versionChanged ? nextVersion : machine.agent_version;
+        await this.pool.execute(
+          `UPDATE machines SET health_status = ?, agent_version = ?, idle_seconds = ?, last_seen_at = NOW() WHERE id = ?`,
+          [nextStatus, resolvedVer, parsedIdle, machine.id]
+        );
+        this.lastPresenceWriteByMachine.set(machine.id, nowMs);
+      }
       return wasOffline || versionChanged || idleChangedSignificantly
         ? this.findMachineById(machine.id)
         : null;
@@ -1445,8 +1701,8 @@ class RmmRepository {
   async deleteMachineById(machineId) {
     const id = Number(machineId);
     if (this.mode === 'mysql') {
-      await this.pool.execute('DELETE FROM machines WHERE id = ?', [id]);
-      return true;
+      const [result] = await this.pool.execute('DELETE FROM machines WHERE id = ?', [id]);
+      return Number(result?.affectedRows || 0) > 0;
     }
     const idx = this.machines.findIndex((m) => m.id === id);
     if (idx === -1) return false;
@@ -1694,13 +1950,13 @@ class RmmRepository {
     const defaultTemplates =
       createDefaultSectors !== false
         ? [
-            { code: 'REC', name: 'Recepção e Triagem', roomTheme: 'REC', boundsX: -4.5, boundsZ: -3.5 },
-            { code: 'CONS-01', name: 'Consultório Médico 01', roomTheme: 'CONS', boundsX: 4.5, boundsZ: -3.5 },
-            { code: 'FARM', name: 'Farmácia e Vacinação', roomTheme: 'FARM', boundsX: -4.5, boundsZ: 3.5 },
-            { code: 'ADM', name: 'Coordenação / Enfermagem', roomTheme: 'ADM', boundsX: 4.5, boundsZ: 3.5 },
+            { code: 'REC', name: 'Recepção e Triagem', roomTheme: 'REC', boundsX: -4.5, boundsZ: -5.5 },
+            { code: 'CONS-01', name: 'Consultório Médico 01', roomTheme: 'CONS', boundsX: 4.5, boundsZ: -5.5 },
+            { code: 'FARM', name: 'Farmácia e Vacinação', roomTheme: 'FARM', boundsX: -4.5, boundsZ: 1.5 },
+            { code: 'ADM', name: 'Coordenação / Enfermagem', roomTheme: 'ADM', boundsX: 4.5, boundsZ: 1.5 },
           ]
         : [
-            { code: 'REC', name: 'Recepção e Triagem', roomTheme: 'REC', boundsX: -4.5, boundsZ: -3.5 },
+            { code: 'REC', name: 'Recepção e Triagem', roomTheme: 'REC', boundsX: -4.5, boundsZ: -5.5 },
           ];
 
     for (const tpl of defaultTemplates) {

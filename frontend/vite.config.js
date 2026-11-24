@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Se não houver backend local na porta 4000, conecta diretamente ao backend da VPS
-const BACKEND_TARGET = process.env.VITE_BACKEND_URL || 'http://31.97.86.253:4005';
+// Por segurança, o proxy local aponta para o backend local (:4000).
+// Para testar contra outro servidor, defina VITE_BACKEND_URL explicitamente no ambiente.
+const BACKEND_TARGET = process.env.VITE_BACKEND_URL || 'http://localhost:4000';
 
 export default defineConfig({
   plugins: [react()],

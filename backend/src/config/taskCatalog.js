@@ -140,16 +140,25 @@ const TASK_CATALOG = Object.freeze({
   },
 });
 
-function signTaskPayload({ task_id, machine_id, task_code, expires_at }) {
+function signTaskPayload(
+  { task_id, machine_id, task_code, expires_at },
+  signingSecret = env.taskSigningSecret
+) {
   const canonical = `${task_id}:${machine_id}:${task_code}:${expires_at}`;
   return crypto
-    .createHmac('sha256', env.taskSigningSecret)
+    .createHmac('sha256', String(signingSecret || env.taskSigningSecret))
     .update(canonical)
     .digest('hex');
 }
 
-function verifyTaskSignature({ task_id, machine_id, task_code, expires_at, signature }) {
-  const expected = signTaskPayload({ task_id, machine_id, task_code, expires_at });
+function verifyTaskSignature(
+  { task_id, machine_id, task_code, expires_at, signature },
+  signingSecret = env.taskSigningSecret
+) {
+  const expected = signTaskPayload(
+    { task_id, machine_id, task_code, expires_at },
+    signingSecret
+  );
   if (!signature || signature.length !== expected.length) return false;
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }

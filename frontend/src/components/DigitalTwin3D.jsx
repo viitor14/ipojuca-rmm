@@ -1,10 +1,10 @@
-import React, { useRef, useMemo, useState } from 'react';
+import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Html, RoundedBox } from '@react-three/drei';
-import styled, { keyframes } from 'styled-components';
-import { theme, STATUS_LABELS, fixTextEncoding } from '../styles/theme';
-import { WorkstationModel, FallbackWorkstationModel } from './models/WorkstationModel';
+import { OrbitControls, Html } from '@react-three/drei';
+import styled from 'styled-components';
+import { fixTextEncoding } from '../styles/theme';
+import { WorkstationModel } from './models/WorkstationModel';
 import { DeskModel } from './models/DeskModel';
 import { ChairModel } from './models/ChairModel';
 import { ReceptionCounterModel } from './models/ReceptionCounterModel';
@@ -13,15 +13,7 @@ import { ThermalPrinterModel } from './models/ThermalPrinterModel';
 import { WaitingBenchModel } from './models/WaitingBenchModel';
 import { PlantModel } from './models/PlantModel';
 import { WaterDispenserModel } from './models/WaterDispenserModel';
-import {
-  RefinedReceptionCounter,
-  RefinedThermalPrinter,
-  RefinedStorageCabinet,
-  RefinedWaitingBench,
-  RefinedPlant,
-} from './models/RefinedFurniture';
-import { getReceptionVariant } from './twin/receptionThemes';
-import { computeCorridorBands } from './twin/floorPlan';
+import { computeCorridorBands, computeCorridorDoors } from './twin/floorPlan';
 
 const StageContainer = styled.div`
   position: absolute;
@@ -30,58 +22,6 @@ const StageContainer = styled.div`
   height: 100vh;
   background: #eaece8;
   overflow: hidden;
-`;
-
-const pulseAnimation = keyframes`
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.45; transform: scale(0.9); }
-`;
-
-/* Tooltip elegante e minimalista ao passar o mouse */
-const DeviceTooltip = styled.div`
-  pointer-events: none;
-  background: #ffffff;
-  color: #242925;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
-  padding: 8px 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.74rem;
-  line-height: 1.35;
-  white-space: nowrap;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  transform: translate3d(-50%, -120%, 0);
-
-  .tt-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 700;
-    color: #242925;
-  }
-
-  .tt-status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: ${({ $statusColor }) => $statusColor};
-    display: inline-block;
-  }
-
-  .tt-meta {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.68rem;
-    color: #737b75;
-  }
-
-  .tt-sector {
-    font-size: 0.7rem;
-    color: #52796b;
-    font-weight: 600;
-  }
 `;
 
 const SectorTag3D = styled.div`
@@ -411,17 +351,15 @@ function IsometricBoard({ sectors = [], boardBounds }) {
     return null;
   }, []);
 
-  const doorwayThresholds = useMemo(() => {
-    return (sectors || [])
-      .filter((s) => Number(s.bounds_z || 0) !== 0)
-      .map((s) => {
-        const bx = Number(s.bounds_x || 0);
-        const bz = Number(s.bounds_z || 0);
-        const hd = Number(s.depth_3d || 5.0) / 2;
-        const thresholdZ = bz < 0 ? bz + hd + 0.01 : bz - hd - 0.01;
-        return { id: s.id, x: bx, z: thresholdZ };
-      });
-  }, [sectors]);
+  const corridorBands = useMemo(() => computeCorridorBands(sectors), [sectors]);
+  const doorwayThresholds = useMemo(
+    () => computeCorridorDoors(sectors, corridorBands),
+    [sectors, corridorBands]
+  );
+  const entranceZ =
+    corridorBands.length > 0
+      ? (corridorBands[0].z0 + corridorBands[0].z1) / 2
+      : centerZ;
 
   return (
     <group position={[0, 0, 0]}>
@@ -454,9 +392,9 @@ function IsometricBoard({ sectors = [], boardBounds }) {
         </mesh>
       </group>
 
-      {/* 4. Deck de madeira na entrada frontal da fachada oeste */}
-      <mesh receiveShadow position={[minX - 0.8, -0.04, 0]}>
-        <boxGeometry args={[1.6, 0.08, 3.2]} />
+      {/* 4. Deck de madeira alinhado ao corredor derivado da planta (fachada oeste) */}
+      <mesh receiveShadow position={[minX - 0.8, -0.04, entranceZ]}>
+        <boxGeometry args={[1.6, 0.08, 2.4]} />
         {deckTex ? (
           <meshStandardMaterial map={deckTex} roughness={0.55} />
         ) : (
@@ -464,85 +402,25 @@ function IsometricBoard({ sectors = [], boardBounds }) {
         )}
       </mesh>
       {/* Rampa suave de acessibilidade */}
-      <mesh receiveShadow position={[minX - 1.75, -0.07, 0]} rotation={[0, 0, 0.12]}>
-        <boxGeometry args={[0.5, 0.04, 3.0]} />
+      <mesh receiveShadow position={[minX - 1.75, -0.07, entranceZ]} rotation={[0, 0, 0.12]}>
+        <boxGeometry args={[0.5, 0.04, 2.2]} />
         <meshStandardMaterial color="#A57D5C" roughness={0.65} />
       </mesh>
-      {/* Capacho de boas-vindas hospitalar */}
-      <mesh receiveShadow position={[minX + 0.6, 0.021, 0]}>
-        <boxGeometry args={[1.0, 0.006, 1.8]} />
-        <meshStandardMaterial color="#8D6E63" roughness={0.85} />
-      </mesh>
-
-      {/* 5. Corredor Central Interno de Circulação Hospitalar com Passadeira */}
-      <group position={[0, 0, 0]}>
-        {/* Piso de circulação em porcelanato polido claro */}
-        <mesh receiveShadow position={[centerX, 0.01, 0]}>
-          <boxGeometry args={[spanX, 0.02, 2.0]} />
-          <meshStandardMaterial color="#F3EFEB" roughness={0.4} />
+      {/* Capacho de boas-vindas hospitalar no acesso do corredor */}
+      {corridorBands.length > 0 && (
+        <mesh receiveShadow position={[minX + 0.55, 0.031, entranceZ]}>
+          <boxGeometry args={[0.9, 0.005, 1.4]} />
+          <meshStandardMaterial color="#8D6E63" roughness={0.85} />
         </mesh>
-        {/* Passadeira central cinza-azulada com bordas (Sem Z-fighting) */}
-        <mesh receiveShadow position={[centerX, 0.023, 0]}>
-          <boxGeometry args={[spanX - 0.2, 0.004, 1.1]} />
-          <meshStandardMaterial color="#557385" roughness={0.65} />
-        </mesh>
-        <mesh position={[centerX, 0.026, -0.53]}>
-          <boxGeometry args={[spanX - 0.2, 0.003, 0.04]} />
-          <meshStandardMaterial color="#304757" />
-        </mesh>
-        <mesh position={[centerX, 0.026, 0.53]}>
-          <boxGeometry args={[spanX - 0.2, 0.003, 0.04]} />
-          <meshStandardMaterial color="#304757" />
-        </mesh>
+      )}
 
-        {/* Soleiras em madeira nobre dinâmicas nos vãos de porta */}
-        {doorwayThresholds.map((th) => (
-          <mesh key={`thresh-${th.id}`} position={[th.x, 0.023, th.z]}>
-            <boxGeometry args={[1.3, 0.006, 0.16]} />
-            <meshStandardMaterial color="#6B472B" roughness={0.45} />
-          </mesh>
-        ))}
-
-        {/* Longarinas no corredor */}
-        <group position={[2.0, 0.02, -0.74]}>
-          <mesh position={[0, 0.18, 0]}>
-            <boxGeometry args={[1.6, 0.03, 0.06]} />
-            <meshStandardMaterial color="#94A3B8" metalness={0.6} roughness={0.3} />
-          </mesh>
-          <mesh position={[-0.7, 0.09, 0]}>
-            <boxGeometry args={[0.04, 0.18, 0.32]} />
-            <meshStandardMaterial color="#475569" metalness={0.7} />
-          </mesh>
-          <mesh position={[0.7, 0.09, 0]}>
-            <boxGeometry args={[0.04, 0.18, 0.32]} />
-            <meshStandardMaterial color="#475569" metalness={0.7} />
-          </mesh>
-          {[-0.5, 0, 0.5].map((offX, idx) => (
-            <group key={`bench-n-${idx}`} position={[offX, 0, 0]}>
-              <mesh position={[0, 0.22, 0]}>
-                <boxGeometry args={[0.42, 0.05, 0.38]} />
-                <meshStandardMaterial color="#1E3A8A" roughness={0.6} />
-              </mesh>
-              <mesh position={[0, 0.40, -0.16]}>
-                <boxGeometry args={[0.42, 0.32, 0.05]} />
-                <meshStandardMaterial color="#1E3A8A" roughness={0.6} />
-              </mesh>
-            </group>
-          ))}
-        </group>
-
-        {/* Extintor de incêndio na parede central */}
-        <group position={[-0.1, 0.65, -0.92]}>
-          <mesh castShadow>
-            <cylinderGeometry args={[0.06, 0.06, 0.28, 12]} />
-            <meshStandardMaterial color="#DC2626" roughness={0.3} />
-          </mesh>
-          <mesh position={[0, 0.16, 0]}>
-            <cylinderGeometry args={[0.02, 0.02, 0.04, 8]} />
-            <meshStandardMaterial color="#1F2937" metalness={0.7} />
-          </mesh>
-        </group>
-      </group>
+      {/* 5. Soleiras em madeira nobre derivadas dinamicamente dos vãos voltados ao corredor */}
+      {doorwayThresholds.map((th) => (
+        <mesh key={`thresh-${th.id}`} position={[th.x, 0.031, th.z]}>
+          <boxGeometry args={[1.3, 0.006, 0.16]} />
+          <meshStandardMaterial color="#6B472B" roughness={0.45} />
+        </mesh>
+      ))}
 
       {/* 6. Cercas Vivas Discretas no Perímetro Externo */}
       <group position={[minX - 0.6, 0.22, minZ - 0.6]}>
@@ -669,9 +547,12 @@ function resolveSectorArchetype(sector) {
 }
 
 function getSectorTheme(sector, variant = null) {
-  const base = SECTOR_THEMES[resolveSectorArchetype(sector)] || SECTOR_THEMES.ADM;
-  if (!variant) return base;
-  return { ...base, ...variant.room };
+  const archetype = resolveSectorArchetype(sector);
+  const base = SECTOR_THEMES[archetype] || SECTOR_THEMES.ADM;
+  // A variante artística de recepção aplica-se apenas à sala-piloto (REC),
+  // preservando os acabamentos próprios de Consultórios, Farmácia, ADM e TI.
+  if (!variant || archetype !== 'REC') return base;
+  return { ...base, ...variant.room, hasRug: false };
 }
 
 /* Paredes arquitetônicas com vãos de portas, rodapés nobres e janelas translúcidas */
@@ -1166,30 +1047,7 @@ function SectorRoomVoxel({ sector, allSectors = [], sectorMachines = [], showLab
  * ========================================================================= */
 const RECEPTION_COUNTER = { x: -2.2, z: 0.55, topY: 1.02 };
 
-function ReceptionPilotFurniture({ halfW, halfD, backZ, refined = true }) {  if (refined) {
-    return (
-      <group>
-        {/* 1. BALCÃO DE ATENDIMENTO EM L com tampo em balanço e chanfro real */}
-        <RefinedReceptionCounter position={[-2.2, 0, 0.55]} />
-
-        {/* 2. IMPRESSORA TÉRMICA DE PRONTUÁRIO NO BALCÃO */}
-        <RefinedThermalPrinter position={[-2.95, 1.10, 0.40]} isActive={true} />
-
-        {/* 3. ARMÁRIO DE ARQUIVOS E PRONTUÁRIOS */}
-        <RefinedStorageCabinet position={[-3.82, 0, -halfD + 0.42]} rotation={[0, Math.PI, 0]} />
-
-        {/* 4. BEBEDOURO DE COLUNA HOSPITALAR (water_dispenser.glb) */}
-        <WaterDispenserModel position={[halfW - 0.65, 0, -halfD + 0.42]} isActive={true} />
-
-        {/* 5. PLANTA DECORATIVA COM FOLHAGEM CURVA */}
-        <RefinedPlant position={[halfW - 0.55, 0, halfD - 0.6]} />
-
-        {/* 6. LONGARINA DE ESPERA COM ASSENTO ERGONÔMICO */}
-        <RefinedWaitingBench position={[-halfW + 0.55, 0, -0.35]} rotation={[0, -Math.PI / 2, 0]} />
-      </group>
-    );
-  }
-
+function ReceptionPilotFurniture({ halfW, halfD }) {
   return (
     <group>
       {/* 1. BALCÃO DE ATENDIMENTO EM L (reception_counter.glb) - Ponto focal na entrada */}
@@ -1236,9 +1094,7 @@ function ClinicalFurnitureVoxel({ sector }) {
   return (
     <group position={[baseX, 0, baseZ]}>
       {/* 1. RECEPÇÃO & TRIAGEM: Renderiza a Sala-Piloto de Alta Fidelidade */}
-      {isReception && (
-        <ReceptionPilotFurniture halfW={halfW} halfD={halfD} backZ={backZ} refined={false} />
-      )}
+      {isReception && <ReceptionPilotFurniture halfW={halfW} halfD={halfD} />}
 
       {/* 2. CONSULTÓRIO MÉDICO / ENFERMAGEM */}
       {(isConsult || isNurse) && (

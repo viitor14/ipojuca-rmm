@@ -56,6 +56,8 @@ function loadExpressAndCors() {
       const mountedRouters = [];
       let notFoundHandler = (req, res) =>
         res.status(404).json({ error: 'Not Found' });
+      let errorHandler = (err, req, res) =>
+        res.status(err?.statusCode || 500).json({ error: err?.message || 'Internal Error' });
 
       const app = async (req, res) => {
         const parsedUrl = new URL(req.url, 'http://localhost');
@@ -125,19 +127,33 @@ function loadExpressAndCors() {
         }
 
         let idx = 0;
-        async function next() {
+        async function next(err) {
+          if (err) {
+            if (!res.writableEnded) {
+              await errorHandler(err, req, res, () => {});
+            }
+            return;
+          }
           const fn = chain[idx++];
           if (!fn || res.writableEnded) return;
-          await fn(req, res, next);
+          try {
+            await fn(req, res, next);
+          } catch (thrown) {
+            await next(thrown);
+          }
         }
         await next();
       };
+
+      app.set = () => {};
 
       app.use = (arg1, arg2) => {
         if (typeof arg1 === 'string' && arg2 && arg2._routes) {
           mountedRouters.push({ prefix: arg1, router: arg2 });
         } else if (typeof arg1 === 'function') {
-          if (arg1.length === 2 && middlewares.length > 0 && mountedRouters.length > 0) {
+          if (arg1.length === 4) {
+            errorHandler = arg1;
+          } else if (arg1.length === 2 && middlewares.length > 0 && mountedRouters.length > 0) {
             notFoundHandler = arg1;
           } else {
             middlewares.push(arg1);
@@ -156,7 +172,7 @@ function loadExpressAndCors() {
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
       res.setHeader(
         'Access-Control-Allow-Headers',
-        'Content-Type,Authorization,X-Agent-Uuid,X-Agent-Token'
+        'Content-Type,Authorization,X-Agent-Uuid,X-Agent-Token,X-Enrollment-Key,X-Agent-Version,X-Agent-Idle-Seconds'
       );
       next();
     };

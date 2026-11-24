@@ -22,7 +22,7 @@ export const RECEPTION_VARIANTS = {
       floorType: 'parquet',
       rugColor: '#A3B18A',
       rugBorderColor: '#DAD7CD',
-      hasRug: true,
+      hasRug: false,
       rugSize: [2.4, 1.5],
       rugPos: [0.5, 0.0, -0.2],
     },
@@ -47,7 +47,7 @@ export const RECEPTION_VARIANTS = {
       floorType: 'porcelain',
       rugColor: '#6FA88F',
       rugBorderColor: '#EAF2EC',
-      hasRug: true,
+      hasRug: false,
       rugSize: [2.4, 1.5],
       rugPos: [0.5, 0.0, -0.2],
     },
@@ -71,7 +71,7 @@ export const RECEPTION_VARIANTS = {
       floorType: 'porcelain',
       rugColor: '#C97B5A',
       rugBorderColor: '#F0DCC8',
-      hasRug: true,
+      hasRug: false,
       rugSize: [2.4, 1.5],
       rugPos: [0.5, 0.0, -0.2],
     },
@@ -87,6 +87,6 @@ export const RECEPTION_VARIANTS = {
 
 export const DEFAULT_VARIANT = 'B';
 
-export function getReceptionVariant(id) {
-  return RECEPTION_VARIANTS[id] || RECEPTION_VARIANTS[DEFAULT_VARIANT];
+export function getReceptionVariant() {
+  return RECEPTION_VARIANTS.B;
 }

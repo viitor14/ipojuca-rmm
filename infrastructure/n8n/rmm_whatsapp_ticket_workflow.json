@@ -1,5 +1,5 @@
 {
-  "name": "RMM Ipojuca - Abertura Autonoma de Chamados e Alerta WhatsApp",
+  "name": "RMM Ipojuca - Abertura Autonoma de Chamados e Alerta WhatsApp (Seguro)",
   "nodes": [
     {
       "parameters": {
@@ -12,17 +12,34 @@
       "name": "Webhook Backend RMM",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300]
+      "position": [220, 300]
     },
     {
       "parameters": {
-        "jsCode": "const headers = $input.first().json.headers || {};\nconst body = $input.first().json.body || $input.first().json;\nconst idempotencyKey = headers['x-idempotency-key'] || body.incident_id;\nif (!idempotencyKey || !body.machine || !body.unit) {\n  throw new Error('Payload de alerta invalido ou sem chave de idempotencia.');\n}\nconst ticketId = `IPO-SAUDE-${Date.now().toString().slice(-6)}`;\nconst whatsappMessage = [\n  `🚨 *[RMM SAÚDE IPOJUCA - ALERTA ${body.event_type}]*`,\n  `🏥 *Unidade:* ${body.unit.name} (${body.unit.type})`,\n  `📍 *Setor:* ${body.sector?.name || 'Geral'}`,\n  `💻 *Equipamento:* ${body.machine.hostname} (${body.machine.ip_address})`,\n  `⚠️ *Diagnóstico:* ${body.reason}`,\n  `📊 *Métricas:* CPU ${body.metrics?.cpu_usage_pct}% | RAM ${body.metrics?.ram_usage_pct}% | HD ${body.metrics?.disk_usage_pct}%`,\n  `🎫 *Chamado Aberto:* #${ticketId}`,\n  `🔗 *Acesso 3D:* ${body.dashboard_url}`\n].join('\\n');\nreturn [{ json: { ticket_id: ticketId, idempotency_key: idempotencyKey, whatsapp_text: whatsappMessage, raw_incident: body } }];"
+        "jsCode": "const crypto = require('crypto');\nconst item = $input.first().json;\nconst headers = item.headers || {};\nconst body = item.body || item;\n\n// 1. Validacao obrigatoria da assinatura HMAC-SHA256 enviada pelo Backend RMM\nconst secret = $env.N8N_WEBHOOK_SECRET;\nif (!secret) {\n  throw new Error('N8N_WEBHOOK_SECRET nao configurado no ambiente do n8n.');\n}\nconst receivedSig = String(headers['x-rmm-signature'] || '').replace(/^sha256=/i, '').trim();\nconst expectedSig = crypto.createHmac('sha256', secret).update(JSON.stringify(body)).digest('hex');\nif (!receivedSig || receivedSig.length !== expectedSig.length || !crypto.timingSafeEqual(Buffer.from(receivedSig), Buffer.from(expectedSig))) {\n  throw new Error('Assinatura HMAC X-RMM-Signature invalida ou ausente.');\n}\n\n// 2. Validacao de estrutura e chave de idempotencia\nconst idempotencyKey = String(headers['x-idempotency-key'] || body.incident_id || '').trim();\nif (!idempotencyKey || !body.machine || !body.unit) {\n  throw new Error('Payload de alerta invalido ou sem chave de idempotencia.');\n}\n\n// 3. Deduplicacao real em memoria persistente do workflow (TTL 30 min)\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.processedIncidents) staticData.processedIncidents = {};\nconst now = Date.now();\nconst TTL_MS = 30 * 60 * 1000;\nfor (const [k, entry] of Object.entries(staticData.processedIncidents)) {\n  if (!entry || now - entry.at > TTL_MS) delete staticData.processedIncidents[k];\n}\nif (staticData.processedIncidents[idempotencyKey]) {\n  return [{ json: { duplicate: true, ticket_id: staticData.processedIncidents[idempotencyKey].ticket_id, idempotency_key: idempotencyKey } }];\n}\n\n// 4. Validacao obrigatoria do destinatario institucional (sem numero hardcoded)\nconst targetGroup = String($env.TI_SUPPORT_WHATSAPP_GROUP || '').trim();\nif (!targetGroup) {\n  throw new Error('TI_SUPPORT_WHATSAPP_GROUP nao configurado no ambiente do n8n.');\n}\n\nconst ticketId = `IPO-SAUDE-${Date.now().toString().slice(-6)}`;\nstaticData.processedIncidents[idempotencyKey] = { ticket_id: ticketId, at: now };\n\nconst whatsappMessage = [\n  `🚨 *[RMM SAÚDE IPOJUCA - ALERTA ${body.event_type}]*`,\n  `🏥 *Unidade:* ${body.unit.name} (${body.unit.type})`,\n  `📍 *Setor:* ${body.sector?.name || 'Geral'}`,\n  `💻 *Equipamento:* ${body.machine.hostname} (${body.machine.ip_address})`,\n  `⚠️ *Diagnóstico:* ${body.reason}`,\n  `📊 *Métricas:* CPU ${body.metrics?.cpu_usage_pct}% | RAM ${body.metrics?.ram_usage_pct}% | HD ${body.metrics?.disk_usage_pct}%`,\n  `🎫 *Chamado Aberto:* #${ticketId}`,\n  `🔗 *Acesso:* ${body.dashboard_url}`\n].join('\\n');\n\nreturn [{ json: { duplicate: false, ticket_id: ticketId, idempotency_key: idempotencyKey, target_group: targetGroup, whatsapp_text: whatsappMessage, raw_incident: body } }];"
       },
       "id": "node-validate-format",
-      "name": "Validar Payload & Gerar Ticket",
+      "name": "Validar HMAC, Deduplicar & Gerar Ticket",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.duplicate }}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "node-check-duplicate",
+      "name": "Incidente Novo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [720, 300]
     },
     {
       "parameters": {
@@ -42,7 +59,7 @@
           "parameters": [
             {
               "name": "number",
-              "value": "={{ $env.TI_SUPPORT_WHATSAPP_GROUP || '5581999999999' }}"
+              "value": "={{ $json.target_group }}"
             },
             {
               "name": "text",
@@ -58,7 +75,7 @@
       "name": "Notificar Equipe TI no WhatsApp",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [740, 300],
+      "position": [980, 220],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000
@@ -66,26 +83,31 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'ok', ticket_id: $('Validar Payload & Gerar Ticket').item.json.ticket_id }) }}",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', duplicate: $('Validar HMAC, Deduplicar & Gerar Ticket').item.json.duplicate, ticket_id: $('Validar HMAC, Deduplicar & Gerar Ticket').item.json.ticket_id }) }}",
         "options": {}
       },
       "id": "node-webhook-response",
       "name": "Retornar Ticket ID ao Backend",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1000, 300]
+      "position": [1240, 300]
     }
   ],
   "connections": {
     "Webhook Backend RMM": {
-      "main": [[{ "node": "Validar Payload & Gerar Ticket", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Validar HMAC, Deduplicar & Gerar Ticket", "type": "main", "index": 0 }]]
     },
-    "Validar Payload & Gerar Ticket": {
-      "main": [[{ "node": "Notificar Equipe TI no WhatsApp", "type": "main", "index": 0 }]]
+    "Validar HMAC, Deduplicar & Gerar Ticket": {
+      "main": [[{ "node": "Incidente Novo?", "type": "main", "index": 0 }]]
+    },
+    "Incidente Novo?": {
+      "main": [
+        [{ "node": "Notificar Equipe TI no WhatsApp", "type": "main", "index": 0 }],
+        [{ "node": "Retornar Ticket ID ao Backend", "type": "main", "index": 0 }]
+      ]
     },
     "Notificar Equipe TI no WhatsApp": {
       "main": [[{ "node": "Retornar Ticket ID ao Backend", "type": "main", "index": 0 }]]
     }
   }
 }
-

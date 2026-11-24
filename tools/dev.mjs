@@ -8,8 +8,23 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 const targets = [
-  { name: 'backend', cwd: path.join(root, 'backend'), args: ['run', 'dev'], color: '\u001b[36m' },
-  { name: 'frontend', cwd: path.join(root, 'frontend'), args: ['run', 'dev'], color: '\u001b[35m' },
+  {
+    name: 'backend',
+    cwd: path.join(root, 'backend'),
+    args: ['run', 'dev'],
+    color: '\u001b[36m',
+    extraEnv: {},
+  },
+  {
+    name: 'frontend',
+    cwd: path.join(root, 'frontend'),
+    args: ['run', 'dev'],
+    color: '\u001b[35m',
+    // Garante que o dev local aponte para o backend local (:4000) e nunca para a VPS por engano
+    extraEnv: {
+      VITE_BACKEND_URL: process.env.VITE_BACKEND_URL || 'http://localhost:4000',
+    },
+  },
 ];
 
 const children = [];
@@ -31,7 +46,7 @@ for (const target of targets) {
     cwd: target.cwd,
     shell: true,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, FORCE_COLOR: '1' },
+    env: { ...process.env, FORCE_COLOR: '1', ...(target.extraEnv || {}) },
   });
   children.push(child);
 

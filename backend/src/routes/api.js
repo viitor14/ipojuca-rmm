@@ -5,9 +5,13 @@ const repository = require("../database/repository");
 const {
   createJwtToken,
   hashPassword,
+  verifyPassword,
+  isLegacyPasswordHash,
   hashAgentToken,
   requireAuth,
   requireRole,
+  createRequireAgentAuth,
+  asyncHandler,
   createRateLimiter,
 } = require("../middlewares/auth");
 const { TASK_CATALOG, signTaskPayload } = require("../config/taskCatalog");
@@ -18,17 +22,17 @@ const fs = require("fs");
 const path = require("path");
 
 const router = express.Router();
+const requireAgentAuth = createRequireAgentAuth(repository);
 
-// Filas em memória para comunicação Cliente-Servidor com o Super Agente Nativo (.exe)
+// Filas em memória para sinalização rápida de polling do Super Agente Nativo (.exe)
+// (Histórico de chat e tarefas ficam persistidos no banco/repositório)
 const pendingRefreshByAgent = new Set();
 const pendingUpdateByAgent = new Set();
 const pendingTasksByAgent = new Map();
 const taskResultWaiters = new Map();
-const pendingMessagesByAgent = new Map();
-const chatHistoryByMachine = new Map();
 const heartbeatWaitersByAgent = new Map();
 
-const LATEST_AGENT_VERSION = "2.3.4-native-exe";
+const LATEST_AGENT_VERSION = "2.4.0-native-exe";
 
 function waitForLiveAgentTaskResult(taskId, timeoutMs = 4500) {
   return new Promise((resolve) => {
@@ -63,11 +67,14 @@ function getAgentInstallerInfo() {
   const exePath = path.join(__dirname, "../../public/IpojucaRMM-Setup.exe");
   let sha256 = "";
   let sizeBytes = 0;
+  let releasedAt = null;
   try {
     if (fs.existsSync(exePath)) {
+      const stat = fs.statSync(exePath);
       const buf = fs.readFileSync(exePath);
       sizeBytes = buf.length;
       sha256 = crypto.createHash("sha256").update(buf).digest("hex");
+      releasedAt = stat.mtime.toISOString();
     }
   } catch {}
   return {
@@ -75,7 +82,7 @@ function getAgentInstallerInfo() {
     download_path: "/api/agent/download",
     sha256,
     size_bytes: sizeBytes,
-    released_at: "2026-11-10T14:55:00Z",
+    released_at: releasedAt,
   };
 }
 
@@ -120,6 +127,10 @@ const heartbeatLimiter = createRateLimiter({
   windowMs: 60000,
   maxRequests: 240,
 });
+const refreshLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 30,
+});
 
 // 1. Healthcheck da API e Observabilidade
 router.get("/health", (req, res) => {
@@ -135,69 +146,79 @@ router.get("/health", (req, res) => {
       "inventory:changes",
       "printers:catalog",
       "printers:discovery",
+      "auth:session-me",
+      "agent:authenticated-poll",
+      "tasks:honest-queue",
+      "alerts:inactivity-24h",
     ],
     timestamp: new Date().toISOString(),
   });
 });
 
-// 2. Login de Operadores (RBAC)
-router.post("/auth/login", authLimiter, async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ error: "E-mail e senha são obrigatórios." });
+// 2. Login de Operadores (RBAC) e Verificação de Sessão
+router.get("/auth/me", requireAuth, (req, res) => {
+  return res.json({
+    user: {
+      id: req.user.id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+    },
+  });
+});
+
+router.post("/auth/login", authLimiter, asyncHandler(async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res
+      .status(400)
+      .json({ error: "E-mail e senha são obrigatórios." });
+  }
+
+  const user = await repository.findUserByEmail(email);
+
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    await repository.recordAuditLog({
+      actionType: "AUTH_LOGIN_FAILED",
+      ipAddress: req.ip,
+      details: { email: String(email).slice(0, 100) },
+    });
+    return res.status(401).json({ error: "Credenciais inválidas." });
+  }
+
+  // Migração transparente de hash legado (salt fixo v1) para scrypt com salt aleatório
+  if (isLegacyPasswordHash(user.password_hash)) {
+    try {
+      await repository.updateUserPasswordHash(user.id, hashPassword(password));
+    } catch {
+      // Nao bloqueia o login caso o upgrade de hash falhe
     }
+  }
 
-    const user = await repository.findUserByEmail(email);
-    const candidateHash = hashPassword(password);
+  const token = createJwtToken({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+  });
 
-    if (
-      !user ||
-      candidateHash.length !== user.password_hash.length ||
-      !crypto.timingSafeEqual(
-        Buffer.from(candidateHash),
-        Buffer.from(user.password_hash),
-      )
-    ) {
-      await repository.recordAuditLog({
-        actionType: "AUTH_LOGIN_FAILED",
-        ipAddress: req.ip,
-        details: { email: String(email).slice(0, 100) },
-      });
-      return res.status(401).json({ error: "Credenciais inválidas." });
-    }
+  await repository.recordAuditLog({
+    userId: user.id,
+    actionType: "AUTH_LOGIN_SUCCESS",
+    ipAddress: req.ip,
+    details: { role: user.role },
+  });
 
-    const token = createJwtToken({
+  return res.json({
+    token,
+    user: {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-    });
-
-    await repository.recordAuditLog({
-      userId: user.id,
-      actionType: "AUTH_LOGIN_SUCCESS",
-      ipAddress: req.ip,
-      details: { role: user.role },
-    });
-
-    return res.json({
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    });
-  } catch (err) {
-    return res
-      .status(500)
-      .json({ error: "Erro interno ao processar autenticação." });
-  }
-});
+    },
+  });
+}));
 
 // 3. Recebimento de Heartbeat e Telemetria do Agente Windows
 router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
@@ -260,6 +281,12 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
 
     const { agent_version, inventory = {}, metrics = {}, printers = [] } = req.body || {};
 
+    const rawTemp = metrics.temperature_c;
+    const sanitizedTemp =
+      rawTemp === null || rawTemp === undefined || rawTemp === "" || Number.isNaN(Number(rawTemp))
+        ? 0
+        : Math.min(130, Math.max(0, Number(rawTemp)));
+
     // Validação numérica de métricas
     const sanitizedMetrics = {
       cpu_usage_pct: Math.min(
@@ -274,10 +301,7 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
         100,
         Math.max(0, Number(metrics.disk_usage_pct ?? 0)),
       ),
-      temperature_c: Math.min(
-        130,
-        Math.max(0, Number(metrics.temperature_c ?? 45)),
-      ),
+      temperature_c: sanitizedTemp,
       uptime_seconds: Math.max(0, Number(metrics.uptime_seconds ?? 0)),
       idle_seconds: Math.max(0, Number(metrics.idle_seconds ?? 0)),
       spooler_running:
@@ -356,6 +380,45 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
       await repository.resolveMachineAlertsIfHealthy(updatedMachine.id);
     }
 
+    let inactivityAlert = null;
+    try {
+      const inactivityOutcome = await repository.evaluateMachineInactivityAlert(updatedMachine);
+      if (inactivityOutcome.alert) {
+        inactivityAlert = inactivityOutcome.alert;
+        if (inactivityOutcome.isNew) {
+          const webhookOutcome = await triggerN8nIncidentWebhook({
+            alert: inactivityAlert,
+            machine: updatedMachine,
+            unit: {
+              id: updatedMachine.unit_id,
+              code: updatedMachine.unit_code,
+              name: updatedMachine.unit_name,
+              unit_type: updatedMachine.unit_type,
+            },
+            sector: {
+              id: updatedMachine.sector_id,
+              name: updatedMachine.sector_name,
+            },
+          });
+          await repository.markAlertNotified(
+            inactivityAlert.id,
+            webhookOutcome.external_ticket_id,
+          );
+          inactivityAlert.n8n_notified = 1;
+          inactivityAlert.external_ticket_id = webhookOutcome.external_ticket_id;
+
+          socketHub.broadcastToDashboard("alert:triggered", {
+            ...inactivityAlert,
+            hostname: updatedMachine.hostname,
+            unit_name: updatedMachine.unit_name,
+            sector_name: updatedMachine.sector_name,
+          });
+        }
+      }
+    } catch {
+      // Falha na avaliacao de inatividade nao invalida o heartbeat
+    }
+
     const installerInfo = getAgentInstallerInfo();
     return res.json({
       status: "ok",
@@ -363,6 +426,7 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
       health_status: updatedMachine.health_status,
       reason: evaluation.reason,
       alert: alertTriggered,
+      inactivity_alert: inactivityAlert,
       latest_agent_version: installerInfo.latest_version,
       server_time: new Date().toISOString(),
     });
@@ -375,10 +439,10 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
 });
 
 // 4. Listagem de Unidades de Saúde e Setores (para o Dashboard e Digital Twin)
-router.get("/units", requireAuth, async (req, res) => {
+router.get("/units", requireAuth, asyncHandler(async (req, res) => {
   const units = await repository.listUnitsWithSummary();
   res.json({ units });
-});
+}));
 
 async function broadcastUnitsAndRelocations(relocatedMachines = []) {
   const units = await repository.listUnitsWithSummary();
@@ -668,7 +732,7 @@ router.delete(
 );
 
 // 5. Listagem de Máquinas (com coordenadas 3D e métricas atuais)
-router.get("/machines", requireAuth, async (req, res) => {
+router.get("/machines", requireAuth, asyncHandler(async (req, res) => {
   const { unit_id, sector_id, status } = req.query;
   const machines = await repository.listMachines({
     unitId: unit_id,
@@ -676,19 +740,19 @@ router.get("/machines", requireAuth, async (req, res) => {
     status,
   });
   res.json({ machines });
-});
+}));
 
 // 6. Diagnóstico Detalhado de um Computador
-router.get("/machines/:id/diagnostics", requireAuth, async (req, res) => {
+router.get("/machines/:id/diagnostics", requireAuth, asyncHandler(async (req, res) => {
   const data = await repository.getMachineDiagnostics(req.params.id);
   if (!data) {
     return res.status(404).json({ error: "Computador não encontrado." });
   }
   return res.json(data);
-});
+}));
 
 // 6.1. Coleta Manual de Telemetria Sob Demanda (Botão Manual do Operador)
-router.post("/machines/:id/refresh-telemetry", requireAuth, async (req, res) => {
+router.post("/machines/:id/refresh-telemetry", requireAuth, refreshLimiter, asyncHandler(async (req, res) => {
   try {
     const machine = await repository.findMachineById(req.params.id);
     if (!machine) {
@@ -738,7 +802,7 @@ router.post("/machines/:id/refresh-telemetry", requireAuth, async (req, res) => 
   } catch (err) {
     return res.status(500).json({ error: "Falha ao solicitar telemetria manual." });
   }
-});
+}));
 
 // 7. Catálogo de Tarefas Autorizadas disponíveis para o operador
 router.get("/catalog/tasks", requireAuth, (req, res) => {
@@ -904,19 +968,32 @@ router.post(
         signature,
       });
 
-      // Enfileira também para o Super Agente Nativo (.exe) executar de verdade no Windows
+      // Enfileira também para o Super Agente Nativo (.exe) executar de verdade no Windows,
+      // assinando com a chave individual da máquina (agent_token_hash) + TTL
       if (taskSpec.code === "SYNC_TELEMETRY_NOW") {
         pendingRefreshByAgent.add(machine.agent_uuid);
         socketHub.requestImmediateTelemetry(machine.id);
       } else if (taskSpec.code === "UPDATE_AGENT") {
         pendingUpdateByAgent.add(machine.agent_uuid);
       } else {
+        const agentSignature = signTaskPayload(
+          {
+            task_id: taskId,
+            machine_id: machine.id,
+            task_code: taskSpec.code,
+            expires_at: expiresAt,
+          },
+          machine.agent_token_hash
+        );
         const agentTaskQueue = pendingTasksByAgent.get(machine.agent_uuid) || [];
         agentTaskQueue.push({
           task_id: taskId,
           machine_id: machine.id,
           task_code: taskSpec.code,
           parameters: paramValidation.sanitized,
+          issued_at: issuedAt,
+          expires_at: expiresAt,
+          signature: agentSignature,
         });
         pendingTasksByAgent.set(machine.agent_uuid, agentTaskQueue);
       }
@@ -930,7 +1007,7 @@ router.post(
               taskId,
               status: "COMPLETED",
               exitCode: 0,
-              outputSummary: `Host: ${liveMachine.hostname} | IPv4: ${liveMachine.ip_address} (${liveMachine.mac_address}) | CPU: ${Number(liveMachine.cpu_usage_pct).toFixed(1)}% | RAM: ${Number(liveMachine.ram_usage_pct).toFixed(1)}% | Disco: ${Number(liveMachine.disk_usage_pct).toFixed(1)}% | Temp: ${Number(liveMachine.temperature_c).toFixed(1)}°C`,
+              outputSummary: `Host: ${liveMachine.hostname} | IPv4: ${liveMachine.ip_address} (${liveMachine.mac_address}) | CPU: ${Number(liveMachine.cpu_usage_pct).toFixed(1)}% | RAM: ${Number(liveMachine.ram_usage_pct).toFixed(1)}% | Disco: ${Number(liveMachine.disk_usage_pct).toFixed(1)}% | Temp: ${Number(liveMachine.temperature_c) > 0 ? `${Number(liveMachine.temperature_c).toFixed(1)}°C` : "N/D"}`,
             });
             socketHub.broadcastToDashboard("task:updated", completedLive);
             return res.status(202).json({
@@ -950,61 +1027,12 @@ router.post(
           }
         }
 
-        const diskUsedPct = Number(machine.disk_usage_pct || 0).toFixed(1);
-        const diskTotalGb = Number(machine.disk_total_gb || 240);
-        const diskFreeGb = Math.max(0, diskTotalGb * (1 - Number(machine.disk_usage_pct || 0) / 100)).toFixed(1);
-        const diskUsedGb = Math.max(0, diskTotalGb - Number(diskFreeGb)).toFixed(1);
-
-        const simulatedOutputByCode = {
-          SYNC_TELEMETRY_NOW: `Host: ${machine.hostname} | IPv4: ${machine.ip_address} (${machine.mac_address}) | CPU: ${Number(machine.cpu_usage_pct).toFixed(1)}% | RAM: ${Number(machine.ram_usage_pct).toFixed(1)}% | Disco: ${diskUsedPct}%`,
-          CLEAR_TEMP_CACHE: `Limpeza concluída em ${machine.hostname}: diretórios temporários (%TEMP% e Windows\\Temp) higienizados | Espaço livre em C:: ${diskFreeGb} GB.`,
-          RESTART_SPOOLER: `Serviço Spooler de Impressão reiniciado com sucesso em ${machine.hostname} (Status: ATIVO) | Fila de impressão limpa.`,
-          COLLECT_NETWORK_DIAG: `Host: ${machine.hostname} | Adaptador Ativo (1000 Mbps) | IPv4: ${machine.ip_address} (MAC ${machine.mac_address || "N/A"}) | Gateway: ${String(machine.ip_address || "10.0.0.1").replace(/\.\d+$/, ".1")} (Ping 1ms) | DNS: [8.8.8.8, 1.1.1.1] | Status: CONECTADO`,
-          FLUSH_DNS_WINSOCK: `Cache DNS limpo com sucesso em ${machine.hostname} (ipconfig /flushdns executado e tabela de resolução renovada).`,
-          CHECK_DISK_HEALTH: `Disco: ${machine.disk_type || "SSD"} (${machine.model || "Workstation"}) | Saúde SMART: OK (Saudável) | Volume C: [NTFS]: ${diskUsedGb} GB usados / ${diskFreeGb} GB livres (Total ${diskTotalGb} GB — ${diskUsedPct}%)`,
-          LIST_TOP_PROCESSES: `Estação ${machine.hostname} | Uso de CPU: ${Number(machine.cpu_usage_pct).toFixed(1)}% | Uso de RAM: ${Number(machine.ram_usage_pct).toFixed(1)}% de ${(Number(machine.ram_total_mb || 8192) / 1024).toFixed(1)} GB | Aguardando listagem detalhada de PIDs do Agente.`,
-          INSTALL_APPROVED_PRINTER: `Impressora '${paramValidation.sanitized.printer_name}' mapeada em ${paramValidation.sanitized.printer_ip} na estação ${machine.hostname}.`,
-          REBOOT_WORKSTATION: `Reinicialização programada com aviso de 30s enviada para a tela de ${machine.hostname}.`,
-          UPDATE_AGENT: `Ordem de atualização OTA (${LATEST_AGENT_VERSION}) enviada para ${machine.hostname} com barra de progresso na tela do cliente.`,
-        };
-
-        // Se for tarefa de reinício de spooler em máquina com spooler parado, corrige o estado
-        if (taskSpec.code === "RESTART_SPOOLER" && !machine.spooler_running) {
-          await repository.upsertHeartbeat({
-            agentUuid: machine.agent_uuid,
-            agentVersion: machine.agent_version,
-            inventory: {},
-            metrics: {
-              cpu_usage_pct: machine.cpu_usage_pct,
-              ram_usage_pct: machine.ram_usage_pct,
-              disk_usage_pct: machine.disk_usage_pct,
-              temperature_c: machine.temperature_c,
-              uptime_seconds: machine.uptime_seconds,
-              spooler_running: true,
-            },
-            healthStatus: evaluateMachineHealth({
-              cpu_usage_pct: machine.cpu_usage_pct,
-              ram_usage_pct: machine.ram_usage_pct,
-              disk_usage_pct: machine.disk_usage_pct,
-              temperature_c: machine.temperature_c,
-              spooler_running: true,
-            }).health_status,
-          });
-        }
-
-        const completedTask = await repository.completeRemoteTask({
-          taskId,
-          status: "COMPLETED",
-          exitCode: 0,
-          outputSummary:
-            simulatedOutputByCode[taskSpec.code] ||
-            "Tarefa executada com sucesso.",
-        });
-
-        socketHub.broadcastToDashboard("task:updated", completedTask);
+        // Nunca forjar COMPLETED quando o agente não respondeu em tempo real:
+        // mantém status honesto DISPATCHED na fila até confirmação real ou expiração (TTL).
+        socketHub.broadcastToDashboard("task:updated", taskRecord);
         return res.status(202).json({
-          task: completedTask,
-          delivery_mode: "completed_immediate",
+          task: taskRecord,
+          delivery_mode: "queued_for_agent",
         });
       }
 
@@ -1022,20 +1050,20 @@ router.post(
 );
 
 // 9. Listagem de Alertas e Chamados n8n
-router.get("/alerts", requireAuth, async (req, res) => {
+router.get("/alerts", requireAuth, asyncHandler(async (req, res) => {
   const alerts = await repository.listAlerts(50);
   res.json({ alerts });
-});
+}));
 
 // 10. Listagem de Trilha de Auditoria (Restrito a ADMIN_N2)
 router.get(
   "/audit-logs",
   requireAuth,
   requireRole(["ADMIN_N2"]),
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const logs = await repository.listAuditLogs(100);
     res.json({ logs });
-  },
+  }),
 );
 
 // 11. Download Direto e Manifesto de Versão do Instalador Executável Nativo (.exe)
@@ -1055,7 +1083,10 @@ router.get("/agent/download", (req, res) => {
     "Content-Disposition",
     'attachment; filename="IpojucaRMM-Setup.exe"',
   );
-  return res.sendFile(exePath);
+  if (typeof res.sendFile === "function") {
+    return res.sendFile(exePath);
+  }
+  return fs.createReadStream(exePath).pipe(res);
 });
 
 // 11.1. Disparo de Atualização Remota do Agente (Individual ou Global em Todas as Máquinas)
@@ -1063,7 +1094,7 @@ router.post(
   "/machines/:id/update-agent",
   requireAuth,
   requireRole(["TECH_N1", "ADMIN_N2"]),
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const machine = await repository.findMachineById(req.params.id);
     if (!machine) {
       return res.status(404).json({ error: "Computador não encontrado." });
@@ -1082,14 +1113,14 @@ router.post(
       machine_id: machine.id,
       message: `Ordem de atualização (${LATEST_AGENT_VERSION}) enviada para ${machine.hostname}. A atualização será exibida na tela do cliente.`,
     });
-  },
+  }),
 );
 
 router.post(
   "/agent/update-all",
   requireAuth,
   requireRole(["ADMIN_N2"]),
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const machines = await repository.listMachines({});
     for (const m of machines) {
       if (m.agent_uuid) {
@@ -1108,24 +1139,20 @@ router.post(
       queued_machines: machines.length,
       message: `Atualização automática (${LATEST_AGENT_VERSION}) enviada para todas as ${machines.length} máquina(s) cadastradas.`,
     });
-  },
+  }),
 );
 
-// 12. Poll de Comandos e Mensagens para o Super Agente Nativo (.exe em segundo plano)
-router.get("/agent/pending", async (req, res) => {
-  const agentUuid = String(
-    req.headers["x-agent-uuid"] || req.query.agent_uuid || "",
-  ).trim();
+// 12. Poll de Comandos e Mensagens Autenticado para o Super Agente Nativo (.exe)
+router.get("/agent/pending", requireAgentAuth, asyncHandler(async (req, res) => {
+  const machine = req.machine;
+  const agentUuid = machine.agent_uuid;
   const currentAgentVersion = String(
     req.headers["x-agent-version"] || req.query.agent_version || "",
   ).trim();
   const rawIdleSeconds =
     req.headers["x-agent-idle-seconds"] ?? req.query.idle_seconds ?? null;
-  if (!agentUuid) {
-    return res.status(400).json({ error: "agent_uuid obrigatório." });
-  }
 
-  // Atualiza presença leve e ociosidade em tempo real do agente (mantém máquina ONLINE enquanto o agente estiver aberto)
+  // Atualiza presença leve e ociosidade em tempo real do agente (com throttle no MySQL)
   try {
     const reactivatedMachine = await repository.touchAgentPresence(
       agentUuid,
@@ -1134,6 +1161,40 @@ router.get("/agent/pending", async (req, res) => {
     );
     if (reactivatedMachine) {
       socketHub.broadcastToDashboard("machine:updated", reactivatedMachine);
+    }
+    const presenceTarget = reactivatedMachine || {
+      ...machine,
+      idle_seconds:
+        rawIdleSeconds !== null && rawIdleSeconds !== "" && !Number.isNaN(Number(rawIdleSeconds))
+          ? Math.max(0, Math.round(Number(rawIdleSeconds)))
+          : Number(machine.idle_seconds || 0),
+    };
+    const inactRes = await repository.evaluateMachineInactivityAlert(presenceTarget);
+    if (inactRes.isNew && inactRes.alert) {
+      const fullMachine = reactivatedMachine || (await repository.findMachineById(machine.id)) || machine;
+      const webhookOutcome = await triggerN8nIncidentWebhook({
+        alert: inactRes.alert,
+        machine: fullMachine,
+        unit: {
+          id: fullMachine.unit_id,
+          code: fullMachine.unit_code,
+          name: fullMachine.unit_name,
+          unit_type: fullMachine.unit_type,
+        },
+        sector: {
+          id: fullMachine.sector_id,
+          name: fullMachine.sector_name,
+        },
+      });
+      await repository.markAlertNotified(inactRes.alert.id, webhookOutcome.external_ticket_id);
+      inactRes.alert.n8n_notified = 1;
+      inactRes.alert.external_ticket_id = webhookOutcome.external_ticket_id;
+      socketHub.broadcastToDashboard("alert:triggered", {
+        ...inactRes.alert,
+        hostname: fullMachine.hostname,
+        unit_name: fullMachine.unit_name,
+        sector_name: fullMachine.sector_name,
+      });
     }
   } catch {
     // Ignora falha silenciosa
@@ -1144,7 +1205,7 @@ router.get("/agent/pending", async (req, res) => {
     pendingRefreshByAgent.delete(agentUuid);
   }
 
-  let updateRequested = pendingUpdateByAgent.has(agentUuid);
+  const updateRequested = pendingUpdateByAgent.has(agentUuid);
   if (updateRequested) {
     pendingUpdateByAgent.delete(agentUuid);
   }
@@ -1154,15 +1215,16 @@ router.get("/agent/pending", async (req, res) => {
     Boolean(currentAgentVersion) &&
     currentAgentVersion !== installerInfo.latest_version;
 
-  const queuedMsgs = pendingMessagesByAgent.get(agentUuid) || [];
-  if (queuedMsgs.length > 0) {
-    pendingMessagesByAgent.set(agentUuid, []);
-  }
+  const queuedMsgs = await repository.consumePendingAgentMessages(agentUuid);
 
-  const queuedTasks = pendingTasksByAgent.get(agentUuid) || [];
-  if (queuedTasks.length > 0) {
+  const nowMs = Date.now();
+  const rawTasks = pendingTasksByAgent.get(agentUuid) || [];
+  if (rawTasks.length > 0) {
     pendingTasksByAgent.set(agentUuid, []);
   }
+  const queuedTasks = rawTasks.filter(
+    (t) => !t.expires_at || new Date(t.expires_at).getTime() >= nowMs
+  );
 
   return res.json({
     refresh_requested: refreshRequested,
@@ -1174,37 +1236,66 @@ router.get("/agent/pending", async (req, res) => {
     messages: queuedMsgs,
     server_time: new Date().toISOString(),
   });
-});
+}));
 
-// 12.05. Recebimento do Resultado Real de Tarefa Executada pelo Agente Nativo (.exe)
-router.post("/agent/task-result", async (req, res) => {
-  try {
-    const { task_id, status = "COMPLETED", exit_code = 0, output_summary = "" } = req.body || {};
-    if (!task_id) {
-      return res.status(400).json({ error: "task_id obrigatório." });
-    }
-    const completedTask = await repository.completeRemoteTask({
-      taskId: String(task_id),
-      status: status === "FAILED" ? "FAILED" : "COMPLETED",
-      exitCode: Number(exit_code || 0),
-      outputSummary: String(output_summary || "Executado pelo Agente Windows.").slice(0, 1000),
-    });
-    if (completedTask) {
-      socketHub.broadcastToDashboard("task:updated", completedTask);
-      notifyLiveAgentTaskResult(String(task_id), completedTask);
-    }
-    return res.json({ status: "ok", task: completedTask });
-  } catch (err) {
-    return res.status(500).json({ error: "Erro ao registrar resultado da tarefa." });
+// 12.05. Recebimento Autenticado do Resultado Real de Tarefa Executada pelo Agente (.exe)
+router.post("/agent/task-result", requireAgentAuth, asyncHandler(async (req, res) => {
+  const { task_id, status = "COMPLETED", exit_code = 0, output_summary = "" } = req.body || {};
+  if (!task_id) {
+    return res.status(400).json({ error: "task_id obrigatório." });
   }
-});
+
+  const existingTask = await repository.findRemoteTaskById(String(task_id));
+  if (!existingTask) {
+    return res.status(404).json({ error: "Tarefa remota não encontrada." });
+  }
+  if (Number(existingTask.machine_id) !== Number(req.machine.id)) {
+    await repository.recordAuditLog({
+      machineId: req.machine.id,
+      actionType: "SECURITY_BLOCKED_TASK_RESULT_SPOOF",
+      ipAddress: req.ip,
+      details: {
+        task_id: String(task_id),
+        ownerMachineId: existingTask.machine_id,
+      },
+    });
+    return res.status(403).json({
+      error: "Acesso negado: tarefa pertence a outro equipamento.",
+    });
+  }
+
+  const validStatus = status === "FAILED" ? "FAILED" : "COMPLETED";
+  const completedTask = await repository.completeRemoteTask({
+    taskId: String(task_id),
+    status: validStatus,
+    exitCode: Number(exit_code || 0),
+    outputSummary: String(output_summary || "Executado pelo Agente Windows.").slice(0, 1000),
+  });
+
+  await repository.recordAuditLog({
+    machineId: req.machine.id,
+    actionType: "REMOTE_TASK_RESULT",
+    ipAddress: req.ip,
+    details: {
+      task_id: String(task_id),
+      status: validStatus,
+      exit_code: Number(exit_code || 0),
+    },
+  });
+
+  if (completedTask) {
+    socketHub.broadcastToDashboard("task:updated", completedTask);
+    notifyLiveAgentTaskResult(String(task_id), completedTask);
+  }
+  return res.json({ status: "ok", task: completedTask });
+}));
 
 // 12.06. Alocação de Unidade de Saúde e Setor da Máquina pelo Painel
 router.post(
   "/machines/:id/location",
   requireAuth,
   requireRole(["TECH_N1", "ADMIN_N2"]),
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const machineId = Number(req.params.id);
     const { unit_id, sector_id } = req.body || {};
     if (!unit_id || !sector_id) {
@@ -1217,114 +1308,129 @@ router.post(
     if (!updated) {
       return res.status(404).json({ error: "Máquina ou setor não encontrado." });
     }
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      machineId: updated.id,
+      actionType: "MACHINE_RELOCATED",
+      ipAddress: req.ip,
+      details: {
+        hostname: updated.hostname,
+        unit_id: updated.unit_id,
+        sector_id: updated.sector_id,
+      },
+    });
     socketHub.broadcastToDashboard("machine:updated", updated);
     return res.json({ status: "ok", machine: updated });
-  },
+  }),
 );
 
-// 12.1. Desconexão Imediata do Agente (Quando o usuário encerra o Agente ou desliga o PC)
-router.post("/agent/disconnect", async (req, res) => {
-  const agentUuid = String(
-    req.headers["x-agent-uuid"] || req.body?.agent_uuid || "",
-  ).trim();
-  if (!agentUuid) {
-    return res.status(400).json({ error: "agent_uuid obrigatório." });
-  }
-
-  const offlineMachine = await repository.markMachineOfflineByAgentUuid(agentUuid);
+// 12.1. Desconexão Imediata Autenticada do Agente (Quando encerra ou desliga o PC)
+router.post("/agent/disconnect", requireAgentAuth, asyncHandler(async (req, res) => {
+  const offlineMachine = await repository.markMachineOfflineById(req.machine.id);
   if (offlineMachine) {
     socketHub.broadcastToDashboard("machine:updated", offlineMachine);
   }
-  return res.json({ status: "offline", agent_uuid: agentUuid });
-});
+  await repository.recordAuditLog({
+    machineId: req.machine.id,
+    actionType: "AGENT_DISCONNECTED",
+    ipAddress: req.ip,
+    details: { agent_uuid: req.machine.agent_uuid },
+  });
+  return res.json({ status: "offline", agent_uuid: req.machine.agent_uuid });
+}));
 
 // 12.2. Exclusão de Máquina Cadastrada (Limpeza administrativa de estações)
 router.delete(
   "/machines/:id",
   requireAuth,
   requireRole(["TECH_N1", "ADMIN_N2"]),
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const machineId = Number(req.params.id);
+    const existing = await repository.findMachineById(machineId);
     const removed = await repository.deleteMachineById(machineId);
     if (!removed) {
       return res.status(404).json({ error: "Computador não encontrado." });
     }
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      machineId,
+      actionType: "MACHINE_DELETED",
+      ipAddress: req.ip,
+      details: {
+        hostname: existing?.hostname || null,
+        agent_uuid: existing?.agent_uuid || null,
+      },
+    });
     socketHub.broadcastToDashboard("machine:deleted", { id: machineId });
     return res.json({ status: "deleted", id: machineId });
-  },
+  }),
 );
 
-// 13. Canal Super Agente Cliente -> Servidor (Mensagem enviada pelo usuário na máquina Windows)
-router.post("/agent/message", async (req, res) => {
-  const agentUuid = String(
-    req.headers["x-agent-uuid"] || req.body?.agent_uuid || "",
-  ).trim();
+// 13. Canal Super Agente Cliente -> Servidor (Autenticado)
+router.post("/agent/message", requireAgentAuth, asyncHandler(async (req, res) => {
   const messageText = String(req.body?.message || "").trim().slice(0, 500);
-  const sender = String(req.body?.sender || agentUuid).trim().slice(0, 80);
+  const sender = String(req.body?.sender || req.machine.hostname || req.machine.agent_uuid)
+    .trim()
+    .slice(0, 80);
 
-  if (!agentUuid || !messageText) {
-    return res.status(400).json({ error: "agent_uuid e message são obrigatórios." });
+  if (!messageText) {
+    return res.status(400).json({ error: "message é obrigatório." });
   }
 
-  const machine = await repository.findMachineByAgentUuid(agentUuid);
-  const machineId = machine ? machine.id : 0;
-  const entry = {
-    id: `msg_${Date.now()}`,
-    machine_id: machineId,
-    agent_uuid: agentUuid,
+  const entry = await repository.createMachineMessage({
+    machineId: req.machine.id,
+    agentUuid: req.machine.agent_uuid,
     direction: "CLIENT_TO_SERVER",
     sender,
     message: messageText,
-    created_at: new Date().toISOString(),
-  };
-
-  if (machineId) {
-    const hist = chatHistoryByMachine.get(machineId) || [];
-    hist.push(entry);
-    chatHistoryByMachine.set(machineId, hist.slice(-100));
-  }
+    deliveredToAgent: true,
+  });
 
   socketHub.broadcastToDashboard("agent:message", entry);
   return res.json({ status: "ok", message: entry });
-});
+}));
 
-// 14. Canal Super Agente Servidor -> Cliente (Histórico e envio de mensagem da Central de TI para o PC)
-router.get("/machines/:id/messages", requireAuth, async (req, res) => {
+// 14. Canal Super Agente Servidor -> Cliente (Histórico persistido e envio restrito a TECH_N1/ADMIN_N2)
+router.get("/machines/:id/messages", requireAuth, asyncHandler(async (req, res) => {
   const machineId = Number(req.params.id);
-  const messages = chatHistoryByMachine.get(machineId) || [];
+  const messages = await repository.listMachineMessages(machineId, 100);
   return res.json({ messages });
-});
+}));
 
-router.post("/machines/:id/messages", requireAuth, async (req, res) => {
-  const machine = await repository.findMachineById(req.params.id);
-  if (!machine) {
-    return res.status(404).json({ error: "Computador não encontrado." });
-  }
-  const messageText = String(req.body?.message || "").trim().slice(0, 500);
-  if (!messageText) {
-    return res.status(400).json({ error: "Mensagem vazia." });
-  }
+router.post(
+  "/machines/:id/messages",
+  requireAuth,
+  requireRole(["TECH_N1", "ADMIN_N2"]),
+  asyncHandler(async (req, res) => {
+    const machine = await repository.findMachineById(req.params.id);
+    if (!machine) {
+      return res.status(404).json({ error: "Computador não encontrado." });
+    }
+    const messageText = String(req.body?.message || "").trim().slice(0, 500);
+    if (!messageText) {
+      return res.status(400).json({ error: "Mensagem vazia." });
+    }
 
-  const entry = {
-    id: `msg_${Date.now()}`,
-    machine_id: machine.id,
-    agent_uuid: machine.agent_uuid,
-    direction: "SERVER_TO_CLIENT",
-    sender: req.user?.name || "Central TI",
-    message: messageText,
-    created_at: new Date().toISOString(),
-  };
+    const entry = await repository.createMachineMessage({
+      machineId: machine.id,
+      agentUuid: machine.agent_uuid,
+      direction: "SERVER_TO_CLIENT",
+      sender: req.user?.name || "Central TI",
+      message: messageText,
+      deliveredToAgent: false,
+    });
 
-  const hist = chatHistoryByMachine.get(machine.id) || [];
-  hist.push(entry);
-  chatHistoryByMachine.set(machine.id, hist.slice(-100));
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      machineId: machine.id,
+      actionType: "AGENT_MESSAGE_SENT",
+      ipAddress: req.ip,
+      details: { message_id: entry.id, length: messageText.length },
+    });
 
-  const queue = pendingMessagesByAgent.get(machine.agent_uuid) || [];
-  queue.push(entry);
-  pendingMessagesByAgent.set(machine.agent_uuid, queue);
-
-  socketHub.broadcastToDashboard("agent:message", entry);
-  return res.json({ status: "ok", message: entry });
-});
+    socketHub.broadcastToDashboard("agent:message", entry);
+    return res.json({ status: "ok", message: entry });
+  }),
+);
 
 module.exports = router;

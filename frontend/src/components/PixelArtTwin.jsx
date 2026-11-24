@@ -243,7 +243,16 @@ const DESK_SLOTS = [
   { x: 8.15, y: 6.25, label: 'BALCÃO', labelOffset: -2 },
 ];
 
-function drawComputer(ctx, slot, machine, isSelected, blinkOn) {
+function isMachineInactive24h(machine) {
+  if (!machine) return false;
+  if (machine.health_status === 'OFFLINE') {
+    if (!machine.last_seen_at) return false;
+    return (Date.now() - new Date(machine.last_seen_at).getTime()) / 1000 >= 86400;
+  }
+  return Number(machine.idle_seconds || 0) >= 86400;
+}
+
+function drawComputer(ctx, slot, machine, isSelected, isHovered, blinkOn) {
   const status = machine?.health_status || 'OFFLINE';
   const screen = STATUS_COLORS[status] || STATUS_COLORS.OFFLINE;
 
@@ -266,14 +275,14 @@ function drawComputer(ctx, slot, machine, isSelected, blinkOn) {
   ctx.fillStyle = blinkOn || status !== 'NORMAL' ? screen : shade(screen, 0.6);
   ctx.fillRect(Math.round(led.sx) - 1, Math.round(led.sy) - 1, 3, 3);
 
-  // destaque de seleção
-  if (isSelected) {
+  // destaque de seleção ou hover
+  if (isSelected || isHovered) {
     const a = iso(slot.x - 0.25, slot.y - 0.25, 0.03);
     const b = iso(slot.x + 1.15, slot.y - 0.25, 0.03);
     const c = iso(slot.x + 1.15, slot.y + 0.85, 0.03);
     const d = iso(slot.x - 0.25, slot.y + 0.85, 0.03);
-    ctx.strokeStyle = '#1F2937';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = isSelected ? '#1F2937' : '#52796B';
+    ctx.lineWidth = isSelected ? 1.4 : 1;
     ctx.beginPath();
     ctx.moveTo(Math.round(a.sx), Math.round(a.sy));
     ctx.lineTo(Math.round(b.sx), Math.round(b.sy));
@@ -286,10 +295,10 @@ function drawComputer(ctx, slot, machine, isSelected, blinkOn) {
 
 function drawMachineLabel(ctx, slot, machine, isSelected, occupied = []) {
   const status = machine?.health_status || 'OFFLINE';
+  const inactive24h = isMachineInactive24h(machine);
   const anchor = iso(slot.x + 0.45, slot.y + 0.2, 2.15);
   const full = machine?.hostname || 'SEM AGENTE';
-  // Nome real completo: sem truncar o hostname no rótulo
-  const short = full;
+  const short = inactive24h ? `${full} !24h` : full;
   ctx.font = '8px "Courier New", monospace';
   const w = Math.max(ctx.measureText(short).width + 18, 46);
   const x = Math.round(anchor.sx - w / 2);
@@ -303,21 +312,31 @@ function drawMachineLabel(ctx, slot, machine, isSelected, occupied = []) {
     y += 14;
     guard += 1;
   }
-  occupied.push({ x, y, w, h: 12 });
+  const box = { x, y, w, h: 12 };
+  occupied.push(box);
 
-  ctx.fillStyle = isSelected ? '#1F2937' : 'rgba(255,255,255,0.96)';
+  ctx.fillStyle = isSelected
+    ? '#1F2937'
+    : inactive24h
+      ? '#FEF2F2'
+      : 'rgba(255,255,255,0.96)';
   ctx.fillRect(x, y, w, 12);
-  ctx.strokeStyle = isSelected ? '#1F2937' : 'rgba(31,41,55,0.3)';
+  ctx.strokeStyle = isSelected
+    ? '#1F2937'
+    : inactive24h
+      ? '#DC2626'
+      : 'rgba(31,41,55,0.3)';
   ctx.lineWidth = 1;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 11);
 
   // LED de status dentro do rótulo
-  ctx.fillStyle = STATUS_COLORS[status] || STATUS_COLORS.OFFLINE;
+  ctx.fillStyle = inactive24h ? '#DC2626' : STATUS_COLORS[status] || STATUS_COLORS.OFFLINE;
   ctx.fillRect(x + 4, y + 4, 4, 4);
 
-  ctx.fillStyle = isSelected ? '#FFFFFF' : PALETTE.ink;
+  ctx.fillStyle = isSelected ? '#FFFFFF' : inactive24h ? '#991B1B' : PALETTE.ink;
   ctx.textBaseline = 'middle';
   ctx.fillText(short, x + 11, y + 6.5);
+  return box;
 }
 
 function drawSelectedCard(ctx, machine, cssW, cssH) {
@@ -353,8 +372,10 @@ function drawSelectedCard(ctx, machine, cssW, cssH) {
     x + 12,
     y + 57
   );
+  const tempLabel =
+    Number(machine.temperature_c) > 0 ? `${Number(machine.temperature_c).toFixed(0)}°C` : 'N/D';
   ctx.fillText(
-    `DISCO ${Number(machine.disk_usage_pct ?? 0).toFixed(0)}%   TEMP ${Number(machine.temperature_c ?? 0).toFixed(0)}°C`,
+    `DISCO ${Number(machine.disk_usage_pct ?? 0).toFixed(0)}%   TEMP ${tempLabel}`,
     x + 12,
     y + 69
   );
@@ -379,7 +400,7 @@ const CanvasEl = styled.canvas`
   width: 100%;
   height: 100%;
   display: block;
-  cursor: ${({ $dragging }) => ($dragging ? 'grabbing' : 'grab')};
+  cursor: ${({ $dragging, $hover }) => ($dragging ? 'grabbing' : $hover ? 'pointer' : 'grab')};
   image-rendering: auto;
 `;
 
@@ -440,36 +461,31 @@ export function PixelArtTwin({
   const [hoverId, setHoverId] = useState(null);
   const [blink, setBlink] = useState(true);
 
-  const sectors = activeUnit?.sectors || [];
-  const receptionSector = useMemo(() => {
-    if (selectedSector) return selectedSector;
-    return (
-      sectors.find((s) => /recep/i.test(s.name || '')) ||
-      sectors[0] ||
-      null
-    );
-  }, [sectors, selectedSector]);
-
   const sectorMachines = useMemo(() => {
-    const list = (machines || []).filter((m) => {
-      const sameUnit = activeUnit?.id && Number(m.unit_id) === Number(activeUnit.id);
-      const sameSector =
-        receptionSector?.id && Number(m.sector_id) === Number(receptionSector.id);
-      return sameSector || sameUnit;
-    });
-    // A estação real do protótipo tem prioridade no slot principal.
-    return list.sort((a, b) => {
-      const rank = (m) => (m.hostname === 'DESKTOP-32HK6KT' ? -1 : 0);
-      return rank(a) - rank(b);
-    });
-  }, [machines, activeUnit?.id, receptionSector?.id]);
+    const unitList = (machines || []).filter(
+      (m) => !activeUnit?.id || Number(m.unit_id) === Number(activeUnit.id)
+    );
+    const filtered = selectedSector?.id
+      ? unitList.filter((m) => Number(m.sector_id) === Number(selectedSector.id))
+      : unitList;
+    return [...filtered].sort((a, b) => Number(a.id) - Number(b.id));
+  }, [machines, activeUnit?.id, selectedSector?.id]);
 
+  // Apenas estações reais recebem computador na mesa (evita PCs fantasmas não selecionáveis)
   const slots = useMemo(
     () =>
-      DESK_SLOTS.map((slot, index) => ({
-        ...slot,
-        machine: sectorMachines[index] || null,
-      })),
+      sectorMachines.map((machine, index) => {
+        const baseSlot = DESK_SLOTS[index] || {
+          x: 2.2 + ((index - DESK_SLOTS.length) % 4) * 2.1,
+          y: 5.2 + Math.floor((index - DESK_SLOTS.length) / 4) * 1.6,
+          label: `POSTO ${String(index + 1).padStart(2, '0')}`,
+          labelOffset: -6,
+        };
+        return {
+          ...baseSlot,
+          machine,
+        };
+      }),
     [sectorMachines]
   );
 
@@ -507,32 +523,41 @@ export function PixelArtTwin({
 
     const hits = [];
     slots.forEach((slot) => {
-      const isSelected = selectedMachine?.id === slot.machine?.id;
-      drawComputer(ctx, slot, slot.machine, isSelected, blink);
+      if (!slot.machine) return;
+      const isSelected = Boolean(selectedMachine?.id) && selectedMachine.id === slot.machine.id;
+      const isHovered = Boolean(hoverId) && hoverId === slot.machine.id;
+      drawComputer(ctx, slot, slot.machine, isSelected, isHovered, blink);
       const anchor = iso(slot.x + 0.45, slot.y + 0.2, 1.2);
       hits.push({
-        id: slot.machine?.id,
-        x: anchor.sx - 22,
-        y: anchor.sy - 26,
-        w: 44,
-        h: 40,
+        id: slot.machine.id,
+        x: anchor.sx - 26,
+        y: anchor.sy - 30,
+        w: 52,
+        h: 48,
       });
     });
 
-    // etiquetas por último para ficarem legíveis
+    // etiquetas por último para ficarem legíveis (também clicáveis)
     const labelBoxes = [];
     slots.forEach((slot) => {
       if (!slot.machine) return;
-      drawMachineLabel(
+      const labelBox = drawMachineLabel(
         ctx,
         slot,
         slot.machine,
-        selectedMachine?.id === slot.machine.id,
+        Boolean(selectedMachine?.id) && selectedMachine.id === slot.machine.id,
         labelBoxes
       );
+      if (labelBox) {
+        hits.push({
+          id: slot.machine.id,
+          x: labelBox.x - 2,
+          y: labelBox.y - 2,
+          w: labelBox.w + 4,
+          h: labelBox.h + 4,
+        });
+      }
     });
-
-    drawSelectedCard(ctx, selectedMachine);
 
     // cabeçalho e cartão são desenhados em espaço de tela, após o blit,
     // para não serem cortados pelo zoom/pan da maquete.
@@ -579,7 +604,7 @@ export function PixelArtTwin({
     out.textBaseline = 'alphabetic';
     out.font = 'bold 11px "Courier New", monospace';
     out.fillStyle = PALETTE.ink;
-    const title = `${activeUnit?.code || 'USF'} // ${receptionSector?.name || 'RECEPÇÃO'}`;
+    const title = `${activeUnit?.code || 'USF'} // ${selectedSector?.name || 'VISÃO GERAL DA UNIDADE'}`;
     out.fillText(title.toUpperCase(), 16, 26);
     out.font = '9px "Courier New", monospace';
     out.fillStyle = PALETTE.inkSoft;
@@ -590,7 +615,7 @@ export function PixelArtTwin({
     );
 
     drawSelectedCard(out, selectedMachine, cssW, cssH);
-  }, [slots, selectedMachine, blink, view, activeUnit?.code, receptionSector?.name, sectorMachines.length]);
+  }, [slots, selectedMachine, hoverId, blink, view, activeUnit?.code, selectedSector?.name, sectorMachines.length]);
 
   useEffect(() => {
     draw();
@@ -673,28 +698,28 @@ export function PixelArtTwin({
     }
   };
 
-  const handleWheel = (event) => {
+  const handleWheel = useCallback((event) => {
     event.preventDefault();
     const factor = event.deltaY < 0 ? 1.12 : 0.89;
     setView((prev) => ({
       ...prev,
       zoom: Math.min(4, Math.max(0.6, prev.zoom * factor)),
     }));
-  };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
-    const onWheel = (e) => handleWheel(e);
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', onWheel);
-  });
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
 
   return (
     <Stage>
       <CanvasEl
         ref={canvasRef}
         $dragging={dragging}
+        $hover={Boolean(hoverId)}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

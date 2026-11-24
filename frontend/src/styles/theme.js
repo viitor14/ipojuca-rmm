@@ -53,6 +53,27 @@ export const RISK_LABELS = {
 };
 
 /**
+ * Compara versões semânticas (ex.: "2.4.0-native-exe" vs "2.3.0").
+ * Retorna true apenas se a versão informada for estritamente inferior à mínima.
+ */
+export function isAgentOutdated(version, minVersion = '2.3.0') {
+  if (!version || typeof version !== 'string') return false;
+  const parse = (v) => {
+    const match = String(v).match(/(\d+)\.(\d+)(?:\.(\d+))?/);
+    if (!match) return null;
+    return [Number(match[1]), Number(match[2]), Number(match[3] || 0)];
+  };
+  const current = parse(version);
+  const minimum = parse(minVersion);
+  if (!current || !minimum) return false;
+  for (let i = 0; i < 3; i += 1) {
+    if (current[i] < minimum[i]) return true;
+    if (current[i] > minimum[i]) return false;
+  }
+  return false;
+}
+
+/**
  * Corrige automaticamente qualquer string corrompida por encoding UTF-8/Latin1
  * (ex: "Nossa Senhora do Ã“" -> "Nossa Senhora do Ó", "RecepÃ§Ã£o" -> "Recepção")
  */

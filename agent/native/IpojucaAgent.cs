@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Management;
 using System.Net;
@@ -21,13 +22,13 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.3.4.0")]
+[assembly: AssemblyVersion("2.4.0.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.3.4-native-exe";
+        public const string CURRENT_VERSION = "2.4.0-native-exe";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -244,6 +245,8 @@ namespace IpojucaRMM
         private readonly System.Windows.Forms.Timer _heartbeatTimer;
         private readonly System.Windows.Forms.Timer _commandPollTimer;
         private readonly List<string> _chatHistory = new List<string>();
+        private readonly HashSet<string> _executedTaskIds = new HashSet<string>();
+        private readonly object _taskLock = new object();
         private SuperAgentForm _statusForm;
         private readonly Control _uiDispatcher;
         private string _lastSyncStatus = "Iniciando coleta...";
@@ -329,9 +332,9 @@ namespace IpojucaRMM
             _heartbeatTimer.Tick += (s, e) => TriggerHeartbeatAsync("PERIODIC_4H");
             _heartbeatTimer.Start();
 
-            // 3. Poll leve a cada 1.5 segundos para resposta imediata aos botões de Manutenção Remota e Chat
+            // 3. Poll calibrado (5s) para comandos remotos assinados e chat sem sobrecarregar rede/MySQL
             _commandPollTimer = new System.Windows.Forms.Timer();
-            _commandPollTimer.Interval = 1500;
+            _commandPollTimer.Interval = 5000;
             _commandPollTimer.Tick += (s, e) => PollPendingCommandsAsync();
             _commandPollTimer.Start();
         }
@@ -595,7 +598,7 @@ namespace IpojucaRMM
                     {
                         { "agent_uuid", _config.AgentUuid },
                         { "hostname", Environment.MachineName },
-                        { "sender", Environment.UserName + "@" + Environment.MachineName },
+                        { "sender", "Estação " + Environment.MachineName },
                         { "message", text }
                     });
 
@@ -669,14 +672,23 @@ namespace IpojucaRMM
                                 Dictionary<string, object> t = item as Dictionary<string, object>;
                                 if (t != null && t.ContainsKey("task_id") && t.ContainsKey("task_code"))
                                 {
-                                    string taskId = t["task_id"].ToString();
-                                    string taskCode = t["task_code"].ToString();
+                                    string taskId = Convert.ToString(t["task_id"]);
+                                    string taskCode = Convert.ToString(t["task_code"]);
+                                    long machineId = t.ContainsKey("machine_id") && t["machine_id"] != null
+                                        ? Convert.ToInt64(t["machine_id"])
+                                        : 0;
+                                    string expiresAt = t.ContainsKey("expires_at") && t["expires_at"] != null
+                                        ? Convert.ToString(t["expires_at"])
+                                        : "";
+                                    string signature = t.ContainsKey("signature") && t["signature"] != null
+                                        ? Convert.ToString(t["signature"])
+                                        : "";
                                     Dictionary<string, object> taskParams = null;
                                     if (t.ContainsKey("parameters") && t["parameters"] is Dictionary<string, object>)
                                     {
                                         taskParams = (Dictionary<string, object>)t["parameters"];
                                     }
-                                    ExecuteAndReportTask(taskId, taskCode, taskParams);
+                                    ValidateAndExecuteTask(taskId, machineId, taskCode, expiresAt, signature, taskParams);
                                 }
                             }
                         }
@@ -715,27 +727,47 @@ namespace IpojucaRMM
             });
         }
 
-        private void ExecuteAndReportTask(string taskId, string taskCode, Dictionary<string, object> taskParams)
+        private static string ComputeSha256Hex(string input)
+        {
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(input ?? ""));
+                StringBuilder sb = new StringBuilder(hash.Length * 2);
+                foreach (byte b in hash) sb.Append(b.ToString("x2"));
+                return sb.ToString();
+            }
+        }
+
+        private static bool VerifyTaskHmac(string taskId, long machineId, string taskCode, string expiresAt, string signature, string agentToken)
+        {
+            if (string.IsNullOrEmpty(signature) || string.IsNullOrEmpty(agentToken)) return false;
+            string keyHex = ComputeSha256Hex(agentToken);
+            string canonical = string.Format(CultureInfo.InvariantCulture, "{0}:{1}:{2}:{3}", taskId, machineId, taskCode, expiresAt);
+            using (HMACSHA256 hmac = new HMACSHA256(Encoding.UTF8.GetBytes(keyHex)))
+            {
+                byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(canonical));
+                StringBuilder sb = new StringBuilder(hash.Length * 2);
+                foreach (byte b in hash) sb.Append(b.ToString("x2"));
+                string expected = sb.ToString();
+                string actual = signature.Trim().ToLowerInvariant();
+                if (expected.Length != actual.Length) return false;
+                int diff = 0;
+                for (int i = 0; i < expected.Length; i++) diff |= expected[i] ^ actual[i];
+                return diff == 0;
+            }
+        }
+
+        private void ReportTaskOutcome(string taskId, bool success, int exitCode, string summary)
         {
             try
             {
-                AppendLog("[TASK EXEC] Iniciando execução local de " + taskCode + " (" + taskId + ")");
-                _trayIcon.ShowBalloonTip(
-                    3500,
-                    "Manutenção Remota — RMM Ipojuca",
-                    "A Central de TI iniciou a tarefa: " + taskCode,
-                    ToolTipIcon.Info
-                );
-
-                RemoteTaskExecutor.TaskResult outcome = RemoteTaskExecutor.RunTask(taskCode, taskParams, _config, () => TriggerHeartbeatAsync("TASK_" + taskCode), () => TriggerSelfUpdateGui(false));
-
                 JavaScriptSerializer serializer = new JavaScriptSerializer();
                 string jsonBody = serializer.Serialize(new Dictionary<string, object>
                 {
                     { "task_id", taskId },
-                    { "status", outcome.Success ? "COMPLETED" : "FAILED" },
-                    { "exit_code", outcome.Success ? 0 : 1 },
-                    { "output_summary", outcome.Summary }
+                    { "status", success ? "COMPLETED" : "FAILED" },
+                    { "exit_code", exitCode },
+                    { "output_summary", summary }
                 });
 
                 string url = _config.BackendUrl.TrimEnd('/') + "/api/agent/task-result";
@@ -753,11 +785,73 @@ namespace IpojucaRMM
                     reqStream.Write(bytes, 0, bytes.Length);
                 }
                 using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse()) { }
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[TASK REPORT ERRO] " + taskId + ": " + ex.Message);
+            }
+        }
+
+        private void ValidateAndExecuteTask(string taskId, long machineId, string taskCode, string expiresAt, string signature, Dictionary<string, object> taskParams)
+        {
+            if (string.IsNullOrEmpty(taskId) || string.IsNullOrEmpty(taskCode) || string.IsNullOrEmpty(expiresAt) || string.IsNullOrEmpty(signature))
+            {
+                AppendLog("[SEGURANCA] Tarefa rejeitada (payload incompleto ou sem assinatura): " + taskId);
+                ReportTaskOutcome(taskId, false, 400, "Tarefa rejeitada: payload incompleto ou sem assinatura HMAC.");
+                return;
+            }
+
+            DateTimeOffset parsedExp;
+            if (!DateTimeOffset.TryParse(expiresAt, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out parsedExp) ||
+                DateTimeOffset.UtcNow > parsedExp)
+            {
+                AppendLog("[SEGURANCA] Tarefa rejeitada (TTL expirado): " + taskId + " exp=" + expiresAt);
+                ReportTaskOutcome(taskId, false, 408, "Tarefa rejeitada: prazo de validade (TTL) expirado.");
+                return;
+            }
+
+            if (!VerifyTaskHmac(taskId, machineId, taskCode, expiresAt, signature, _config.AgentToken))
+            {
+                AppendLog("[SEGURANCA] Tarefa rejeitada (HMAC invalido): " + taskId);
+                ReportTaskOutcome(taskId, false, 401, "Tarefa rejeitada: assinatura criptográfica HMAC inválida.");
+                return;
+            }
+
+            lock (_taskLock)
+            {
+                if (_executedTaskIds.Contains(taskId))
+                {
+                    AppendLog("[SEGURANCA] Tarefa rejeitada (Anti-Replay): " + taskId);
+                    ReportTaskOutcome(taskId, false, 409, "Tarefa rejeitada: task_id já processado anteriormente (Anti-Replay).");
+                    return;
+                }
+                if (_executedTaskIds.Count > 5000) _executedTaskIds.Clear();
+                _executedTaskIds.Add(taskId);
+            }
+
+            ExecuteAndReportTask(taskId, taskCode, taskParams);
+        }
+
+        private void ExecuteAndReportTask(string taskId, string taskCode, Dictionary<string, object> taskParams)
+        {
+            try
+            {
+                AppendLog("[TASK EXEC] Iniciando execução local de " + taskCode + " (" + taskId + ")");
+                _trayIcon.ShowBalloonTip(
+                    3500,
+                    "Manutenção Remota — RMM Ipojuca",
+                    "A Central de TI iniciou a tarefa: " + taskCode,
+                    ToolTipIcon.Info
+                );
+
+                RemoteTaskExecutor.TaskResult outcome = RemoteTaskExecutor.RunTask(taskCode, taskParams, _config, () => TriggerHeartbeatAsync("TASK_" + taskCode), () => TriggerSelfUpdateGui(false));
+                ReportTaskOutcome(taskId, outcome.Success, outcome.Success ? 0 : 1, outcome.Summary);
                 AppendLog("[TASK OK] " + taskCode + " -> " + outcome.Summary);
             }
             catch (Exception ex)
             {
                 AppendLog("[TASK ERRO] " + taskCode + ": " + ex.Message);
+                ReportTaskOutcome(taskId, false, 1, "Erro na execução da tarefa: " + ex.Message);
             }
         }
 
@@ -849,18 +943,36 @@ namespace IpojucaRMM
             }
         }
 
+        private static bool IsPrivateIpv4Strict(string ip)
+        {
+            if (string.IsNullOrEmpty(ip)) return false;
+            if (!Regex.IsMatch(ip, @"^(10\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])|192\.168)\.\d{1,3}\.\d{1,3}$"))
+                return false;
+            IPAddress parsed;
+            return IPAddress.TryParse(ip, out parsed) && parsed.AddressFamily == AddressFamily.InterNetwork;
+        }
+
+        private static string EscapePsSingleQuoted(string value)
+        {
+            return (value ?? "").Replace("'", "''");
+        }
+
         private static TaskResult InstallApprovedPrinter(Dictionary<string, object> parameters, Action onTriggerHeartbeat)
         {
             string printerIp = parameters != null && parameters.ContainsKey("printer_ip")
                 ? Convert.ToString(parameters["printer_ip"]).Trim()
                 : "";
             string printerName = parameters != null && parameters.ContainsKey("printer_name")
-                ? Convert.ToString(parameters["printer_name"]).Trim()
+                ? SanitizePrinterName(Convert.ToString(parameters["printer_name"]))
                 : "";
 
-            if (string.IsNullOrEmpty(printerIp) || string.IsNullOrEmpty(printerName))
+            if (!IsPrivateIpv4Strict(printerIp))
             {
-                return new TaskResult(false, "Parâmetros printer_ip e printer_name são obrigatórios para instalar a impressora.");
+                return new TaskResult(false, "Endereço printer_ip inválido ou fora da rede privada institucional.");
+            }
+            if (string.IsNullOrEmpty(printerName) || printerName.Length < 3)
+            {
+                return new TaskResult(false, "Parâmetro printer_name inválido após sanitização (permitido 3-64 caracteres alfanuméricos).");
             }
 
             if (!IsPrinterReachable(printerIp))
@@ -872,9 +984,13 @@ namespace IpojucaRMM
             string realName;
             string realModel;
             PrinterDiscovery.ResolveIppIdentity(printerIp, out realName, out realModel);
-            if (!string.IsNullOrEmpty(realName) && (syntheticName || string.IsNullOrEmpty(printerName)))
+            if (!string.IsNullOrEmpty(realName) && syntheticName)
             {
-                printerName = SanitizePrinterName(realName);
+                string safeRealName = SanitizePrinterName(realName);
+                if (!string.IsNullOrEmpty(safeRealName) && safeRealName.Length >= 3)
+                {
+                    printerName = safeRealName;
+                }
             }
 
             string portName = "IP_" + printerIp;
@@ -896,16 +1012,25 @@ namespace IpojucaRMM
             candidateDrivers.Add("Generic / Text Only");
             candidateDrivers.Add("Microsoft enhanced Point and Print compatibility driver");
 
+            string safePort = EscapePsSingleQuoted(portName);
+            string safeIp = EscapePsSingleQuoted(printerIp);
+            string safePrinter = EscapePsSingleQuoted(printerName);
+
             string lastError = "";
             foreach (string driver in candidateDrivers)
             {
+                string safeDriver = EscapePsSingleQuoted(driver);
                 string script = string.Join("; ", new string[]
                 {
                     "$ErrorActionPreference='Stop'",
-                    "if (-not (Get-PrinterPort -Name '" + portName + "' -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name '" + portName + "' -PrinterHostAddress '" + printerIp + "' }",
-                    "if (Get-Printer -Name '" + printerName + "' -ErrorAction SilentlyContinue) { Remove-Printer -Name '" + printerName + "' }",
-                    "Add-Printer -Name '" + printerName + "' -DriverName '" + driver + "' -PortName '" + portName + "'",
-                    "(Get-Printer -Name '" + printerName + "').Name"
+                    "$pPort='" + safePort + "'",
+                    "$pIp='" + safeIp + "'",
+                    "$pName='" + safePrinter + "'",
+                    "$pDrv='" + safeDriver + "'",
+                    "if (-not (Get-PrinterPort -Name $pPort -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name $pPort -PrinterHostAddress $pIp }",
+                    "if (Get-Printer -Name $pName -ErrorAction SilentlyContinue) { Remove-Printer -Name $pName }",
+                    "Add-Printer -Name $pName -DriverName $pDrv -PortName $pPort",
+                    "(Get-Printer -Name $pName).Name"
                 });
 
                 string output = RunPowerShell(script, 45000);
@@ -924,10 +1049,11 @@ namespace IpojucaRMM
 
         private static string SanitizePrinterName(string value)
         {
-            if (string.IsNullOrEmpty(value)) return value;
-            string clean = Regex.Replace(value, @"[\\/,;:|*?""<>]", " ").Trim();
+            if (string.IsNullOrEmpty(value)) return "";
+            // Whitelist estrita: impede qualquer caractere de controle ou metacaractere PowerShell (', `, $, ;, |, &)
+            string clean = Regex.Replace(value, @"[^a-zA-Z0-9 _().-]", " ").Trim();
             clean = Regex.Replace(clean, @"\s+", " ");
-            if (clean.Length > 200) clean = clean.Substring(0, 200).Trim();
+            if (clean.Length > 64) clean = clean.Substring(0, 64).Trim();
             return clean;
         }
 
@@ -1552,17 +1678,97 @@ namespace IpojucaRMM
             return 8.5;
         }
 
+        private static bool IsGenericSerial(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return true;
+            string v = raw.Trim();
+            if (v.Length < 3 || v.Length > 100) return true;
+            string upper = v.ToUpperInvariant();
+            string[] generics = new string[]
+            {
+                "TO BE FILLED BY O.E.M.", "TO BE FILLED BY OEM", "DEFAULT STRING",
+                "SYSTEM SERIAL NUMBER", "SYSTEM SERIAL", "SERIAL NUMBER",
+                "NONE", "N/A", "NA", "NULL", "UNKNOWN", "NOT SPECIFIED",
+                "NOT APPLICABLE", "O.E.M.", "OEM", "123456789", "1234567890", "0123456789"
+            };
+            foreach (string g in generics)
+            {
+                if (upper == g) return true;
+            }
+            if (Regex.IsMatch(upper, @"^[0\s\-.]+$") || Regex.IsMatch(upper, @"^F+$")) return true;
+            if (upper.StartsWith("SN-")) return true;
+            return false;
+        }
+
+        private static string NormalizeSmbiosUuid(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return null;
+            string v = raw.Trim().ToUpperInvariant();
+            if (!Regex.IsMatch(v, @"^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$"))
+                return null;
+            if (Regex.IsMatch(v, @"^[0-]+$") || Regex.IsMatch(v, @"^[F-]+$"))
+                return null;
+            return v;
+        }
+
+        private static string DetectSystemDiskType()
+        {
+            try
+            {
+                ManagementScope scope = new ManagementScope(@"\\.\root\Microsoft\Windows\Storage");
+                scope.Connect();
+                using (ManagementObjectSearcher s = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT MediaType, BusType FROM MSFT_PhysicalDisk")))
+                {
+                    foreach (ManagementObject disk in s.Get())
+                    {
+                        int media = disk["MediaType"] != null ? Convert.ToInt32(disk["MediaType"]) : 0;
+                        int bus = disk["BusType"] != null ? Convert.ToInt32(disk["BusType"]) : 0;
+                        if (media == 4 || bus == 17) return "SSD";
+                        if (media == 3) return "HDD";
+                    }
+                }
+            }
+            catch { }
+            return "UNKNOWN";
+        }
+
+        private static double? ReadRealTemperatureC()
+        {
+            try
+            {
+                ManagementScope scope = new ManagementScope(@"\\.\root\WMI");
+                scope.Connect();
+                using (ManagementObjectSearcher s = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature")))
+                {
+                    foreach (ManagementObject obj in s.Get())
+                    {
+                        if (obj["CurrentTemperature"] != null)
+                        {
+                            double tenthsKelvin = Convert.ToDouble(obj["CurrentTemperature"]);
+                            double celsius = Math.Round((tenthsKelvin / 10.0) - 273.15, 1);
+                            if (celsius >= 10.0 && celsius <= 120.0) return celsius;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
         public static Dictionary<string, object> CollectInventory()
         {
             string hostname = Environment.MachineName;
-            string manufacturer = "OEM Workstation";
-            string model = "Windows PC";
-            string serialNumber = "SN-" + hostname;
-            string cpuModel = "Intel/AMD x64 Processor";
-            int ramTotalMb = 8192;
-            int diskTotalGb = 256;
-            string diskType = "SSD";
-            string osVersion = "Windows 11 Pro";
+            string manufacturer = null;
+            string model = null;
+            string serialNumber = null;
+            string smbiosUuid = null;
+            string cpuModel = null;
+            int? cpuCores = null;
+            int? cpuThreads = null;
+            int ramTotalMb = 0;
+            int diskTotalGb = 0;
+            string diskType = DetectSystemDiskType();
+            string osVersion = "Windows";
             string ipAddress;
             string macAddress;
 
@@ -1578,7 +1784,6 @@ namespace IpojucaRMM
                         object mfgObj = biosKey.GetValue("SystemManufacturer") ?? biosKey.GetValue("BaseBoardManufacturer");
                         object famObj = biosKey.GetValue("SystemFamily");
                         object prodObj = biosKey.GetValue("SystemProductName") ?? biosKey.GetValue("BaseBoardProduct");
-                        object verObj = biosKey.GetValue("BIOSVersion");
 
                         if (mfgObj != null && mfgObj.ToString().Trim().Length > 0)
                             manufacturer = mfgObj.ToString().Trim();
@@ -1591,9 +1796,6 @@ namespace IpojucaRMM
                             model = fam;
                         else if (!string.IsNullOrEmpty(prod))
                             model = prod;
-
-                        if (verObj != null && !(verObj is string[]))
-                            serialNumber = (string.IsNullOrEmpty(prod) ? "SN" : prod) + "-" + verObj.ToString().Trim();
                     }
                 }
             }
@@ -1642,7 +1844,7 @@ namespace IpojucaRMM
             }
             catch { }
 
-            // 3. Serial da BIOS via WMI quando disponível
+            // 3. Serial real da BIOS, SMBIOS UUID e núcleos de CPU via WMI (Ciclo #27 / #48 — nunca inventa serial sintético)
             try
             {
                 using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT SerialNumber FROM Win32_BIOS"))
@@ -1652,16 +1854,55 @@ namespace IpojucaRMM
                         if (obj["SerialNumber"] != null)
                         {
                             string sn = obj["SerialNumber"].ToString().Trim();
-                            if (!string.IsNullOrEmpty(sn) && !sn.Equals("Default string", StringComparison.OrdinalIgnoreCase))
-                            {
-                                serialNumber = sn;
-                            }
+                            if (!IsGenericSerial(sn)) serialNumber = sn;
                         }
                         break;
                     }
                 }
             }
             catch { }
+
+            try
+            {
+                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT UUID FROM Win32_ComputerSystemProduct"))
+                {
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        if (obj["UUID"] != null)
+                        {
+                            smbiosUuid = NormalizeSmbiosUuid(obj["UUID"].ToString());
+                        }
+                        break;
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                int coresSum = 0;
+                int threadsSum = 0;
+                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT Name, NumberOfCores, NumberOfLogicalProcessors FROM Win32_Processor"))
+                {
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        if (string.IsNullOrEmpty(cpuModel) && obj["Name"] != null)
+                            cpuModel = obj["Name"].ToString().Trim();
+                        if (obj["NumberOfCores"] != null)
+                            coresSum += Convert.ToInt32(obj["NumberOfCores"]);
+                        if (obj["NumberOfLogicalProcessors"] != null)
+                            threadsSum += Convert.ToInt32(obj["NumberOfLogicalProcessors"]);
+                    }
+                }
+                if (coresSum > 0) cpuCores = coresSum;
+                if (threadsSum > 0) cpuThreads = threadsSum;
+            }
+            catch { }
+
+            if (!cpuThreads.HasValue && Environment.ProcessorCount > 0)
+            {
+                cpuThreads = Environment.ProcessorCount;
+            }
 
             // 4. Capacidade real do disco do sistema (C:)
             try
@@ -1680,16 +1921,20 @@ namespace IpojucaRMM
                 { "manufacturer", manufacturer },
                 { "model", model },
                 { "serial_number", serialNumber },
+                { "smbios_uuid", smbiosUuid },
                 { "cpu_model", cpuModel },
                 { "processor", cpuModel },
-                { "ram_total_mb", ramTotalMb },
-                { "ram_total_gb", Math.Round(ramTotalMb / 1024.0, 1) },
+                { "cpu_cores", cpuCores },
+                { "cpu_threads", cpuThreads },
+                { "ram_total_mb", ramTotalMb > 0 ? (object)ramTotalMb : null },
+                { "ram_total_gb", ramTotalMb > 0 ? (object)Math.Round(ramTotalMb / 1024.0, 1) : null },
                 { "disk_type", diskType },
-                { "disk_total_gb", diskTotalGb },
+                { "disk_total_gb", diskTotalGb > 0 ? (object)diskTotalGb : null },
                 { "os_version", osVersion },
                 { "os_name", osVersion },
                 { "ip_address", ipAddress },
-                { "mac_address", macAddress }
+                { "mac_address", macAddress },
+                { "inventory_collected_at", DateTime.UtcNow.ToString("o") }
             };
         }
 
@@ -1739,7 +1984,7 @@ namespace IpojucaRMM
             }
             catch { }
 
-            double temperatureC = Math.Round(42.0 + (cpuUsagePct * 0.31), 1);
+            double? temperatureC = ReadRealTemperatureC();
             long idleSeconds = GetIdleSeconds();
 
             return new Dictionary<string, object>
@@ -1747,7 +1992,7 @@ namespace IpojucaRMM
                 { "cpu_usage_pct", cpuUsagePct },
                 { "ram_usage_pct", ramUsagePct },
                 { "disk_usage_pct", diskUsagePct },
-                { "temperature_c", temperatureC },
+                { "temperature_c", temperatureC.HasValue ? (object)temperatureC.Value : null },
                 { "uptime_seconds", uptimeSeconds },
                 { "idle_seconds", idleSeconds },
                 { "spooler_running", spoolerRunning }
@@ -1867,27 +2112,29 @@ namespace IpojucaRMM
 
                 string expectedSha256 = "";
                 string latestVer = AgentConfig.CURRENT_VERSION;
-                try
+                HttpWebRequest vReq = (HttpWebRequest)WebRequest.Create(config.BackendUrl.TrimEnd('/') + "/api/agent/version");
+                vReq.Method = "GET";
+                vReq.Timeout = 8000;
+                using (HttpWebResponse vResp = (HttpWebResponse)vReq.GetResponse())
+                using (StreamReader sr = new StreamReader(vResp.GetResponseStream(), Encoding.UTF8))
                 {
-                    HttpWebRequest vReq = (HttpWebRequest)WebRequest.Create(config.BackendUrl.TrimEnd('/') + "/api/agent/version");
-                    vReq.Method = "GET";
-                    vReq.Timeout = 8000;
-                    using (HttpWebResponse vResp = (HttpWebResponse)vReq.GetResponse())
-                    using (StreamReader sr = new StreamReader(vResp.GetResponseStream(), Encoding.UTF8))
+                    string vJson = sr.ReadToEnd();
+                    JavaScriptSerializer ser = new JavaScriptSerializer();
+                    Dictionary<string, object> vData = ser.Deserialize<Dictionary<string, object>>(vJson);
+                    if (vData != null)
                     {
-                        string vJson = sr.ReadToEnd();
-                        JavaScriptSerializer ser = new JavaScriptSerializer();
-                        Dictionary<string, object> vData = ser.Deserialize<Dictionary<string, object>>(vJson);
-                        if (vData != null)
-                        {
-                            if (vData.ContainsKey("latest_version") && vData["latest_version"] != null)
-                                latestVer = vData["latest_version"].ToString();
-                            if (vData.ContainsKey("sha256") && vData["sha256"] != null)
-                                expectedSha256 = vData["sha256"].ToString().ToLowerInvariant();
-                        }
+                        if (vData.ContainsKey("latest_version") && vData["latest_version"] != null)
+                            latestVer = vData["latest_version"].ToString();
+                        if (vData.ContainsKey("sha256") && vData["sha256"] != null)
+                            expectedSha256 = vData["sha256"].ToString().Trim().ToLowerInvariant();
                     }
                 }
-                catch { }
+
+                // Integridade obrigatória (@security): nunca executar binário OTA sem SHA-256 válido do manifesto
+                if (!Regex.IsMatch(expectedSha256, @"^[0-9a-f]{64}$"))
+                {
+                    throw new Exception("Manifesto /api/agent/version não retornou um hash SHA-256 válido. Atualização abortada por segurança.");
+                }
 
                 UpdateUi(55, "Baixando nova versão do Agente (" + latestVer + ")...", "Transferindo instalador oficial /api/agent/download...", false);
 
@@ -1916,25 +2163,25 @@ namespace IpojucaRMM
                 FileInfo fi = new FileInfo(tempUpdaterPath);
                 if (!fi.Exists || fi.Length < 10240)
                 {
+                    try { File.Delete(tempUpdaterPath); } catch { }
                     throw new Exception("O arquivo baixado está incompleto ou inválido.");
                 }
 
                 UpdateUi(82, "Verificando assinatura criptográfica SHA-256...", "Tamanho recebido: " + (fi.Length / 1024) + " KB", false);
                 Thread.Sleep(350);
 
-                if (!string.IsNullOrEmpty(expectedSha256))
+                using (SHA256 sha = SHA256.Create())
+                using (FileStream fs = File.OpenRead(tempUpdaterPath))
                 {
-                    using (SHA256 sha = SHA256.Create())
-                    using (FileStream fs = File.OpenRead(tempUpdaterPath))
+                    byte[] hashBytes = sha.ComputeHash(fs);
+                    StringBuilder sbHash = new StringBuilder();
+                    foreach (byte b in hashBytes) sbHash.Append(b.ToString("x2"));
+                    string actualSha = sbHash.ToString().ToLowerInvariant();
+                    if (actualSha != expectedSha256)
                     {
-                        byte[] hashBytes = sha.ComputeHash(fs);
-                        StringBuilder sbHash = new StringBuilder();
-                        foreach (byte b in hashBytes) sbHash.Append(b.ToString("x2"));
-                        string actualSha = sbHash.ToString().ToLowerInvariant();
-                        if (actualSha != expectedSha256)
-                        {
-                            throw new Exception("Falha na verificação de integridade SHA-256 do instalador.");
-                        }
+                        fs.Close();
+                        try { File.Delete(tempUpdaterPath); } catch { }
+                        throw new Exception("Falha na verificação de integridade SHA-256 do instalador. Arquivo descartado.");
                     }
                 }
 

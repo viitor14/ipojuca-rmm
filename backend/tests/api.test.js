@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('crypto');
+const path = require('path');
+const { execFileSync } = require('child_process');
 
 process.env.DB_MODE = 'memory';
 process.env.FORCE_NATIVE_ROUTER = '1';
@@ -7,7 +10,12 @@ process.env.FORCE_NATIVE_ROUTER = '1';
 const app = require('../src/app');
 const repository = require('../src/database/repository');
 const socketHub = require('../src/realtime/socketHub');
-const { signTaskPayload } = require('../src/config/taskCatalog');
+const { signTaskPayload, verifyTaskSignature } = require('../src/config/taskCatalog');
+const {
+  hashPassword,
+  verifyPassword,
+  isLegacyPasswordHash,
+} = require('../src/middlewares/auth');
 const env = require('../src/config/env');
 const { executeAuthorizedTask } = require('../../agent/src/tasks/taskExecutor');
 const { collectTelemetrySnapshot } = require('../../agent/src/collectors/systemCollector');
@@ -190,8 +198,39 @@ test('5. CA-04, CA-05 e CA-06: Controle RBAC e Bloqueio de Comandos PowerShell A
     },
   });
   assert.equal(validTask.status, 202);
+  assert.equal(validTask.data.delivery_mode, 'queued_for_agent');
   assert.equal(validTask.data.task.task_code, 'CLEAR_TEMP_CACHE');
-  assert.equal(validTask.data.task.status, 'COMPLETED');
+  assert.equal(validTask.data.task.status, 'DISPATCHED');
+
+  // Agente autenticado consulta fila, verifica assinatura individual e confirma execução real
+  const polled = await requestJson('GET', '/api/agent/pending', {
+    headers: {
+      'X-Agent-Uuid': 'agt-usf-nso-rec01',
+      'X-Agent-Token': 'tok-usf-nso-rec01-secret',
+    },
+  });
+  assert.equal(polled.status, 200);
+  assert.equal(polled.data.tasks.length, 1);
+  assert.equal(polled.data.tasks[0].task_id, validTask.data.task.task_id);
+  assert.equal(
+    verifyTaskSignature(polled.data.tasks[0], m.agent_token_hash),
+    true
+  );
+
+  const report = await requestJson('POST', '/api/agent/task-result', {
+    headers: {
+      'X-Agent-Uuid': 'agt-usf-nso-rec01',
+      'X-Agent-Token': 'tok-usf-nso-rec01-secret',
+    },
+    body: {
+      task_id: validTask.data.task.task_id,
+      status: 'COMPLETED',
+      exit_code: 0,
+      output_summary: 'Limpeza concluída no agente Windows.',
+    },
+  });
+  assert.equal(report.status, 200);
+  assert.equal(report.data.task.status, 'COMPLETED');
 });
 
 test('6. Despacho WebSocket Simulado Backend <-> Agente Windows e Diagnóstico Completo', async () => {
@@ -327,7 +366,8 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
 
   const verRes = await requestJson('GET', '/api/agent/version');
   assert.equal(verRes.status, 200);
-  assert.equal(verRes.data.latest_version, '2.3.4-native-exe');
+  assert.equal(verRes.data.latest_version, '2.4.0-native-exe');
+  assert.match(String(verRes.data.sha256 || ''), /^[a-f0-9]{64}$/i);
 
   const updateRes = await requestJson(
     'POST',
@@ -341,7 +381,13 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
 
   const pollRes = await requestJson(
     'GET',
-    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.0.0-native-exe&idle_seconds=420'
+    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.0.0-native-exe&idle_seconds=420',
+    {
+      headers: {
+        'X-Agent-Uuid': 'agt-win-posto-teste01',
+        'X-Agent-Token': 'tok-posto-teste01-secret',
+      },
+    }
   );
   assert.equal(pollRes.status, 200);
   assert.equal(pollRes.data.update_requested, true);
@@ -745,14 +791,49 @@ test('12. Ciclo #29 (CA-136 a CA-139): catalogo de impressoras homologadas e par
       parameters: { printer_ip: printer.ip_address, printer_name: printer.name },
     },
   });
-  assert.ok([200, 202].includes(withParams.status));
-  assert.ok(String(withParams.data.task?.output_summary || '').includes(printer.name));
+  assert.equal(withParams.status, 202);
+  assert.equal(withParams.data.delivery_mode, 'queued_for_agent');
+  assert.equal(withParams.data.task.status, 'DISPATCHED');
+
+  const printerPoll = await requestJson('GET', '/api/agent/pending', {
+    headers: {
+      'X-Agent-Uuid': 'agt-printer-29',
+      'X-Agent-Token': 'tok-printer-29',
+    },
+  });
+  assert.equal(printerPoll.status, 200);
+  const queuedPrinterTask = printerPoll.data.tasks.find(
+    (t) => t.task_id === withParams.data.task.task_id
+  );
+  assert.ok(queuedPrinterTask, 'tarefa de impressora deve estar na fila do agente');
+  assert.equal(queuedPrinterTask.parameters.printer_name, printer.name);
+  assert.equal(queuedPrinterTask.parameters.printer_ip, printer.ip_address);
+  assert.equal(
+    verifyTaskSignature(queuedPrinterTask, machine.agent_token_hash),
+    true
+  );
+
+  const printerDone = await requestJson('POST', '/api/agent/task-result', {
+    headers: {
+      'X-Agent-Uuid': 'agt-printer-29',
+      'X-Agent-Token': 'tok-printer-29',
+    },
+    body: {
+      task_id: withParams.data.task.task_id,
+      status: 'COMPLETED',
+      exit_code: 0,
+      output_summary: `Impressora '${printer.name}' instalada em ${printer.ip_address}.`,
+    },
+  });
+  assert.equal(printerDone.status, 200);
+  assert.ok(String(printerDone.data.task?.output_summary || '').includes(printer.name));
 
   const reboot = await requestJson('POST', '/api/command', {
     headers: auth,
     body: { machine_id: machine.id, task_code: 'REBOOT_WORKSTATION', parameters: {} },
   });
-  assert.ok([200, 202].includes(reboot.status));
+  assert.equal(reboot.status, 202);
+  assert.equal(reboot.data.task.status, 'DISPATCHED');
 });
 
 test('13. Ciclo #45 (CA-140 a CA-143): tamanho automatico do setor e planta sem vao entre salas', async () => {
@@ -826,4 +907,410 @@ test('13. Ciclo #45 (CA-140 a CA-143): tamanho automatico do setor e planta sem 
   assert.equal(explicitRes.status, 201);
   assert.equal(Number(explicitRes.data.sector.width_3d), 6);
   assert.equal(Number(explicitRes.data.sector.depth_3d), 4);
+});
+
+test('14. Ciclo #48: Autenticação de Agente, Bloqueio de Spoof, Assinatura Individual e TTL de Tarefas', async () => {
+  repository.resetMemoryStore();
+  const mA = await repository.enrollNewAgentMachine({
+    agentUuid: 'agt-sec-a',
+    agentToken: 'tok-sec-a-secret',
+    unitId: 1,
+    sectorId: 1,
+    inventory: { hostname: 'PC-SEC-A', ip_address: '10.14.1.21' },
+  });
+  const mB = await repository.enrollNewAgentMachine({
+    agentUuid: 'agt-sec-b',
+    agentToken: 'tok-sec-b-secret',
+    unitId: 1,
+    sectorId: 2,
+    inventory: { hostname: 'PC-SEC-B', ip_address: '10.14.1.22' },
+  });
+
+  // Endpoints de agente sem credencial ou com token incorreto devem retornar 401
+  assert.equal((await requestJson('GET', '/api/agent/pending?agent_uuid=agt-sec-a')).status, 401);
+  assert.equal(
+    (
+      await requestJson('GET', '/api/agent/pending', {
+        headers: { 'X-Agent-Uuid': 'agt-sec-a', 'X-Agent-Token': 'token-errado' },
+      })
+    ).status,
+    401
+  );
+  assert.equal(
+    (
+      await requestJson('POST', '/api/agent/task-result', {
+        body: { task_id: 'tsk_fake', status: 'COMPLETED' },
+      })
+    ).status,
+    401
+  );
+  assert.equal(
+    (await requestJson('POST', '/api/agent/disconnect', { body: { agent_uuid: 'agt-sec-a' } })).status,
+    401
+  );
+  assert.equal(
+    (
+      await requestJson('POST', '/api/agent/message', {
+        body: { agent_uuid: 'agt-sec-a', message: 'spoof' },
+      })
+    ).status,
+    401
+  );
+
+  // Agente revogado deve receber 403
+  mB.is_revoked = true;
+  const revokedPoll = await requestJson('GET', '/api/agent/pending', {
+    headers: { 'X-Agent-Uuid': 'agt-sec-b', 'X-Agent-Token': 'tok-sec-b-secret' },
+  });
+  assert.equal(revokedPoll.status, 403);
+  mB.is_revoked = false;
+
+  const adminLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+  });
+  const auth = { Authorization: `Bearer ${adminLogin.data.token}` };
+
+  const cmdA = await requestJson('POST', '/api/command', {
+    headers: auth,
+    body: { machine_id: mA.id, task_code: 'RESTART_SPOOLER' },
+  });
+  assert.equal(cmdA.status, 202);
+  assert.equal(cmdA.data.task.status, 'DISPATCHED');
+
+  // Máquina B não pode confirmar tarefa da Máquina A (403 + auditoria)
+  const spoofResult = await requestJson('POST', '/api/agent/task-result', {
+    headers: { 'X-Agent-Uuid': 'agt-sec-b', 'X-Agent-Token': 'tok-sec-b-secret' },
+    body: { task_id: cmdA.data.task.task_id, status: 'COMPLETED', exit_code: 0 },
+  });
+  assert.equal(spoofResult.status, 403);
+  assert.ok(
+    repository.auditLogs.some((l) => l.action_type === 'SECURITY_BLOCKED_TASK_RESULT_SPOOF')
+  );
+
+  // Tarefa inexistente retorna 404
+  const missingTask = await requestJson('POST', '/api/agent/task-result', {
+    headers: { 'X-Agent-Uuid': 'agt-sec-a', 'X-Agent-Token': 'tok-sec-a-secret' },
+    body: { task_id: 'tsk_nao_existe', status: 'COMPLETED', exit_code: 0 },
+  });
+  assert.equal(missingTask.status, 404);
+
+  // Assinatura individual valida apenas com a chave (agent_token_hash) da máquina A
+  const pollA = await requestJson('GET', '/api/agent/pending', {
+    headers: { 'X-Agent-Uuid': 'agt-sec-a', 'X-Agent-Token': 'tok-sec-a-secret' },
+  });
+  assert.equal(pollA.status, 200);
+  assert.equal(pollA.data.tasks.length, 1);
+  assert.equal(
+    verifyTaskSignature(pollA.data.tasks[0], mA.agent_token_hash),
+    true
+  );
+  assert.equal(
+    verifyTaskSignature(pollA.data.tasks[0], mB.agent_token_hash),
+    false
+  );
+
+  // Expiração automática por TTL de tarefa não confirmada
+  const storedTask = await repository.findRemoteTaskById(cmdA.data.task.task_id);
+  storedTask.expires_at = new Date(Date.now() - 5000).toISOString();
+  const expiredTasks = await repository.expireStaleRemoteTasks();
+  assert.equal(expiredTasks.length, 1);
+  assert.equal(expiredTasks[0].task_id, cmdA.data.task.task_id);
+  assert.equal(expiredTasks[0].status, 'EXPIRED');
+
+  // Desconexão autenticada marca máquina OFFLINE e grava auditoria
+  const disc = await requestJson('POST', '/api/agent/disconnect', {
+    headers: { 'X-Agent-Uuid': 'agt-sec-a', 'X-Agent-Token': 'tok-sec-a-secret' },
+    body: {},
+  });
+  assert.equal(disc.status, 200);
+  assert.equal((await repository.findMachineById(mA.id)).health_status, 'OFFLINE');
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'AGENT_DISCONNECTED'));
+});
+
+test('15. Ciclo #48: Sessão /api/auth/me, Hash scrypt$ com Salt Aleatório, Upgrade Legado e Fail-Fast Produção', async () => {
+  repository.resetMemoryStore();
+
+  // Sem token -> 401
+  assert.equal((await requestJson('GET', '/api/auth/me')).status, 401);
+
+  // Hash com salt aleatório individual por senha
+  const h1 = hashPassword('SenhaForte@2026');
+  const h2 = hashPassword('SenhaForte@2026');
+  assert.match(h1, /^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/);
+  assert.notEqual(h1, h2);
+  assert.equal(verifyPassword('SenhaForte@2026', h1), true);
+  assert.equal(verifyPassword('SenhaForte@2026', h2), true);
+  assert.equal(verifyPassword('SenhaErrada', h1), false);
+
+  // Compatibilidade + upgrade transparente de hash legado (salt v1)
+  const adminUser = await repository.findUserByEmail('admin@ipojuca.pe.gov.br');
+  const legacyHash = crypto
+    .scryptSync('Admin@Rmm2026', 'ipojuca_rmm_salt_v1', 64)
+    .toString('hex');
+  assert.equal(isLegacyPasswordHash(legacyHash), true);
+  adminUser.password_hash = legacyHash;
+
+  const loginRes = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+  });
+  assert.equal(loginRes.status, 200);
+  assert.equal(isLegacyPasswordHash(adminUser.password_hash), false);
+  assert.match(adminUser.password_hash, /^scrypt\$/);
+
+  // Sessão /api/auth/me com JWT válido
+  const meRes = await requestJson('GET', '/api/auth/me', {
+    headers: { Authorization: `Bearer ${loginRes.data.token}` },
+  });
+  assert.equal(meRes.status, 200);
+  assert.equal(meRes.data.user.email, 'admin@ipojuca.pe.gov.br');
+  assert.equal(meRes.data.user.role, 'ADMIN_N2');
+
+  // Fail-fast em produção: deve bloquear segredos fracos/ausentes e CORS "*"
+  const envModulePath = path.resolve(__dirname, '../src/config/env.js');
+  assert.throws(
+    () => {
+      execFileSync(
+        process.execPath,
+        ['-e', `require(${JSON.stringify(envModulePath)}).validateProductionConfig()`],
+        {
+          env: {
+            PATH: process.env.PATH,
+            NODE_ENV: 'production',
+            JWT_SECRET: 'change-in-prod',
+            TASK_SIGNING_SECRET: 'short',
+            N8N_WEBHOOK_SECRET: 'x',
+            AGENT_ENROLLMENT_KEY: 'abc',
+            CORS_ORIGIN: '*',
+          },
+          stdio: 'pipe',
+        }
+      );
+    },
+    /Boot bloqueado em producao/
+  );
+
+  // Com segredos fortes e CORS explícito, validação de produção deve aprovar
+  execFileSync(
+    process.execPath,
+    ['-e', `require(${JSON.stringify(envModulePath)}).validateProductionConfig()`],
+    {
+      env: {
+        PATH: process.env.PATH,
+        NODE_ENV: 'production',
+        JWT_SECRET: 'a'.repeat(48),
+        TASK_SIGNING_SECRET: 'b'.repeat(48),
+        N8N_WEBHOOK_SECRET: 'c'.repeat(32),
+        AGENT_ENROLLMENT_KEY: 'enroll-strong-2026-key',
+        CORS_ORIGIN: 'https://rmm.ipojuca.pe.gov.br',
+      },
+      stdio: 'pipe',
+    }
+  );
+});
+
+test('16. Ciclo #48: Chat Persistido (machine_messages), RBAC de Mensagens e Auditoria Administrativa', async () => {
+  const m = await enrollTestMachine();
+
+  const viewerLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'gestao@ipojuca.pe.gov.br', password: 'Gestao@Rmm2026' },
+  });
+  const techLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'suporte@ipojuca.pe.gov.br', password: 'Suporte@Rmm2026' },
+  });
+  const adminLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+  });
+
+  // VIEWER não pode enviar mensagem para estação
+  const viewerMsg = await requestJson('POST', `/api/machines/${m.id}/messages`, {
+    headers: { Authorization: `Bearer ${viewerLogin.data.token}` },
+    body: { message: 'Tentativa não autorizada' },
+  });
+  assert.equal(viewerMsg.status, 403);
+
+  // TECH_N1 envia mensagem persistida e auditada
+  const techMsg = await requestJson('POST', `/api/machines/${m.id}/messages`, {
+    headers: { Authorization: `Bearer ${techLogin.data.token}` },
+    body: { message: 'Reiniciando fila de impressão em 1 minuto.' },
+  });
+  assert.equal(techMsg.status, 200);
+  assert.equal(techMsg.data.message.direction, 'SERVER_TO_CLIENT');
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'AGENT_MESSAGE_SENT'));
+
+  // Agente autenticado recebe mensagem uma única vez
+  const agentHeaders = {
+    'X-Agent-Uuid': 'agt-usf-nso-rec01',
+    'X-Agent-Token': 'tok-usf-nso-rec01-secret',
+  };
+  const firstPoll = await requestJson('GET', '/api/agent/pending', { headers: agentHeaders });
+  assert.equal(firstPoll.status, 200);
+  assert.equal(firstPoll.data.messages.length, 1);
+  assert.match(firstPoll.data.messages[0].message, /fila de impressão/);
+
+  const secondPoll = await requestJson('GET', '/api/agent/pending', { headers: agentHeaders });
+  assert.equal(secondPoll.status, 200);
+  assert.equal(secondPoll.data.messages.length, 0);
+
+  // Resposta do agente fica persistida no histórico
+  const reply = await requestJson('POST', '/api/agent/message', {
+    headers: agentHeaders,
+    body: { message: 'Ciente, aguardando liberação.', sender: 'Estação USF-NSO-REC01' },
+  });
+  assert.equal(reply.status, 200);
+
+  const history = await requestJson('GET', `/api/machines/${m.id}/messages`, {
+    headers: { Authorization: `Bearer ${viewerLogin.data.token}` },
+  });
+  assert.equal(history.status, 200);
+  assert.equal(history.data.messages.length, 2);
+  assert.equal(history.data.messages[1].direction, 'CLIENT_TO_SERVER');
+
+  // Realocação e exclusão de máquina gravam auditoria e exclusão repetida retorna 404
+  const moveRes = await requestJson('POST', `/api/machines/${m.id}/location`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: { unit_id: 1, sector_id: 2 },
+  });
+  assert.equal(moveRes.status, 200);
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'MACHINE_RELOCATED'));
+
+  const delFirst = await requestJson('DELETE', `/api/machines/${m.id}`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+  });
+  assert.equal(delFirst.status, 200);
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'MACHINE_DELETED'));
+
+  const delAgain = await requestJson('DELETE', `/api/machines/${m.id}`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+  });
+  assert.equal(delAgain.status, 404);
+});
+
+test('17. Ciclo #48: Smoke Test HTTP Real com Express (Headers de Segurança, /api/health e /api/auth/me)', () => {
+  const backendRoot = path.resolve(__dirname, '..');
+  const script = `
+    const http = require('http');
+    const assert = require('assert');
+    process.env.DB_MODE = 'memory';
+    delete process.env.FORCE_NATIVE_ROUTER;
+    const app = require('./src/app');
+    const repository = require('./src/database/repository');
+    (async () => {
+      await repository.initialize();
+      const server = http.createServer(app);
+      await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const { port } = server.address();
+      const base = 'http://127.0.0.1:' + port;
+
+      const healthRes = await fetch(base + '/api/health');
+      assert.strictEqual(healthRes.status, 200);
+      assert.strictEqual(healthRes.headers.get('x-content-type-options'), 'nosniff');
+      assert.strictEqual(healthRes.headers.get('x-frame-options'), 'DENY');
+      assert.ok(healthRes.headers.get('permissions-policy'));
+      const health = await healthRes.json();
+      assert.ok(health.capabilities.includes('agent:authenticated-poll'));
+      assert.ok(health.capabilities.includes('tasks:honest-queue'));
+
+      const loginRes = await fetch(base + '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' }),
+      });
+      assert.strictEqual(loginRes.status, 200);
+      const loginData = await loginRes.json();
+      assert.ok(loginData.token);
+
+      const meRes = await fetch(base + '/api/auth/me', {
+        headers: { Authorization: 'Bearer ' + loginData.token },
+      });
+      assert.strictEqual(meRes.status, 200);
+      const meData = await meRes.json();
+      assert.strictEqual(meData.user.role, 'ADMIN_N2');
+
+      server.close();
+      process.exit(0);
+    })().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `;
+
+  execFileSync(process.execPath, ['-e', script], {
+    cwd: backendRoot,
+    env: {
+      PATH: process.env.PATH,
+      DB_MODE: 'memory',
+    },
+    stdio: 'pipe',
+  });
+});
+
+test('18. Ciclo #48: Alerta Automático de Inatividade > 24h (Online Ocioso e Offline) com Auto-Resolução', async () => {
+  const m = await enrollTestMachine();
+  const agentHeaders = {
+    'X-Agent-Uuid': 'agt-usf-nso-rec01',
+    'X-Agent-Token': 'tok-usf-nso-rec01-secret',
+  };
+
+  // 1. Heartbeat saudável mas com idle_seconds >= 24h (86400s) dispara INACTIVITY_24H sem duplicar
+  const idleHb1 = await requestJson('POST', '/api/heartbeat', {
+    headers: agentHeaders,
+    body: {
+      agent_version: '2.4.0-native-exe',
+      inventory: { hostname: 'USF-NSO-REC01', ip_address: '10.14.1.11' },
+      metrics: {
+        cpu_usage_pct: 12,
+        ram_usage_pct: 35,
+        disk_usage_pct: 40,
+        uptime_seconds: 120000,
+        idle_seconds: 90000, // 25h sem interação
+        spooler_running: true,
+      },
+    },
+  });
+  assert.equal(idleHb1.status, 200);
+  assert.equal(idleHb1.data.health_status, 'NORMAL');
+  assert.ok(idleHb1.data.inactivity_alert, 'deve disparar alerta INACTIVITY_24H');
+  assert.equal(idleHb1.data.inactivity_alert.metric_name, 'INACTIVITY_24H');
+  assert.equal(idleHb1.data.inactivity_alert.status, 'OPEN');
+
+  // Reenvio mantém mesmo alerta (sem duplicar) mesmo com CPU/RAM/Disco NORMAL
+  const idleHb2 = await requestJson('POST', '/api/heartbeat', {
+    headers: agentHeaders,
+    body: {
+      agent_version: '2.4.0-native-exe',
+      inventory: { hostname: 'USF-NSO-REC01', ip_address: '10.14.1.11' },
+      metrics: {
+        cpu_usage_pct: 10,
+        ram_usage_pct: 30,
+        disk_usage_pct: 40,
+        uptime_seconds: 120500,
+        idle_seconds: 90500,
+        spooler_running: true,
+      },
+    },
+  });
+  assert.equal(idleHb2.data.inactivity_alert.id, idleHb1.data.inactivity_alert.id);
+
+  // 2. Quando usuário volta a mexer (idle_seconds < 24h), alerta resolve automaticamente
+  const activePoll = await requestJson('GET', '/api/agent/pending?idle_seconds=12', {
+    headers: agentHeaders,
+  });
+  assert.equal(activePoll.status, 200);
+  const afterActive = repository.alerts.find((a) => a.id === idleHb1.data.inactivity_alert.id);
+  assert.equal(afterActive.status, 'RESOLVED');
+
+  // 3. Máquina OFFLINE há >24h gera alerta via worker checkInactiveMachinesAndAlert
+  const storedMachine = repository.machines.find((x) => x.id === m.id);
+  storedMachine.health_status = 'OFFLINE';
+  storedMachine.idle_seconds = 0;
+  storedMachine.last_seen_at = new Date(Date.now() - 26 * 3600 * 1000).toISOString();
+
+  const triggered = await repository.checkInactiveMachinesAndAlert(86400);
+  assert.equal(triggered.length, 1);
+  assert.equal(triggered[0].alert.metric_name, 'INACTIVITY_24H');
+  assert.match(triggered[0].alert.message, /desligada\/sem comunicação/i);
+
+  // Segunda checagem não duplica
+  const triggeredAgain = await repository.checkInactiveMachinesAndAlert(86400);
+  assert.equal(triggeredAgain.length, 0);
 });

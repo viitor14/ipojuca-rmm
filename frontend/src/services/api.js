@@ -15,7 +15,9 @@ async function request(path, { method = 'GET', token, body, headers = {} } = {})
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `Falha na requisição (${res.status})`);
+    const err = new Error(data.error || `Falha na requisição (${res.status})`);
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
@@ -26,6 +28,9 @@ export const rmmApi = {
       method: 'POST',
       body: { email, password },
     });
+  },
+  getMe(token) {
+    return request('/api/auth/me', { token });
   },
   getUnits(token) {
     return request('/api/units', { token });

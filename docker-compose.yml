@@ -4,16 +4,16 @@ services:
     container_name: ipojuca-rmm-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_change_in_prod}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD no arquivo .env}
       MYSQL_DATABASE: ${DB_NAME:-ipojuca_rmm}
       MYSQL_USER: ${DB_USER:-rmm_user}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-rmm_pass_change_in_prod}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no arquivo .env}
     volumes:
       - mysql_data:/var/lib/mysql
       - ./infrastructure/mysql/01_schema_and_seed.sql:/docker-entrypoint-initdb.d/01_schema_and_seed.sql:ro
-    # Seguindo a sequencia da VPS (3306=mensageria, 3307=visitas, 3308=chamados -> 3309=rmm)
+    # Exposto apenas em loopback da VPS para manutencao local segura (nunca aberto em 0.0.0.0)
     ports:
-      - "${MYSQL_EXTERNAL_PORT:-3309}:3306"
+      - "127.0.0.1:${MYSQL_EXTERNAL_PORT:-3309}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -36,17 +36,22 @@ services:
     environment:
       PORT: 4000
       NODE_ENV: production
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      CORS_ORIGIN: ${CORS_ORIGIN:?Defina CORS_ORIGIN no arquivo .env (ex: https://rmm.ipojuca.pe.gov.br)}
       DB_MODE: mysql
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: ${DB_USER:-rmm_user}
-      DB_PASSWORD: ${DB_PASSWORD:-rmm_pass_change_in_prod}
+      DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no arquivo .env}
       DB_NAME: ${DB_NAME:-ipojuca_rmm}
       OFFLINE_THRESHOLD_SECONDS: ${OFFLINE_THRESHOLD_SECONDS:-15000}
-      JWT_SECRET: ${JWT_SECRET:-rmm-ipojuca-jwt-secret-change-in-production-2026}
-      TASK_SIGNING_SECRET: ${TASK_SIGNING_SECRET:-rmm-ipojuca-hmac-task-secret-change-in-production-2026}
-      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-rmm-ipojuca-n8n-webhook-secret-2026}
-      AGENT_ENROLLMENT_KEY: ${AGENT_ENROLLMENT_KEY:-rmm-ipojuca-enroll-2026}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET forte no arquivo .env}
+      TASK_SIGNING_SECRET: ${TASK_SIGNING_SECRET:?Defina TASK_SIGNING_SECRET forte no arquivo .env}
+      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:?Defina N8N_WEBHOOK_SECRET forte no arquivo .env}
+      AGENT_ENROLLMENT_KEY: ${AGENT_ENROLLMENT_KEY:?Defina AGENT_ENROLLMENT_KEY no arquivo .env}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_TECH_PASSWORD: ${SEED_TECH_PASSWORD:-}
+      SEED_VIEWER_PASSWORD: ${SEED_VIEWER_PASSWORD:-}
       # Conecta ao container n8n ja existente na VPS (porta 5678) sem duplicar container
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://host.docker.internal:5678/webhook/rmm-alert}
       DASHBOARD_PUBLIC_URL: ${DASHBOARD_PUBLIC_URL:-http://31.97.86.253:8095}

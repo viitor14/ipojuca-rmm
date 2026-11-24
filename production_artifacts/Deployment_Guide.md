@@ -141,3 +141,66 @@ curl -s -o /dev/null -w "%{http_code}\n" -X PUT http://31.97.86.253:4005/api/uni
 ```
 
 `/api/health` passou a expor `capabilities`, permitindo detectar container desatualizado sem disparar requisições de escrita.
+
+---
+
+## 7. Hardening de Produção, Migrations Controladas e HTTPS/WSS — Ciclo #48 (`@devops` + `@security`)
+
+### 7.1. Variáveis Obrigatórias no `.env` de Produção (Fail-Fast Ativo)
+
+A partir do Ciclo #48, tanto o `docker-compose.yml` (sintaxe `${VAR:?...}`) quanto o backend (`env.validateProductionConfig()` em `NODE_ENV=production`) **recusam subir** se segredos forem ausentes/fracos ou se `CORS_ORIGIN` estiver aberto (`*`):
+
+```env
+MYSQL_ROOT_PASSWORD=<senha_forte_mysql_root>
+DB_NAME=ipojuca_rmm
+DB_USER=rmm_user
+DB_PASSWORD=<senha_forte_mysql_app>
+MYSQL_EXTERNAL_PORT=3309
+
+JWT_SECRET=<openssl rand -hex 32>             # mínimo 24 chars
+TASK_SIGNING_SECRET=<openssl rand -hex 32>    # mínimo 24 chars
+N8N_WEBHOOK_SECRET=<openssl rand -hex 24>     # mínimo 16 chars
+AGENT_ENROLLMENT_KEY=<openssl rand -hex 16>   # mínimo 12 chars
+
+CORS_ORIGIN=https://rmm.ipojuca.pe.gov.br
+TRUST_PROXY=1
+DASHBOARD_PUBLIC_URL=https://rmm.ipojuca.pe.gov.br
+
+# Apenas na primeira carga de usuários em banco vazio (opcional após seed inicial):
+SEED_ADMIN_PASSWORD=<senha_inicial_admin>
+SEED_TECH_PASSWORD=<senha_inicial_suporte>
+SEED_VIEWER_PASSWORD=<senha_inicial_gestao>
+```
+
+> **Proteção de porta MySQL:** o serviço `mysql` no `docker-compose.yml` agora escuta apenas em `127.0.0.1:${MYSQL_EXTERNAL_PORT:-3309}:3306` (inacessível pela internet externa; usar túnel SSH se precisar de acesso administrativo).
+
+### 7.2. Controle de Migrations (`schema_migrations`)
+
+- **Banco novo:** `infrastructure/mysql/01_schema_and_seed.sql` foi corrigido (erro de sintaxe resolvido) e já inicializa todas as tabelas (`discovered_printers`, `machine_messages`, `schema_migrations`) e layout de corredor alinhado.
+- **Banco existente na VPS:** o script `infrastructure/scripts/deploy_rmm_update.sh` aplica primeiro `08_messages_and_migrations_control.sql` e passa a registrar cada arquivo aplicado na tabela `schema_migrations`, evitando reaplicação de migrations de layout (`05`–`07`) sobre customizações feitas pelo usuário.
+
+### 7.3. Ativação de HTTPS/WSS (Reverse Proxy na VPS)
+
+1. Apontar DNS (ex.: `rmm.ipojuca.pe.gov.br`) para o IP da VPS (`31.97.86.253`).
+2. Emitir certificado Let's Encrypt (`certbot certonly --nginx -d rmm.ipojuca.pe.gov.br`).
+3. Copiar e ajustar o template [vps-https.conf.example](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/infrastructure/nginx/vps-https.conf.example) para `/etc/nginx/sites-available/ipojuca-rmm.conf`, ativar em `sites-enabled` e recarregar o Nginx (`nginx -t && systemctl reload nginx`).
+4. Atualizar `CORS_ORIGIN` e `DASHBOARD_PUBLIC_URL` no `.env` para `https://rmm.ipojuca.pe.gov.br` e reiniciar o backend.
+
+### 7.4. Backup Seguro e Retenção Automática
+
+O script `infrastructure/scripts/backup_mysql.sh` foi atualizado para:
+- Passar a credencial do MySQL via `MYSQL_PWD` (sem expor `-p<senha>` na tabela de processos `ps`).
+- Executar a retenção real de banco recomendada pelo `@dba` (`telemetry_history` > `30` dias e `audit_logs` > `180` dias, configuráveis via `TELEMETRY_RETENTION_DAYS` e `AUDIT_RETENTION_DAYS`).
+
+### 7.5. Validação Pós-Deploy (Ciclo #48)
+
+```bash
+curl -s http://127.0.0.1:4005/api/health
+# Deve incluir: "auth:session-me", "agent:authenticated-poll", "tasks:honest-queue"
+
+curl -s http://127.0.0.1:4005/api/agent/version
+# Deve retornar latest_version: "2.4.0-native-exe" e sha256 (64 hex)
+
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4005/api/agent/pending
+# Deve retornar 401 (autenticação de agente ativa)
+```
