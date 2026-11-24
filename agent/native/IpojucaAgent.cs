@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Management;
@@ -11,6 +13,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -19,16 +22,17 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 
 [assembly: AssemblyTitle("Ipojuca RMM - Super Agente Windows")]
-[assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA e Comunicacao Client-Server")]
+[assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA Silencioso e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.4.0.0")]
+[assembly: AssemblyVersion("2.5.0.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.4.0-native-exe";
+        public const string CURRENT_VERSION = "2.5.0-native-exe";
+        public const string DISPLAY_VERSION = "2.5.0";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -36,6 +40,36 @@ namespace IpojucaRMM
         public int HeartbeatIntervalMs = 14400000; // 4 horas
         public string AgentUuid = "";
         public string AgentToken = "";
+    }
+
+    public class ChatEntry
+    {
+        public string Timestamp;
+        public string Sender;
+        public string Text;
+        public bool IsSelf;
+        public bool IsSystem;
+
+        public ChatEntry(string sender, string text, bool isSelf, bool isSystem)
+        {
+            Timestamp = DateTime.Now.ToString("HH:mm");
+            Sender = sender;
+            Text = text;
+            IsSelf = isSelf;
+            IsSystem = isSystem;
+        }
+    }
+
+    public class StationSnapshot
+    {
+        public double CpuPct;
+        public double RamPct;
+        public double DiskPct;
+        public string IpAddress = "—";
+        public bool IsConnected;
+        public bool IsSyncing;
+        public string StatusText = "Conectando ao servidor...";
+        public string LastSyncClock = "—";
     }
 
     public class Program
@@ -51,18 +85,30 @@ namespace IpojucaRMM
             bool isBackgroundMode = false;
             bool isSilentInstall = false;
             bool isOtaUpdate = false;
+            bool isVerifyAdminExit = false;
             string customUrl = null;
 
             foreach (string arg in args)
             {
-                if (arg.Equals("--background", StringComparison.OrdinalIgnoreCase))
+                if (arg.Equals("--verify-admin-exit", StringComparison.OrdinalIgnoreCase))
+                    isVerifyAdminExit = true;
+                else if (arg.Equals("--background", StringComparison.OrdinalIgnoreCase))
                     isBackgroundMode = true;
                 else if (arg.Equals("--silent", StringComparison.OrdinalIgnoreCase))
                     isSilentInstall = true;
+                else if (arg.Equals("--silent-restart", StringComparison.OrdinalIgnoreCase))
+                    isBackgroundMode = true;
                 else if (arg.Equals("--ota-update", StringComparison.OrdinalIgnoreCase))
                     isOtaUpdate = true;
                 else if (arg.StartsWith("--url=", StringComparison.OrdinalIgnoreCase))
                     customUrl = arg.Substring(6).Trim();
+            }
+
+            // Modo auxiliar silencioso acionado via UAC nativo do Windows (Verb = "runas")
+            if (isVerifyAdminExit)
+            {
+                Environment.Exit(WindowsAdminAuthenticator.IsCurrentProcessElevated() ? 0 : 5);
+                return;
             }
 
             string installDir = Path.Combine(
@@ -78,9 +124,21 @@ namespace IpojucaRMM
                 Path.GetFullPath(installedExePath).TrimEnd('\\'),
                 StringComparison.OrdinalIgnoreCase)))
             {
-                RunInstaller(currentExePath, installDir, installedExePath, customUrl, isSilentInstall, isOtaUpdate);
+                RunInstaller(currentExePath, installDir, installedExePath, customUrl, isSilentInstall || isOtaUpdate, isOtaUpdate);
                 return;
             }
+
+            // Limpa binário temporário remanescente de uma atualização OTA silenciosa
+            try
+            {
+                string leftoverTmp = Path.Combine(installDir, "IpojucaRMM-Updater-Temp.exe");
+                if (File.Exists(leftoverTmp) &&
+                    !string.Equals(Path.GetFullPath(currentExePath), Path.GetFullPath(leftoverTmp), StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Delete(leftoverTmp);
+                }
+            }
+            catch { }
 
             bool createdNew = false;
             int maxMutexRetries = isBackgroundMode ? 12 : 1;
@@ -100,7 +158,7 @@ namespace IpojucaRMM
                 if (!isBackgroundMode)
                 {
                     MessageBox.Show(
-                        "O Agente RMM Ipojuca já está em execução em segundo plano nesta máquina!\n\nVerifique o ícone azul próximo ao relógio do Windows (Bandeja do Sistema).",
+                        "O Agente RMM Ipojuca já está em execução em segundo plano nesta máquina.\n\nClique no ícone verde próximo ao relógio do Windows (Bandeja do Sistema) para abrir o painel de suporte.",
                         "RMM Ipojuca — Já Ativo",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information
@@ -110,6 +168,32 @@ namespace IpojucaRMM
             }
 
             Application.Run(new TrayAgentContext(installDir, customUrl));
+        }
+
+        public static void DisableAutoStart()
+        {
+            try
+            {
+                using (RegistryKey runKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    if (runKey != null && runKey.GetValue("IpojucaRMMService") != null)
+                    {
+                        runKey.DeleteValue("IpojucaRMMService", false);
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                ProcessStartInfo psiDel = new ProcessStartInfo("schtasks.exe", "/Delete /TN \"IpojucaRMMService_AutoStart\" /F");
+                psiDel.CreateNoWindow = true;
+                psiDel.UseShellExecute = false;
+                psiDel.WindowStyle = ProcessWindowStyle.Hidden;
+                Process pDel = Process.Start(psiDel);
+                if (pDel != null) pDel.WaitForExit(3000);
+            }
+            catch { }
         }
 
         public static void ReleaseSingleInstanceMutex()
@@ -124,6 +208,7 @@ namespace IpojucaRMM
 
         private static void RunInstaller(string sourceExe, string installDir, string targetExe, string customUrl, bool silent, bool isOtaUpdate)
         {
+            string logPath = Path.Combine(installDir, "agent.log");
             try
             {
                 if (!Directory.Exists(installDir))
@@ -133,7 +218,7 @@ namespace IpojucaRMM
 
                 // Aguarda encerramento de instância anterior caso esteja atualizando
                 string[] runningNames = new string[] { "IpojucaRMM-Agent", "IpojucaRMM-Setup", "IpojucaRMM-Updater-Temp" };
-                for (int attempt = 0; attempt < 8; attempt++)
+                for (int attempt = 0; attempt < 10; attempt++)
                 {
                     foreach (string pName in runningNames)
                     {
@@ -173,48 +258,52 @@ namespace IpojucaRMM
                     }
                 }
 
-                // Também tenta criar Tarefa Agendada no logon (sem janela)
+                // Também tenta criar Tarefa Agendada no logon (menor privilégio para manter UAC ativo no encerramento)
                 try
                 {
                     ProcessStartInfo psiTask = new ProcessStartInfo("schtasks.exe",
-                        "/Create /TN \"IpojucaRMMService_AutoStart\" /TR \"\\\"" + targetExe + "\\\" --background\" /SC ONLOGON /RL HIGHEST /F");
+                        "/Create /TN \"IpojucaRMMService_AutoStart\" /TR \"\\\"" + targetExe + "\\\" --background\" /SC ONLOGON /RL LIMITED /F");
                     psiTask.CreateNoWindow = true;
                     psiTask.UseShellExecute = false;
+                    psiTask.WindowStyle = ProcessWindowStyle.Hidden;
                     Process pTask = Process.Start(psiTask);
                     if (pTask != null) pTask.WaitForExit(3000);
                 }
                 catch { }
 
-                // Inicia o agente em segundo plano imediatamente
-                ProcessStartInfo psiStart = new ProcessStartInfo(targetExe, "--background");
+                // Inicia o agente em segundo plano imediatamente (silencioso em OTA)
+                string startArgs = isOtaUpdate ? "--background --silent-restart" : "--background";
+                ProcessStartInfo psiStart = new ProcessStartInfo(targetExe, startArgs);
                 psiStart.WorkingDirectory = installDir;
                 psiStart.UseShellExecute = false;
+                psiStart.CreateNoWindow = true;
+                psiStart.WindowStyle = ProcessWindowStyle.Hidden;
                 Process.Start(psiStart);
 
                 if (isOtaUpdate)
                 {
-                    MessageBox.Show(
-                        "O Agente RMM Ipojuca foi atualizado automaticamente pela Central de TI!\n\n" +
-                        "• Nova Versão Instalada: " + AgentConfig.CURRENT_VERSION + "\n" +
-                        "• Computador: " + Environment.MachineName + "\n" +
-                        "• Identificador Mantido: " + cfg.AgentUuid + "\n" +
-                        "• Servidor Central: " + cfg.BackendUrl + "\n\n" +
-                        "O monitoramento em segundo plano já foi reiniciado com sucesso.",
-                        "Atualização Concluída — RMM Ipojuca",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information
-                    );
+                    // OTA 100% silencioso: zero janela, zero popup ao usuário — apenas log técnico
+                    try
+                    {
+                        File.AppendAllText(
+                            logPath,
+                            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " [OTA OK] Atualizado silenciosamente para " + AgentConfig.CURRENT_VERSION + " (" + cfg.AgentUuid + ")" + Environment.NewLine,
+                            Encoding.UTF8
+                        );
+                    }
+                    catch { }
                 }
                 else if (!silent)
                 {
                     MessageBox.Show(
                         "Agente RMM Ipojuca instalado e iniciado em segundo plano com sucesso!\n\n" +
-                        "• Versão: " + AgentConfig.CURRENT_VERSION + "\n" +
+                        "• Versão: v" + AgentConfig.DISPLAY_VERSION + "\n" +
                         "• Computador: " + Environment.MachineName + "\n" +
                         "• Identificador: " + cfg.AgentUuid + "\n" +
-                        "• Servidor VPS: " + cfg.BackendUrl + "\n" +
-                        "• Ciclo de Envio: Ao ligar o PC + a cada 4 horas + Sob Demanda\n\n" +
-                        "O agente está rodando silenciosamente perto do relógio do Windows (Bandeja do Sistema).",
+                        "• Servidor Central: " + cfg.BackendUrl + "\n" +
+                        "• Atualizações: Silenciosas em segundo plano\n" +
+                        "• Encerramento: Protegido por conta de Administrador do Windows\n\n" +
+                        "O agente está ativo perto do relógio do Windows (Bandeja do Sistema).",
                         "Instalação Concluída — RMM Ipojuca",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information
@@ -223,10 +312,20 @@ namespace IpojucaRMM
             }
             catch (Exception ex)
             {
-                if (!silent)
+                try
+                {
+                    File.AppendAllText(
+                        logPath,
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " [INSTALL ERRO] " + ex.Message + Environment.NewLine,
+                        Encoding.UTF8
+                    );
+                }
+                catch { }
+
+                if (!silent && !isOtaUpdate)
                 {
                     MessageBox.Show(
-                        "Erro ao instalar/atualizar o Agente RMM Ipojuca:\n" + ex.Message,
+                        "Erro ao instalar o Agente RMM Ipojuca:\n" + ex.Message,
                         "Erro na Instalação",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error
@@ -242,17 +341,23 @@ namespace IpojucaRMM
         private readonly string _logFile;
         private readonly AgentConfig _config;
         private readonly NotifyIcon _trayIcon;
+        private readonly Icon _appIcon;
         private readonly System.Windows.Forms.Timer _heartbeatTimer;
         private readonly System.Windows.Forms.Timer _commandPollTimer;
-        private readonly List<string> _chatHistory = new List<string>();
+        private readonly List<ChatEntry> _chatHistory = new List<ChatEntry>();
         private readonly HashSet<string> _executedTaskIds = new HashSet<string>();
         private readonly object _taskLock = new object();
+        private readonly object _snapshotLock = new object();
+        private readonly object _updateLock = new object();
+        private readonly StationSnapshot _snapshot = new StationSnapshot();
         private SuperAgentForm _statusForm;
         private readonly Control _uiDispatcher;
-        private string _lastSyncStatus = "Iniciando coleta...";
         private DateTime _lastSyncTime = DateTime.MinValue;
+        private DateTime _lastUpdateFailureUtc = DateTime.MinValue;
+        private string _lastDowngradeBlockedVersion = "";
         private bool _isSending = false;
         private bool _isUpdating = false;
+        private bool _adminDialogOpen = false;
         private bool _suppressDisconnectOnExit = false;
 
         public TrayAgentContext(string installDir, string customUrl)
@@ -264,39 +369,46 @@ namespace IpojucaRMM
             _uiDispatcher = new Control();
             _uiDispatcher.CreateControl();
 
-            _chatHistory.Add("[SISTEMA] Super Agente (" + AgentConfig.CURRENT_VERSION + ") conectado ao servidor " + _config.BackendUrl);
-            _chatHistory.Add("[SISTEMA] Canal pronto para comandos homologados, Auto-Update OTA e conversa Cliente-Servidor com a Central de TI.");
+            _chatHistory.Add(new ChatEntry(
+                "Central TI",
+                "Use este canal sempre que precisar falar com a equipe de TI.",
+                false,
+                true
+            ));
 
             ContextMenuStrip menu = new ContextMenuStrip();
-            ToolStripMenuItem titleItem = new ToolStripMenuItem("RMM Ipojuca — " + Environment.MachineName + " (" + AgentConfig.CURRENT_VERSION + ")");
+            menu.Renderer = new EditorialMenuRenderer();
+            menu.ShowImageMargin = false;
+            menu.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            menu.BackColor = Color.White;
+            menu.ForeColor = Color.FromArgb(36, 41, 37);
+
+            ToolStripMenuItem titleItem = new ToolStripMenuItem("RMM Ipojuca — v" + AgentConfig.DISPLAY_VERSION);
             titleItem.Enabled = false;
+            titleItem.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
             menu.Items.Add(titleItem);
             menu.Items.Add(new ToolStripSeparator());
 
-            ToolStripMenuItem sendNowItem = new ToolStripMenuItem("⟳ Enviar Telemetria Agora (Manual)");
-            sendNowItem.Click += (s, e) => TriggerHeartbeatAsync("MANUAL_TRAY_CLICK");
-            menu.Items.Add(sendNowItem);
-
-            ToolStripMenuItem checkUpdateItem = new ToolStripMenuItem("⬆ Buscar e Instalar Atualização Agora");
-            checkUpdateItem.Click += (s, e) => TriggerSelfUpdateGui(true);
-            menu.Items.Add(checkUpdateItem);
-
-            ToolStripMenuItem openPanelItem = new ToolStripMenuItem("💬 Abrir Painel Super Agente (Status / Chat TI)");
+            ToolStripMenuItem openPanelItem = new ToolStripMenuItem("Abrir Painel de Suporte e Status");
+            openPanelItem.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
             openPanelItem.Click += (s, e) => ShowStatusWindow();
             menu.Items.Add(openPanelItem);
 
-            ToolStripMenuItem openLogsItem = new ToolStripMenuItem("📂 Abrir Pasta do Agente");
-            openLogsItem.Click += (s, e) => Process.Start("explorer.exe", _installDir);
+            ToolStripMenuItem sendNowItem = new ToolStripMenuItem("Sincronizar Telemetria Agora");
+            sendNowItem.Click += (s, e) => TriggerHeartbeatAsync("MANUAL_TRAY_CLICK");
+            menu.Items.Add(sendNowItem);
+
+            ToolStripMenuItem openLogsItem = new ToolStripMenuItem("Abrir Pasta de Logs");
+            openLogsItem.Click += (s, e) =>
+            {
+                try { Process.Start("explorer.exe", _installDir); } catch { }
+            };
             menu.Items.Add(openLogsItem);
 
             menu.Items.Add(new ToolStripSeparator());
             ToolStripMenuItem exitItem = new ToolStripMenuItem("Encerrar Agente");
-            exitItem.Click += (s, e) =>
-            {
-                SendDisconnectSignal();
-                _trayIcon.Visible = false;
-                Application.Exit();
-            };
+            exitItem.ForeColor = Color.FromArgb(180, 35, 24);
+            exitItem.Click += (s, e) => RequestAdminExit();
             menu.Items.Add(exitItem);
 
             SystemEvents.SessionEnding += (s, e) => SendDisconnectSignal();
@@ -308,22 +420,16 @@ namespace IpojucaRMM
                 }
             };
 
+            _appIcon = CreateCustomIcon();
             _trayIcon = new NotifyIcon();
-            _trayIcon.Icon = CreateCustomIcon();
-            _trayIcon.Text = "RMM Ipojuca — " + Environment.MachineName + " (Ativo)";
+            _trayIcon.Icon = _appIcon;
+            _trayIcon.Text = "RMM Ipojuca — " + Environment.MachineName;
             _trayIcon.ContextMenuStrip = menu;
             _trayIcon.Visible = true;
             _trayIcon.DoubleClick += (s, e) => ShowStatusWindow();
             _trayIcon.BalloonTipClicked += (s, e) => ShowStatusWindow();
 
-            _trayIcon.ShowBalloonTip(
-                4000,
-                "RMM Ipojuca Ativo em Segundo Plano",
-                "Monitorando " + Environment.MachineName + " -> " + _config.BackendUrl,
-                ToolTipIcon.Info
-            );
-
-            // 1. Dispara telemetria imediatamente ao ligar/iniciar
+            // 1. Dispara telemetria imediatamente ao ligar/iniciar (sem balão intrusivo ao usuário)
             TriggerHeartbeatAsync("BOOT_STARTUP");
 
             // 2. Timer de 4 horas (14.400.000 ms)
@@ -332,7 +438,7 @@ namespace IpojucaRMM
             _heartbeatTimer.Tick += (s, e) => TriggerHeartbeatAsync("PERIODIC_4H");
             _heartbeatTimer.Start();
 
-            // 3. Poll calibrado (5s) para comandos remotos assinados e chat sem sobrecarregar rede/MySQL
+            // 3. Poll calibrado (5s) para comandos remotos assinados, OTA silencioso e chat TI
             _commandPollTimer = new System.Windows.Forms.Timer();
             _commandPollTimer.Interval = 5000;
             _commandPollTimer.Tick += (s, e) => PollPendingCommandsAsync();
@@ -343,17 +449,33 @@ namespace IpojucaRMM
         {
             try
             {
-                Bitmap bmp = new Bitmap(16, 16);
+                Bitmap bmp = new Bitmap(32, 32);
                 using (Graphics g = Graphics.FromImage(bmp))
                 {
-                    g.Clear(Color.FromArgb(10, 15, 29));
-                    using (Pen borderPen = new Pen(Color.FromArgb(0, 229, 255), 2))
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.Clear(Color.Transparent);
+
+                    PointF[] shield = new PointF[]
                     {
-                        g.DrawRectangle(borderPen, 1, 1, 13, 13);
+                        new PointF(16f, 2f),
+                        new PointF(28f, 6.5f),
+                        new PointF(26.5f, 18.5f),
+                        new PointF(16f, 30f),
+                        new PointF(5.5f, 18.5f),
+                        new PointF(4f, 6.5f)
+                    };
+
+                    using (SolidBrush fillBrush = new SolidBrush(Color.FromArgb(45, 106, 79)))
+                    {
+                        g.FillPolygon(fillBrush, shield);
                     }
-                    using (Brush dotBrush = new SolidBrush(Color.FromArgb(16, 185, 129)))
+                    using (Pen borderPen = new Pen(Color.FromArgb(244, 245, 242), 1.6f))
                     {
-                        g.FillEllipse(dotBrush, 5, 5, 6, 6);
+                        g.DrawPolygon(borderPen, shield);
+                    }
+                    using (SolidBrush dotBrush = new SolidBrush(Color.White))
+                    {
+                        g.FillEllipse(dotBrush, 11.5f, 11.5f, 9f, 9f);
                     }
                 }
                 return Icon.FromHandle(bmp.GetHicon());
@@ -364,74 +486,247 @@ namespace IpojucaRMM
             }
         }
 
+        private StationSnapshot GetSnapshotCopy()
+        {
+            lock (_snapshotLock)
+            {
+                StationSnapshot copy = new StationSnapshot();
+                copy.CpuPct = _snapshot.CpuPct;
+                copy.RamPct = _snapshot.RamPct;
+                copy.DiskPct = _snapshot.DiskPct;
+                copy.IpAddress = _snapshot.IpAddress;
+                copy.IsConnected = _snapshot.IsConnected;
+                copy.IsSyncing = _snapshot.IsSyncing;
+                copy.StatusText = _snapshot.StatusText;
+                copy.LastSyncClock = _snapshot.LastSyncClock;
+                return copy;
+            }
+        }
+
+        private List<ChatEntry> GetChatHistorySnapshot()
+        {
+            lock (_chatHistory)
+            {
+                return new List<ChatEntry>(_chatHistory);
+            }
+        }
+
         private void ShowStatusWindow()
         {
             if (_statusForm == null || _statusForm.IsDisposed)
             {
                 _statusForm = new SuperAgentForm(
                     _config,
+                    _appIcon,
                     () => TriggerHeartbeatAsync("MANUAL_UI_BUTTON"),
-                    () => TriggerSelfUpdateGui(true),
                     SendClientMessageAsync,
-                    () => _lastSyncStatus,
-                    () => _chatHistory
+                    GetSnapshotCopy,
+                    GetChatHistorySnapshot
                 );
             }
-            _statusForm.Show();
+            if (!_statusForm.Visible)
+            {
+                _statusForm.Show();
+            }
+            if (_statusForm.WindowState == FormWindowState.Minimized)
+            {
+                _statusForm.WindowState = FormWindowState.Normal;
+            }
             _statusForm.BringToFront();
             _statusForm.Activate();
         }
 
-        private void TriggerSelfUpdateGui(bool isManualClick)
+        private void RequestAdminExit()
         {
-            if (_isUpdating) return;
-            _isUpdating = true;
-
+            if (_adminDialogOpen) return;
+            _adminDialogOpen = true;
             try
             {
-                Action openUpdater = () =>
+                IntPtr ownerHwnd = (_statusForm != null && !_statusForm.IsDisposed && _statusForm.Visible)
+                    ? _statusForm.Handle
+                    : IntPtr.Zero;
+
+                string authMethod;
+                string detailMsg;
+                bool authorized = WindowsAdminAuthenticator.RequestAdminAuthorization(ownerHwnd, out authMethod, out detailMsg);
+
+                if (!authorized)
                 {
-                    try
+                    AppendLog("[SEGURANCA] Encerramento nao autorizado (" + authMethod + "): " + detailMsg);
+                    return;
+                }
+
+                AppendLog("[SEGURANCA] Encerramento autorizado via " + authMethod + ": " + detailMsg);
+                SendDisconnectSignal();
+                if (_statusForm != null && !_statusForm.IsDisposed)
+                {
+                    _statusForm.ForceCloseFromAdmin();
+                }
+                _trayIcon.Visible = false;
+                Program.ReleaseSingleInstanceMutex();
+                Application.Exit();
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[SEGURANCA ERRO] Falha ao solicitar autorizacao administrativa do Windows: " + ex.Message);
+            }
+            finally
+            {
+                _adminDialogOpen = false;
+            }
+        }
+
+        public static bool IsRemoteVersionNewer(string remoteVersion, string localVersion)
+        {
+            int rMaj, rMin, rPat;
+            int lMaj, lMin, lPat;
+            if (!TryParseSemVer(remoteVersion, out rMaj, out rMin, out rPat)) return false;
+            if (!TryParseSemVer(localVersion, out lMaj, out lMin, out lPat)) return false;
+            if (rMaj != lMaj) return rMaj > lMaj;
+            if (rMin != lMin) return rMin > lMin;
+            return rPat > lPat;
+        }
+
+        private static bool TryParseSemVer(string raw, out int major, out int minor, out int patch)
+        {
+            major = 0;
+            minor = 0;
+            patch = 0;
+            if (string.IsNullOrEmpty(raw)) return false;
+            Match m = Regex.Match(raw.Trim(), @"^v?(\d+)\.(\d+)(?:\.(\d+))?");
+            if (!m.Success) return false;
+            if (!int.TryParse(m.Groups[1].Value, out major)) return false;
+            if (!int.TryParse(m.Groups[2].Value, out minor)) return false;
+            if (m.Groups[3].Success && !string.IsNullOrEmpty(m.Groups[3].Value))
+            {
+                int.TryParse(m.Groups[3].Value, out patch);
+            }
+            return true;
+        }
+
+        private void TriggerSilentUpdateAsync(string reason)
+        {
+            lock (_updateLock)
+            {
+                if (_isUpdating) return;
+                if (_lastUpdateFailureUtc != DateTime.MinValue &&
+                    (DateTime.UtcNow - _lastUpdateFailureUtc).TotalMinutes < 10.0)
+                {
+                    return;
+                }
+                _isUpdating = true;
+            }
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string tempUpdaterPath = Path.Combine(_installDir, "IpojucaRMM-Updater-Temp.exe");
+                try
+                {
+                    AppendLog("[OTA SILENCIOSO] Verificando manifesto de versao (" + reason + ") em " + _config.BackendUrl);
+
+                    string expectedSha256 = "";
+                    string latestVer = AgentConfig.CURRENT_VERSION;
+                    HttpWebRequest vReq = (HttpWebRequest)WebRequest.Create(_config.BackendUrl.TrimEnd('/') + "/api/agent/version");
+                    vReq.Method = "GET";
+                    vReq.Timeout = 8000;
+                    using (HttpWebResponse vResp = (HttpWebResponse)vReq.GetResponse())
+                    using (StreamReader sr = new StreamReader(vResp.GetResponseStream(), Encoding.UTF8))
                     {
-                        _trayIcon.ShowBalloonTip(
-                            5000,
-                            "Atualização do Agente RMM Ipojuca",
-                            "Baixando e instalando a nova versão oficial da Central de TI...",
-                            ToolTipIcon.Info
-                        );
-                        UpdateProgressForm updateForm = new UpdateProgressForm(_config, _installDir, isManualClick, () =>
+                        string vJson = sr.ReadToEnd();
+                        JavaScriptSerializer ser = new JavaScriptSerializer();
+                        Dictionary<string, object> vData = ser.Deserialize<Dictionary<string, object>>(vJson);
+                        if (vData != null)
                         {
-                            _suppressDisconnectOnExit = true;
-                            Program.ReleaseSingleInstanceMutex();
-                            _trayIcon.Visible = false;
-                            Environment.Exit(0);
-                        }, () =>
-                        {
-                            _isUpdating = false;
-                        });
-                        updateForm.Show();
-                        updateForm.BringToFront();
-                        updateForm.Activate();
+                            if (vData.ContainsKey("latest_version") && vData["latest_version"] != null)
+                                latestVer = vData["latest_version"].ToString().Trim();
+                            if (vData.ContainsKey("sha256") && vData["sha256"] != null)
+                                expectedSha256 = vData["sha256"].ToString().Trim().ToLowerInvariant();
+                        }
                     }
-                    catch
+
+                    if (!IsRemoteVersionNewer(latestVer, AgentConfig.CURRENT_VERSION))
                     {
+                        AppendLog("[OTA ANTI-DOWNGRADE] Versao do servidor (" + latestVer + ") nao e superior a versao local (" + AgentConfig.CURRENT_VERSION + "). Downgrade bloqueado.");
+                        lock (_updateLock) { _isUpdating = false; }
+                        return;
+                    }
+
+                    // Integridade obrigatoria (@security): nunca executar binario OTA sem SHA-256 valido do manifesto
+                    if (!Regex.IsMatch(expectedSha256, @"^[0-9a-f]{64}$"))
+                    {
+                        throw new Exception("Manifesto /api/agent/version nao retornou SHA-256 valido (64 hex).");
+                    }
+
+                    if (File.Exists(tempUpdaterPath))
+                    {
+                        try { File.Delete(tempUpdaterPath); } catch { }
+                    }
+
+                    AppendLog("[OTA SILENCIOSO] Baixando nova versao " + latestVer + " em segundo plano...");
+                    string downloadUrl = _config.BackendUrl.TrimEnd('/') + "/api/agent/download";
+                    HttpWebRequest dlReq = (HttpWebRequest)WebRequest.Create(downloadUrl);
+                    dlReq.Method = "GET";
+                    dlReq.Timeout = 45000;
+                    using (HttpWebResponse dlResp = (HttpWebResponse)dlReq.GetResponse())
+                    using (Stream netStream = dlResp.GetResponseStream())
+                    using (FileStream fileStream = new FileStream(tempUpdaterPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        byte[] buffer = new byte[16384];
+                        int read;
+                        while ((read = netStream.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            fileStream.Write(buffer, 0, read);
+                        }
+                    }
+
+                    FileInfo fi = new FileInfo(tempUpdaterPath);
+                    if (!fi.Exists || fi.Length < 10240)
+                    {
+                        try { File.Delete(tempUpdaterPath); } catch { }
+                        throw new Exception("Arquivo OTA baixado esta incompleto ou invalido.");
+                    }
+
+                    string actualSha;
+                    using (SHA256 sha = SHA256.Create())
+                    using (FileStream fs = File.OpenRead(tempUpdaterPath))
+                    {
+                        byte[] hashBytes = sha.ComputeHash(fs);
+                        StringBuilder sbHash = new StringBuilder(hashBytes.Length * 2);
+                        foreach (byte b in hashBytes) sbHash.Append(b.ToString("x2"));
+                        actualSha = sbHash.ToString().ToLowerInvariant();
+                    }
+
+                    if (actualSha != expectedSha256)
+                    {
+                        try { File.Delete(tempUpdaterPath); } catch { }
+                        throw new Exception("Falha na verificacao de integridade SHA-256 (esperado=" + expectedSha256 + ", obtido=" + actualSha + ").");
+                    }
+
+                    AppendLog("[OTA SILENCIOSO] SHA-256 verificado (" + (fi.Length / 1024) + " KB). Aplicando versao " + latestVer + " silenciosamente...");
+
+                    ProcessStartInfo psi = new ProcessStartInfo(tempUpdaterPath, "--ota-update --silent");
+                    psi.WorkingDirectory = _installDir;
+                    psi.UseShellExecute = false;
+                    psi.CreateNoWindow = true;
+                    psi.WindowStyle = ProcessWindowStyle.Hidden;
+                    Process.Start(psi);
+
+                    _suppressDisconnectOnExit = true;
+                    Program.ReleaseSingleInstanceMutex();
+                    try { _trayIcon.Visible = false; } catch { }
+                    Environment.Exit(0);
+                }
+                catch (Exception ex)
+                {
+                    try { if (File.Exists(tempUpdaterPath)) File.Delete(tempUpdaterPath); } catch { }
+                    AppendLog("[OTA ERRO] Falha na atualizacao silenciosa (" + reason + "): " + ex.Message);
+                    lock (_updateLock)
+                    {
+                        _lastUpdateFailureUtc = DateTime.UtcNow;
                         _isUpdating = false;
                     }
-                };
-
-                if (_uiDispatcher != null && _uiDispatcher.InvokeRequired)
-                {
-                    _uiDispatcher.BeginInvoke(openUpdater);
                 }
-                else
-                {
-                    openUpdater();
-                }
-            }
-            catch
-            {
-                _isUpdating = false;
-            }
+            });
         }
 
         public static AgentConfig LoadOrCreateConfig(string installDir, string overrideUrl)
@@ -530,10 +825,31 @@ namespace IpojucaRMM
 
         private void SendHeartbeat(string reason)
         {
+            lock (_snapshotLock)
+            {
+                _snapshot.IsSyncing = true;
+                _snapshot.StatusText = "Sincronizando com a Central de TI...";
+            }
+
             try
             {
                 Dictionary<string, object> inventory = HardwareCollector.CollectInventory();
                 Dictionary<string, object> metrics = HardwareCollector.CollectMetrics();
+
+                lock (_snapshotLock)
+                {
+                    if (metrics.ContainsKey("cpu_usage_pct") && metrics["cpu_usage_pct"] != null)
+                        _snapshot.CpuPct = Convert.ToDouble(metrics["cpu_usage_pct"]);
+                    if (metrics.ContainsKey("ram_usage_pct") && metrics["ram_usage_pct"] != null)
+                        _snapshot.RamPct = Convert.ToDouble(metrics["ram_usage_pct"]);
+                    if (metrics.ContainsKey("disk_usage_pct") && metrics["disk_usage_pct"] != null)
+                        _snapshot.DiskPct = Convert.ToDouble(metrics["disk_usage_pct"]);
+                    if (inventory.ContainsKey("ip_address") && inventory["ip_address"] != null)
+                    {
+                        string ipVal = inventory["ip_address"].ToString().Trim();
+                        if (!string.IsNullOrEmpty(ipVal)) _snapshot.IpAddress = ipVal;
+                    }
+                }
 
                 Dictionary<string, object> payload = new Dictionary<string, object>
                 {
@@ -571,23 +887,34 @@ namespace IpojucaRMM
                 {
                     string responseText = reader.ReadToEnd();
                     _lastSyncTime = DateTime.Now;
-                    _lastSyncStatus = "Sincronizado (" + reason + ") às " + _lastSyncTime.ToString("HH:mm:ss");
+                    string clock = _lastSyncTime.ToString("HH:mm:ss");
+                    lock (_snapshotLock)
+                    {
+                        _snapshot.IsConnected = true;
+                        _snapshot.IsSyncing = false;
+                        _snapshot.LastSyncClock = clock;
+                        _snapshot.StatusText = "Conectado · Última sincronização às " + clock;
+                    }
                     AppendLog("[OK] Heartbeat enviado (" + reason + ") -> " + responseText);
                 }
             }
             catch (Exception ex)
             {
-                _lastSyncStatus = "Erro de conexão: " + ex.Message;
+                lock (_snapshotLock)
+                {
+                    _snapshot.IsConnected = false;
+                    _snapshot.IsSyncing = false;
+                    _snapshot.StatusText = "Sem conexão com o servidor";
+                }
                 AppendLog("[ERRO] Falha no envio de heartbeat (" + reason + "): " + ex.Message);
             }
         }
 
         private void SendClientMessageAsync(string text)
         {
-            string line = "[" + DateTime.Now.ToString("HH:mm") + " VOCÊ]: " + text;
             lock (_chatHistory)
             {
-                _chatHistory.Add(line);
+                _chatHistory.Add(new ChatEntry("Você", text, true, false));
             }
             ThreadPool.QueueUserWorkItem(_ =>
             {
@@ -660,8 +987,22 @@ namespace IpojucaRMM
 
                         if (result.ContainsKey("update_requested") && Convert.ToBoolean(result["update_requested"]))
                         {
-                            AppendLog("[OTA UPDATE] Ordem de atualização automática recebida da Central de TI!");
-                            TriggerSelfUpdateGui(false);
+                            string announcedVer = (result.ContainsKey("latest_version") && result["latest_version"] != null)
+                                ? result["latest_version"].ToString().Trim()
+                                : "";
+                            if (!string.IsNullOrEmpty(announcedVer) && !IsRemoteVersionNewer(announcedVer, AgentConfig.CURRENT_VERSION))
+                            {
+                                if (!string.Equals(_lastDowngradeBlockedVersion, announcedVer, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    _lastDowngradeBlockedVersion = announcedVer;
+                                    AppendLog("[OTA ANTI-DOWNGRADE] Servidor anunciou versao " + announcedVer + " (local: " + AgentConfig.CURRENT_VERSION + "). Downgrade bloqueado.");
+                                }
+                            }
+                            else
+                            {
+                                AppendLog("[OTA SILENCIOSO] Ordem de atualização automática recebida da Central de TI.");
+                                TriggerSilentUpdateAsync("SERVER_POLL");
+                            }
                         }
 
                         if (result.ContainsKey("tasks") && result["tasks"] is System.Collections.ArrayList)
@@ -705,8 +1046,9 @@ namespace IpojucaRMM
                                     string msgText = m["message"].ToString();
                                     lock (_chatHistory)
                                     {
-                                        _chatHistory.Add("[" + DateTime.Now.ToString("HH:mm") + " " + sender + "]: " + msgText);
+                                        _chatHistory.Add(new ChatEntry(sender, msgText, false, false));
                                     }
+                                    // Politica A3: notificacao de bandeja mantida exclusivamente para mensagens da TI
                                     _trayIcon.ShowBalloonTip(5000, "Mensagem da Central de TI (" + sender + ")", msgText, ToolTipIcon.Info);
                                     if (_uiDispatcher != null)
                                     {
@@ -836,15 +1178,15 @@ namespace IpojucaRMM
         {
             try
             {
-                AppendLog("[TASK EXEC] Iniciando execução local de " + taskCode + " (" + taskId + ")");
-                _trayIcon.ShowBalloonTip(
-                    3500,
-                    "Manutenção Remota — RMM Ipojuca",
-                    "A Central de TI iniciou a tarefa: " + taskCode,
-                    ToolTipIcon.Info
-                );
+                AppendLog("[TASK EXEC] Iniciando execução local silenciosa de " + taskCode + " (" + taskId + ")");
 
-                RemoteTaskExecutor.TaskResult outcome = RemoteTaskExecutor.RunTask(taskCode, taskParams, _config, () => TriggerHeartbeatAsync("TASK_" + taskCode), () => TriggerSelfUpdateGui(false));
+                RemoteTaskExecutor.TaskResult outcome = RemoteTaskExecutor.RunTask(
+                    taskCode,
+                    taskParams,
+                    _config,
+                    () => TriggerHeartbeatAsync("TASK_" + taskCode),
+                    () => TriggerSilentUpdateAsync("TASK_UPDATE_AGENT")
+                );
                 ReportTaskOutcome(taskId, outcome.Success, outcome.Success ? 0 : 1, outcome.Summary);
                 AppendLog("[TASK OK] " + taskCode + " -> " + outcome.Summary);
             }
@@ -936,7 +1278,7 @@ namespace IpojucaRMM
 
                 case "UPDATE_AGENT":
                     if (onTriggerUpdate != null) onTriggerUpdate();
-                    return new TaskResult(true, "Atualização automática iniciada na tela de " + Environment.MachineName + ".");
+                    return new TaskResult(true, "Atualização silenciosa iniciada em segundo plano em " + Environment.MachineName + ".");
 
                 default:
                     return new TaskResult(false, "Tarefa '" + taskCode + "' não é suportada por este agente em " + Environment.MachineName + ".");
@@ -2000,353 +2342,903 @@ namespace IpojucaRMM
         }
     }
 
-    public class UpdateProgressForm : Form
+    public static class WindowsAdminAuthenticator
     {
-        private readonly Label _lblStep;
-        private readonly Label _lblDetail;
-        private readonly ProgressBar _progressBar;
-        private readonly Button _btnClose;
+        private const int LOGON32_LOGON_INTERACTIVE = 2;
+        private const int LOGON32_LOGON_NETWORK = 3;
+        private const int LOGON32_PROVIDER_DEFAULT = 0;
 
-        public UpdateProgressForm(
-            AgentConfig config,
-            string installDir,
-            bool isManualCheck,
-            Action onLaunchAndExit,
-            Action onAborted)
+        private const int TokenElevationType = 18;
+        private const int TokenLinkedToken = 19;
+        private const int TokenElevationTypeLimited = 3;
+
+        private const int CREDUIWIN_ENUMERATE_ADMINS = 0x00000100;
+        private const int ERROR_CANCELLED = 1223;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct TOKEN_LINKED_TOKEN
         {
-            this.Text = "RMM Ipojuca — Atualização do Agente (" + Environment.MachineName + ")";
-            this.Size = new Size(490, 235);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = Color.FromArgb(11, 15, 25);
-            this.ForeColor = Color.FromArgb(241, 245, 249);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.TopMost = true;
-
-            Label lblTitle = new Label();
-            lblTitle.Text = "⬆ ATUALIZAÇÃO AUTOMÁTICA — RMM IPOJUCA";
-            lblTitle.Font = new Font("Segoe UI", 11, FontStyle.Bold);
-            lblTitle.ForeColor = Color.FromArgb(212, 255, 51);
-            lblTitle.Location = new Point(18, 16);
-            lblTitle.AutoSize = true;
-            this.Controls.Add(lblTitle);
-
-            _lblStep = new Label();
-            _lblStep.Text = "Conectando ao servidor central (" + config.BackendUrl + ")...";
-            _lblStep.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-            _lblStep.ForeColor = Color.FromArgb(248, 250, 252);
-            _lblStep.Location = new Point(18, 48);
-            _lblStep.Size = new Size(440, 22);
-            this.Controls.Add(_lblStep);
-
-            _progressBar = new ProgressBar();
-            _progressBar.Location = new Point(18, 78);
-            _progressBar.Size = new Size(438, 24);
-            _progressBar.Style = ProgressBarStyle.Continuous;
-            _progressBar.Value = 15;
-            this.Controls.Add(_progressBar);
-
-            _lblDetail = new Label();
-            _lblDetail.Text = "Versão atual: " + AgentConfig.CURRENT_VERSION + " — Verificando pacote oficial da Central de TI...";
-            _lblDetail.Font = new Font("Consolas", 8.5f, FontStyle.Regular);
-            _lblDetail.ForeColor = Color.FromArgb(148, 163, 184);
-            _lblDetail.Location = new Point(18, 112);
-            _lblDetail.Size = new Size(440, 38);
-            this.Controls.Add(_lblDetail);
-
-            _btnClose = new Button();
-            _btnClose.Text = "Fechar";
-            _btnClose.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-            _btnClose.BackColor = Color.FromArgb(30, 41, 59);
-            _btnClose.ForeColor = Color.White;
-            _btnClose.FlatStyle = FlatStyle.Flat;
-            _btnClose.Location = new Point(356, 154);
-            _btnClose.Size = new Size(100, 30);
-            _btnClose.Enabled = false;
-            _btnClose.Click += (s, e) =>
-            {
-                onAborted();
-                this.Close();
-            };
-            this.Controls.Add(_btnClose);
-
-            this.FormClosed += (s, e) => onAborted();
-
-            this.Shown += (s, e) =>
-            {
-                ThreadPool.QueueUserWorkItem(_ =>
-                {
-                    RunUpdatePipeline(config, installDir, isManualCheck, onLaunchAndExit);
-                });
-            };
+            public IntPtr LinkedToken;
         }
 
-        private void UpdateUi(int progress, string stepText, string detailText, bool enableClose)
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct CREDUI_INFO
         {
-            if (this.IsDisposed) return;
+            public int cbSize;
+            public IntPtr hwndParent;
+            public string pszMessageText;
+            public string pszCaptionText;
+            public IntPtr hbmBanner;
+        }
+
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool LogonUser(
+            string lpszUsername,
+            string lpszDomain,
+            string lpszPassword,
+            int dwLogonType,
+            int dwLogonProvider,
+            out IntPtr phToken
+        );
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool GetTokenInformation(
+            IntPtr TokenHandle,
+            int TokenInformationClass,
+            IntPtr TokenInformation,
+            int TokenInformationLength,
+            out int ReturnLength
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr hObject);
+
+        [DllImport("credui.dll", CharSet = CharSet.Unicode)]
+        private static extern uint CredUIPromptForWindowsCredentials(
+            ref CREDUI_INFO pUiInfo,
+            uint dwAuthError,
+            ref uint pulAuthPackage,
+            IntPtr pvInAuthBuffer,
+            uint ulInAuthBufferSize,
+            out IntPtr ppvOutAuthBuffer,
+            out uint pulOutAuthBufferSize,
+            ref bool pfSave,
+            uint dwFlags
+        );
+
+        [DllImport("credui.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool CredUnPackAuthenticationBuffer(
+            int dwFlags,
+            IntPtr pAuthBuffer,
+            uint cbAuthBuffer,
+            StringBuilder pszUserName,
+            ref int pcchMaxUserName,
+            StringBuilder pszDomainName,
+            ref int pcchMaxDomainName,
+            StringBuilder pszPassword,
+            ref int pcchMaxPassword
+        );
+
+        public static bool IsCurrentProcessElevated()
+        {
             try
             {
-                this.BeginInvoke((Action)(() =>
+                using (WindowsIdentity id = WindowsIdentity.GetCurrent())
                 {
-                    if (this.IsDisposed) return;
-                    _progressBar.Value = Math.Max(0, Math.Min(100, progress));
-                    _lblStep.Text = stepText;
-                    _lblDetail.Text = detailText;
-                    _btnClose.Enabled = enableClose;
-                }));
+                    WindowsPrincipal principal = new WindowsPrincipal(id);
+                    return principal.IsInRole(WindowsBuiltInRole.Administrator);
+                }
             }
-            catch { }
+            catch
+            {
+                return false;
+            }
         }
 
-        private void RunUpdatePipeline(
-            AgentConfig config,
-            string installDir,
-            bool isManualCheck,
-            Action onLaunchAndExit)
+        /// <summary>
+        /// Aciona a tela nativa UAC do Windows (Controle de Conta de Usuario / Verb = "runas"),
+        /// suportando nativamente administradores locais e contas administradoras de rede/dominio (AD/Entra ID).
+        /// Caso o processo ja esteja elevado, aciona o prompt nativo Seguranca do Windows (credui.dll).
+        /// </summary>
+        public static bool RequestAdminAuthorization(IntPtr ownerHwnd, out string authMethod, out string detailMessage)
         {
+            authMethod = "WINDOWS_UAC";
+            detailMessage = "";
+
+            if (!IsCurrentProcessElevated())
+            {
+                return RequestViaNativeUac(out detailMessage);
+            }
+
+            authMethod = "WINDOWS_CREDUI";
+            return RequestViaNativeCredUi(ownerHwnd, out detailMessage);
+        }
+
+        private static bool RequestViaNativeUac(out string detailMessage)
+        {
+            detailMessage = "";
             try
             {
-                UpdateUi(25, "Consultando manifesto de versão na Central de TI...", "Servidor: " + config.BackendUrl, false);
-                Thread.Sleep(400);
+                ProcessStartInfo psi = new ProcessStartInfo(Application.ExecutablePath, "--verify-admin-exit");
+                psi.UseShellExecute = true;
+                psi.Verb = "runas";
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
 
-                string expectedSha256 = "";
-                string latestVer = AgentConfig.CURRENT_VERSION;
-                HttpWebRequest vReq = (HttpWebRequest)WebRequest.Create(config.BackendUrl.TrimEnd('/') + "/api/agent/version");
-                vReq.Method = "GET";
-                vReq.Timeout = 8000;
-                using (HttpWebResponse vResp = (HttpWebResponse)vReq.GetResponse())
-                using (StreamReader sr = new StreamReader(vResp.GetResponseStream(), Encoding.UTF8))
+                using (Process proc = Process.Start(psi))
                 {
-                    string vJson = sr.ReadToEnd();
-                    JavaScriptSerializer ser = new JavaScriptSerializer();
-                    Dictionary<string, object> vData = ser.Deserialize<Dictionary<string, object>>(vJson);
-                    if (vData != null)
+                    if (proc == null)
                     {
-                        if (vData.ContainsKey("latest_version") && vData["latest_version"] != null)
-                            latestVer = vData["latest_version"].ToString();
-                        if (vData.ContainsKey("sha256") && vData["sha256"] != null)
-                            expectedSha256 = vData["sha256"].ToString().Trim().ToLowerInvariant();
+                        detailMessage = "Nao foi possivel iniciar o verificador elevado do Windows.";
+                        return false;
                     }
-                }
-
-                // Integridade obrigatória (@security): nunca executar binário OTA sem SHA-256 válido do manifesto
-                if (!Regex.IsMatch(expectedSha256, @"^[0-9a-f]{64}$"))
-                {
-                    throw new Exception("Manifesto /api/agent/version não retornou um hash SHA-256 válido. Atualização abortada por segurança.");
-                }
-
-                UpdateUi(55, "Baixando nova versão do Agente (" + latestVer + ")...", "Transferindo instalador oficial /api/agent/download...", false);
-
-                string tempUpdaterPath = Path.Combine(installDir, "IpojucaRMM-Updater-Temp.exe");
-                if (File.Exists(tempUpdaterPath))
-                {
-                    try { File.Delete(tempUpdaterPath); } catch { }
-                }
-
-                string downloadUrl = config.BackendUrl.TrimEnd('/') + "/api/agent/download";
-                HttpWebRequest dlReq = (HttpWebRequest)WebRequest.Create(downloadUrl);
-                dlReq.Method = "GET";
-                dlReq.Timeout = 30000;
-                using (HttpWebResponse dlResp = (HttpWebResponse)dlReq.GetResponse())
-                using (Stream netStream = dlResp.GetResponseStream())
-                using (FileStream fileStream = new FileStream(tempUpdaterPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                {
-                    byte[] buffer = new byte[16384];
-                    int read;
-                    while ((read = netStream.Read(buffer, 0, buffer.Length)) > 0)
+                    if (!proc.WaitForExit(30000))
                     {
-                        fileStream.Write(buffer, 0, read);
+                        try { proc.Kill(); } catch { }
+                        detailMessage = "Tempo limite excedido na verificacao administrativa do Windows.";
+                        return false;
                     }
-                }
-
-                FileInfo fi = new FileInfo(tempUpdaterPath);
-                if (!fi.Exists || fi.Length < 10240)
-                {
-                    try { File.Delete(tempUpdaterPath); } catch { }
-                    throw new Exception("O arquivo baixado está incompleto ou inválido.");
-                }
-
-                UpdateUi(82, "Verificando assinatura criptográfica SHA-256...", "Tamanho recebido: " + (fi.Length / 1024) + " KB", false);
-                Thread.Sleep(350);
-
-                using (SHA256 sha = SHA256.Create())
-                using (FileStream fs = File.OpenRead(tempUpdaterPath))
-                {
-                    byte[] hashBytes = sha.ComputeHash(fs);
-                    StringBuilder sbHash = new StringBuilder();
-                    foreach (byte b in hashBytes) sbHash.Append(b.ToString("x2"));
-                    string actualSha = sbHash.ToString().ToLowerInvariant();
-                    if (actualSha != expectedSha256)
+                    if (proc.ExitCode == 0)
                     {
-                        fs.Close();
-                        try { File.Delete(tempUpdaterPath); } catch { }
-                        throw new Exception("Falha na verificação de integridade SHA-256 do instalador. Arquivo descartado.");
+                        detailMessage = "Elevacao UAC confirmada pelo Windows.";
+                        return true;
                     }
+                    detailMessage = "Verificador elevado retornou acesso negado (ExitCode=" + proc.ExitCode + ").";
+                    return false;
                 }
-
-                UpdateUi(100, "Aplicando atualização e reiniciando o Agente...", "Nova versão pronta: " + latestVer, false);
-                Thread.Sleep(600);
-
-                ProcessStartInfo psi = new ProcessStartInfo(tempUpdaterPath, "--ota-update");
-                psi.WorkingDirectory = installDir;
-                psi.UseShellExecute = false;
-                Process.Start(psi);
-
-                this.BeginInvoke((Action)(() =>
+            }
+            catch (Win32Exception wex)
+            {
+                if (wex.NativeErrorCode == ERROR_CANCELLED)
                 {
-                    onLaunchAndExit();
-                }));
+                    detailMessage = "Cancelado pelo usuario na tela UAC do Windows.";
+                    return false;
+                }
+                detailMessage = "Falha ao abrir tela UAC do Windows (codigo " + wex.NativeErrorCode + "): " + wex.Message;
+                return false;
             }
             catch (Exception ex)
             {
-                UpdateUi(0, "Falha ao atualizar o Agente Windows", ex.Message, true);
+                detailMessage = "Erro ao solicitar UAC do Windows: " + ex.Message;
+                return false;
             }
+        }
+
+        private static bool RequestViaNativeCredUi(IntPtr ownerHwnd, out string detailMessage)
+        {
+            detailMessage = "";
+            uint authPackage = 0;
+            uint lastAuthError = 0;
+            bool saveCred = false;
+
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                CREDUI_INFO uiInfo = new CREDUI_INFO();
+                uiInfo.cbSize = Marshal.SizeOf(typeof(CREDUI_INFO));
+                uiInfo.hwndParent = ownerHwnd;
+                uiInfo.pszCaptionText = "Segurança do Windows — RMM Ipojuca";
+                uiInfo.pszMessageText = "Informe uma conta Administradora (local ou de rede) para encerrar o agente nesta máquina.";
+                uiInfo.hbmBanner = IntPtr.Zero;
+
+                IntPtr outCredBuf = IntPtr.Zero;
+                uint outCredSize = 0;
+                try
+                {
+                    uint result = CredUIPromptForWindowsCredentials(
+                        ref uiInfo,
+                        lastAuthError,
+                        ref authPackage,
+                        IntPtr.Zero,
+                        0,
+                        out outCredBuf,
+                        out outCredSize,
+                        ref saveCred,
+                        CREDUIWIN_ENUMERATE_ADMINS
+                    );
+
+                    if (result == ERROR_CANCELLED)
+                    {
+                        detailMessage = "Cancelado na janela de Seguranca do Windows.";
+                        return false;
+                    }
+                    if (result != 0 || outCredBuf == IntPtr.Zero)
+                    {
+                        detailMessage = "Prompt de Seguranca do Windows retornou codigo " + result + ".";
+                        return false;
+                    }
+
+                    int maxUser = 256;
+                    int maxDomain = 256;
+                    int maxPass = 256;
+                    StringBuilder sbUser = new StringBuilder(maxUser);
+                    StringBuilder sbDomain = new StringBuilder(maxDomain);
+                    StringBuilder sbPass = new StringBuilder(maxPass);
+
+                    if (!CredUnPackAuthenticationBuffer(0, outCredBuf, outCredSize, sbUser, ref maxUser, sbDomain, ref maxDomain, sbPass, ref maxPass))
+                    {
+                        lastAuthError = 1326;
+                        continue;
+                    }
+
+                    string unpackedUser = sbUser.ToString().Trim();
+                    string unpackedDomain = sbDomain.ToString().Trim();
+                    string fullUser = (!string.IsNullOrEmpty(unpackedDomain) && !unpackedUser.Contains("\\") && !unpackedUser.Contains("@"))
+                        ? (unpackedDomain + "\\" + unpackedUser)
+                        : unpackedUser;
+
+                    string errMsg;
+                    if (ValidateWindowsAdmin(fullUser, sbPass.ToString(), out errMsg))
+                    {
+                        detailMessage = "Conta administrativa validada: " + fullUser;
+                        return true;
+                    }
+
+                    lastAuthError = 1326;
+                    detailMessage = errMsg;
+                }
+                finally
+                {
+                    if (outCredBuf != IntPtr.Zero)
+                    {
+                        try { Marshal.FreeCoTaskMem(outCredBuf); } catch { }
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(detailMessage))
+            {
+                detailMessage = "Credenciais administrativas recusadas pelo Windows.";
+            }
+            return false;
+        }
+
+        public static bool ValidateWindowsAdmin(string rawUsername, string password, out string errorMessage)
+        {
+            errorMessage = "";
+            string inputUser = (rawUsername ?? "").Trim();
+            if (string.IsNullOrEmpty(inputUser))
+            {
+                errorMessage = "Informe o nome de usuário Administrador do Windows.";
+                return false;
+            }
+            if (string.IsNullOrEmpty(password))
+            {
+                errorMessage = "Informe a senha da conta Administradora.";
+                return false;
+            }
+
+            List<string> domainsToTry = new List<string>();
+            string user = inputUser;
+
+            int slashIdx = inputUser.IndexOf('\\');
+            if (slashIdx > 0 && slashIdx < inputUser.Length - 1)
+            {
+                string explicitDomain = inputUser.Substring(0, slashIdx).Trim();
+                user = inputUser.Substring(slashIdx + 1).Trim();
+                domainsToTry.Add(string.IsNullOrEmpty(explicitDomain) ? "." : explicitDomain);
+            }
+            else if (inputUser.Contains("@"))
+            {
+                domainsToTry.Add(null);
+            }
+            else
+            {
+                // Suporta conta de rede/dominio (AD) e conta local sem precisar digitar o prefixo
+                string activeDomain = Environment.UserDomainName;
+                if (!string.IsNullOrEmpty(activeDomain) &&
+                    !string.Equals(activeDomain, Environment.MachineName, StringComparison.OrdinalIgnoreCase))
+                {
+                    domainsToTry.Add(activeDomain);
+                }
+                domainsToTry.Add(".");
+            }
+
+            int lastWin32Err = 1326;
+            bool authenticatedAsNonAdmin = false;
+
+            foreach (string dom in domainsToTry)
+            {
+                IntPtr token = IntPtr.Zero;
+                IntPtr netToken = IntPtr.Zero;
+                try
+                {
+                    int usedLogonType = LOGON32_LOGON_INTERACTIVE;
+                    bool loggedIn = LogonUser(user, dom, password, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, out token);
+                    int win32Err = loggedIn ? 0 : Marshal.GetLastWin32Error();
+
+                    if (!loggedIn && (win32Err == 1385 || win32Err == 1326))
+                    {
+                        usedLogonType = LOGON32_LOGON_NETWORK;
+                        loggedIn = LogonUser(user, dom, password, LOGON32_LOGON_NETWORK, LOGON32_PROVIDER_DEFAULT, out token);
+                        win32Err = loggedIn ? 0 : Marshal.GetLastWin32Error();
+                    }
+
+                    if (!loggedIn || token == IntPtr.Zero)
+                    {
+                        lastWin32Err = win32Err;
+                        continue;
+                    }
+
+                    if (IsTokenAdministrator(token))
+                    {
+                        return true;
+                    }
+
+                    if (usedLogonType == LOGON32_LOGON_INTERACTIVE)
+                    {
+                        if (LogonUser(user, dom, password, LOGON32_LOGON_NETWORK, LOGON32_PROVIDER_DEFAULT, out netToken) &&
+                            netToken != IntPtr.Zero)
+                        {
+                            if (IsTokenAdministrator(netToken))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+
+                    authenticatedAsNonAdmin = true;
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = "Não foi possível validar a conta no Windows: " + ex.Message;
+                    return false;
+                }
+                finally
+                {
+                    if (netToken != IntPtr.Zero)
+                    {
+                        try { CloseHandle(netToken); } catch { }
+                    }
+                    if (token != IntPtr.Zero)
+                    {
+                        try { CloseHandle(token); } catch { }
+                    }
+                }
+            }
+
+            if (authenticatedAsNonAdmin)
+            {
+                errorMessage = "Credenciais válidas, mas esta conta não possui privilégio de Administrador nesta máquina.";
+                return false;
+            }
+
+            errorMessage = MapLogonError(lastWin32Err);
+            return false;
+        }
+
+        private static bool IsTokenAdministrator(IntPtr token)
+        {
+            try
+            {
+                using (WindowsIdentity id = new WindowsIdentity(token))
+                {
+                    WindowsPrincipal principal = new WindowsPrincipal(id);
+                    if (principal.IsInRole(WindowsBuiltInRole.Administrator))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch { }
+
+            // Verifica UAC Split Token (TokenElevationTypeLimited -> TokenLinkedToken)
+            IntPtr elevPtr = IntPtr.Zero;
+            IntPtr linkedStructPtr = IntPtr.Zero;
+            IntPtr linkedToken = IntPtr.Zero;
+            try
+            {
+                int outLen = 0;
+                int elevSize = Marshal.SizeOf(typeof(int));
+                elevPtr = Marshal.AllocHGlobal(elevSize);
+                if (GetTokenInformation(token, TokenElevationType, elevPtr, elevSize, out outLen))
+                {
+                    int elevType = Marshal.ReadInt32(elevPtr);
+                    if (elevType == TokenElevationTypeLimited)
+                    {
+                        int linkedSize = Marshal.SizeOf(typeof(TOKEN_LINKED_TOKEN));
+                        linkedStructPtr = Marshal.AllocHGlobal(linkedSize);
+                        if (GetTokenInformation(token, TokenLinkedToken, linkedStructPtr, linkedSize, out outLen))
+                        {
+                            TOKEN_LINKED_TOKEN linked = (TOKEN_LINKED_TOKEN)Marshal.PtrToStructure(linkedStructPtr, typeof(TOKEN_LINKED_TOKEN));
+                            linkedToken = linked.LinkedToken;
+                            if (linkedToken != IntPtr.Zero)
+                            {
+                                using (WindowsIdentity linkedId = new WindowsIdentity(linkedToken))
+                                {
+                                    WindowsPrincipal linkedPrincipal = new WindowsPrincipal(linkedId);
+                                    if (linkedPrincipal.IsInRole(WindowsBuiltInRole.Administrator))
+                                    {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            finally
+            {
+                if (linkedToken != IntPtr.Zero)
+                {
+                    try { CloseHandle(linkedToken); } catch { }
+                }
+                if (linkedStructPtr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(linkedStructPtr);
+                }
+                if (elevPtr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(elevPtr);
+                }
+            }
+
+            return false;
+        }
+
+        private static string MapLogonError(int win32Error)
+        {
+            switch (win32Error)
+            {
+                case 1326:
+                    return "Usuário ou senha do Windows incorretos.";
+                case 1327:
+                    return "Restrição de conta impede autenticação neste momento.";
+                case 1330:
+                case 1907:
+                    return "A senha desta conta Windows expirou ou precisa ser alterada.";
+                case 1331:
+                    return "Esta conta de usuário do Windows está desativada.";
+                case 1909:
+                    return "Esta conta está temporariamente bloqueada no Windows.";
+                case 1385:
+                    return "Política local do Windows não permite validação desta conta.";
+                default:
+                    return "Autenticação recusada pelo Windows (código " + win32Error + ").";
+            }
+        }
+    }
+
+    public class EditorialMenuColorTable : ProfessionalColorTable
+    {
+        private readonly Color _surface = Color.White;
+        private readonly Color _hover = Color.FromArgb(236, 239, 235);
+        private readonly Color _border = Color.FromArgb(228, 232, 227);
+
+        public override Color ToolStripDropDownBackground { get { return _surface; } }
+        public override Color MenuBorder { get { return _border; } }
+        public override Color MenuItemBorder { get { return Color.FromArgb(208, 217, 210); } }
+        public override Color MenuItemSelected { get { return _hover; } }
+        public override Color MenuItemSelectedGradientBegin { get { return _hover; } }
+        public override Color MenuItemSelectedGradientEnd { get { return _hover; } }
+        public override Color ImageMarginGradientBegin { get { return _surface; } }
+        public override Color ImageMarginGradientMiddle { get { return _surface; } }
+        public override Color ImageMarginGradientEnd { get { return _surface; } }
+        public override Color SeparatorDark { get { return _border; } }
+        public override Color SeparatorLight { get { return _surface; } }
+    }
+
+    public class EditorialMenuRenderer : ToolStripProfessionalRenderer
+    {
+        public EditorialMenuRenderer() : base(new EditorialMenuColorTable())
+        {
+            this.RoundedEdges = false;
+        }
+
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            if (!e.Item.Enabled)
+            {
+                e.TextColor = Color.FromArgb(115, 123, 117);
+            }
+            base.OnRenderItemText(e);
         }
     }
 
     public class SuperAgentForm : Form
     {
-        private readonly Label _lblStatus;
-        private readonly TextBox _txtChatHistory;
+        private readonly Color _bgCanvas = Color.FromArgb(244, 245, 242);
+        private readonly Color _bgCard = Color.White;
+        private readonly Color _bgSubtle = Color.FromArgb(248, 250, 248);
+        private readonly Color _borderColor = Color.FromArgb(228, 232, 227);
+        private readonly Color _textPrimary = Color.FromArgb(36, 41, 37);
+        private readonly Color _textMuted = Color.FromArgb(115, 123, 117);
+        private readonly Color _accentPrimary = Color.FromArgb(45, 106, 79);
+        private readonly Color _accentSecondary = Color.FromArgb(82, 121, 107);
+
+        private readonly Label _lblStatusPill;
+        private readonly Label _lblSyncInfo;
+        private readonly Label _lblCpuVal;
+        private readonly Label _lblRamVal;
+        private readonly Label _lblDiskVal;
+        private readonly Label _lblIpVal;
+        private readonly Button _btnSyncNow;
+        private readonly RichTextBox _rtbChat;
         private readonly TextBox _txtMessage;
         private readonly System.Windows.Forms.Timer _uiTimer;
+        private readonly Func<StationSnapshot> _getSnapshot;
+        private readonly Func<List<ChatEntry>> _getChatHistory;
         private int _lastChatCount = 0;
+        private bool _allowRealClose = false;
 
         public SuperAgentForm(
             AgentConfig config,
+            Icon appIcon,
             Action onManualSync,
-            Action onManualUpdate,
             Action<string> onSendMessage,
-            Func<string> getStatus,
-            Func<List<string>> getChatHistory)
+            Func<StationSnapshot> getSnapshot,
+            Func<List<ChatEntry>> getChatHistory)
         {
-            this.Text = "RMM Ipojuca — Super Agente Windows (" + Environment.MachineName + " | " + AgentConfig.CURRENT_VERSION + ")";
-            this.Size = new Size(520, 445);
+            _getSnapshot = getSnapshot;
+            _getChatHistory = getChatHistory;
+
+            this.Text = "RMM Ipojuca — Central de Suporte (" + Environment.MachineName + ")";
+            this.ClientSize = new Size(544, 544);
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = Color.FromArgb(10, 14, 24);
-            this.ForeColor = Color.FromArgb(230, 238, 248);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.BackColor = _bgCanvas;
+            this.ForeColor = _textPrimary;
+            this.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
+            this.DoubleBuffered = true;
+            if (appIcon != null) this.Icon = appIcon;
 
-            Label lblHeader = new Label();
-            lblHeader.Text = "IPOJUCA RMM // SUPER AGENTE (" + AgentConfig.CURRENT_VERSION + ")";
-            lblHeader.Font = new Font("Consolas", 11, FontStyle.Bold);
-            lblHeader.ForeColor = Color.FromArgb(0, 229, 255);
-            lblHeader.Location = new Point(16, 14);
-            lblHeader.AutoSize = true;
-            this.Controls.Add(lblHeader);
+            // 1. Cartao de Cabecalho Editorial
+            Panel headerCard = CreateCard(16, 16, 512, 68);
+            this.Controls.Add(headerCard);
 
-            Label lblInfo = new Label();
-            lblInfo.Text = string.Format("Host: {0}  |  UUID: {1}\nServidor VPS: {2}  |  Ciclo: Boot + 4h + Auto-Update OTA",
-                Environment.MachineName, config.AgentUuid, config.BackendUrl);
-            lblInfo.Font = new Font("Consolas", 8.5f, FontStyle.Regular);
-            lblInfo.ForeColor = Color.FromArgb(148, 163, 184);
-            lblInfo.Location = new Point(16, 40);
-            lblInfo.Size = new Size(480, 36);
-            this.Controls.Add(lblInfo);
+            Panel accentBar = new Panel();
+            accentBar.BackColor = _accentPrimary;
+            accentBar.Location = new Point(0, 0);
+            accentBar.Size = new Size(4, 68);
+            headerCard.Controls.Add(accentBar);
 
-            _lblStatus = new Label();
-            _lblStatus.Text = "Status: " + getStatus();
-            _lblStatus.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-            _lblStatus.ForeColor = Color.FromArgb(16, 185, 129);
-            _lblStatus.Location = new Point(16, 80);
-            _lblStatus.Size = new Size(480, 22);
-            this.Controls.Add(_lblStatus);
+            Label lblBrand = new Label();
+            lblBrand.Text = "RMM // Saúde Ipojuca";
+            lblBrand.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+            lblBrand.ForeColor = _textPrimary;
+            lblBrand.Location = new Point(16, 12);
+            lblBrand.AutoSize = true;
+            headerCard.Controls.Add(lblBrand);
 
-            Button btnSyncNow = new Button();
-            btnSyncNow.Text = "⟳ ENVIAR TELEMETRIA AGORA";
-            btnSyncNow.Font = new Font("Consolas", 8.5f, FontStyle.Bold);
-            btnSyncNow.BackColor = Color.FromArgb(14, 116, 144);
-            btnSyncNow.ForeColor = Color.White;
-            btnSyncNow.FlatStyle = FlatStyle.Flat;
-            btnSyncNow.Location = new Point(16, 110);
-            btnSyncNow.Size = new Size(230, 34);
-            btnSyncNow.Click += (s, e) =>
+            Label lblSub = new Label();
+            lblSub.Text = "v" + AgentConfig.DISPLAY_VERSION;
+            lblSub.Font = new Font("Segoe UI", 8.5f, FontStyle.Regular);
+            lblSub.ForeColor = _textMuted;
+            lblSub.Location = new Point(16, 38);
+            lblSub.Size = new Size(340, 18);
+            headerCard.Controls.Add(lblSub);
+
+            _lblStatusPill = new Label();
+            _lblStatusPill.Text = "● Conectando";
+            _lblStatusPill.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            _lblStatusPill.ForeColor = Color.FromArgb(154, 91, 19);
+            _lblStatusPill.BackColor = Color.FromArgb(253, 243, 231);
+            _lblStatusPill.TextAlign = ContentAlignment.MiddleCenter;
+            _lblStatusPill.Location = new Point(368, 20);
+            _lblStatusPill.Size = new Size(128, 28);
+            headerCard.Controls.Add(_lblStatusPill);
+
+            // 2. Cartao de Saude e Telemetria Rapida
+            Panel healthCard = CreateCard(16, 96, 512, 136);
+            this.Controls.Add(healthCard);
+
+            Label lblHealthTitle = new Label();
+            lblHealthTitle.Text = "SAÚDE DA ESTAÇÃO";
+            lblHealthTitle.Font = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+            lblHealthTitle.ForeColor = _textMuted;
+            lblHealthTitle.Location = new Point(16, 12);
+            lblHealthTitle.AutoSize = true;
+            healthCard.Controls.Add(lblHealthTitle);
+
+            _lblCpuVal = CreateMetricTile(healthCard, "CPU", "—", 16, 32, 108);
+            _lblRamVal = CreateMetricTile(healthCard, "RAM", "—", 132, 32, 108);
+            _lblDiskVal = CreateMetricTile(healthCard, "DISCO C:", "—", 248, 32, 108);
+            _lblIpVal = CreateMetricTile(healthCard, "ENDEREÇO IP", "—", 364, 32, 132);
+
+            _lblSyncInfo = new Label();
+            _lblSyncInfo.Text = "Última sincronização: aguardando...";
+            _lblSyncInfo.Font = new Font("Segoe UI", 8.5f, FontStyle.Regular);
+            _lblSyncInfo.ForeColor = _textMuted;
+            _lblSyncInfo.Location = new Point(16, 102);
+            _lblSyncInfo.Size = new Size(326, 22);
+            healthCard.Controls.Add(_lblSyncInfo);
+
+            _btnSyncNow = new Button();
+            _btnSyncNow.Text = "Sincronizar Agora";
+            _btnSyncNow.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            _btnSyncNow.BackColor = _accentPrimary;
+            _btnSyncNow.ForeColor = Color.White;
+            _btnSyncNow.FlatStyle = FlatStyle.Flat;
+            _btnSyncNow.FlatAppearance.BorderSize = 0;
+            _btnSyncNow.Cursor = Cursors.Hand;
+            _btnSyncNow.Location = new Point(352, 95);
+            _btnSyncNow.Size = new Size(144, 30);
+            _btnSyncNow.Click += (s, e) =>
             {
-                _lblStatus.Text = "Status: Enviando telemetria agora...";
+                _btnSyncNow.Enabled = false;
+                _btnSyncNow.Text = "Sincronizando...";
                 onManualSync();
             };
-            this.Controls.Add(btnSyncNow);
+            healthCard.Controls.Add(_btnSyncNow);
 
-            Button btnUpdateNow = new Button();
-            btnUpdateNow.Text = "⬆ BUSCAR ATUALIZAÇÃO";
-            btnUpdateNow.Font = new Font("Consolas", 8.5f, FontStyle.Bold);
-            btnUpdateNow.BackColor = Color.FromArgb(212, 255, 51);
-            btnUpdateNow.ForeColor = Color.Black;
-            btnUpdateNow.FlatStyle = FlatStyle.Flat;
-            btnUpdateNow.Location = new Point(256, 110);
-            btnUpdateNow.Size = new Size(230, 34);
-            btnUpdateNow.Click += (s, e) =>
+            // 3. Cartao de Chat com a Central de TI
+            Panel chatCard = CreateCard(16, 244, 512, 246);
+            this.Controls.Add(chatCard);
+
+            Label lblChatTitle = new Label();
+            lblChatTitle.Text = "CANAL DE SUPORTE — CENTRAL DE TI";
+            lblChatTitle.Font = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+            lblChatTitle.ForeColor = _textMuted;
+            lblChatTitle.Location = new Point(16, 12);
+            lblChatTitle.AutoSize = true;
+            chatCard.Controls.Add(lblChatTitle);
+
+            Panel rtbWrap = new Panel();
+            rtbWrap.BackColor = _bgSubtle;
+            rtbWrap.Location = new Point(16, 32);
+            rtbWrap.Size = new Size(480, 158);
+            rtbWrap.Paint += (s, e) =>
             {
-                onManualUpdate();
+                using (Pen p = new Pen(_borderColor, 1))
+                {
+                    e.Graphics.DrawRectangle(p, 0, 0, rtbWrap.Width - 1, rtbWrap.Height - 1);
+                }
             };
-            this.Controls.Add(btnUpdateNow);
+            chatCard.Controls.Add(rtbWrap);
 
-            Label lblChat = new Label();
-            lblChat.Text = "CANAL DE COMUNICAÇÃO CLIENTE-SERVIDOR (SUPER AGENTE TI):";
-            lblChat.Font = new Font("Consolas", 8.5f, FontStyle.Bold);
-            lblChat.ForeColor = Color.FromArgb(0, 229, 255);
-            lblChat.Location = new Point(16, 158);
-            lblChat.AutoSize = true;
-            this.Controls.Add(lblChat);
+            _rtbChat = new RichTextBox();
+            _rtbChat.BorderStyle = BorderStyle.None;
+            _rtbChat.ReadOnly = true;
+            _rtbChat.TabStop = false;
+            _rtbChat.WordWrap = true;
+            _rtbChat.ScrollBars = RichTextBoxScrollBars.Vertical;
+            _rtbChat.BackColor = _bgSubtle;
+            _rtbChat.ForeColor = _textPrimary;
+            _rtbChat.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
+            _rtbChat.Location = new Point(8, 6);
+            _rtbChat.Size = new Size(464, 146);
+            rtbWrap.Controls.Add(_rtbChat);
 
-            _txtChatHistory = new TextBox();
-            _txtChatHistory.Multiline = true;
-            _txtChatHistory.ReadOnly = true;
-            _txtChatHistory.ScrollBars = ScrollBars.Vertical;
-            _txtChatHistory.BackColor = Color.FromArgb(17, 24, 39);
-            _txtChatHistory.ForeColor = Color.FromArgb(226, 232, 240);
-            _txtChatHistory.Font = new Font("Consolas", 9);
-            _txtChatHistory.Location = new Point(16, 180);
-            _txtChatHistory.Size = new Size(470, 155);
-            this.Controls.Add(_txtChatHistory);
+            Panel msgWrap = new Panel();
+            msgWrap.BackColor = Color.White;
+            msgWrap.Location = new Point(16, 200);
+            msgWrap.Size = new Size(374, 32);
+            msgWrap.Paint += (s, e) =>
+            {
+                using (Pen p = new Pen(Color.FromArgb(208, 215, 209), 1))
+                {
+                    e.Graphics.DrawRectangle(p, 0, 0, msgWrap.Width - 1, msgWrap.Height - 1);
+                }
+            };
+            chatCard.Controls.Add(msgWrap);
 
             _txtMessage = new TextBox();
-            _txtMessage.BackColor = Color.FromArgb(30, 41, 59);
-            _txtMessage.ForeColor = Color.White;
-            _txtMessage.Font = new Font("Segoe UI", 9.5f);
-            _txtMessage.Location = new Point(16, 348);
-            _txtMessage.Size = new Size(360, 28);
-            this.Controls.Add(_txtMessage);
+            _txtMessage.BorderStyle = BorderStyle.None;
+            _txtMessage.BackColor = Color.White;
+            _txtMessage.ForeColor = _textPrimary;
+            _txtMessage.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            _txtMessage.Location = new Point(8, 7);
+            _txtMessage.Size = new Size(356, 20);
+            msgWrap.Controls.Add(_txtMessage);
 
-            Button btnSendMsg = new Button();
-            btnSendMsg.Text = "ENVIAR TI";
-            btnSendMsg.Font = new Font("Consolas", 9, FontStyle.Bold);
-            btnSendMsg.BackColor = Color.FromArgb(16, 185, 129);
-            btnSendMsg.ForeColor = Color.Black;
-            btnSendMsg.FlatStyle = FlatStyle.Flat;
-            btnSendMsg.Location = new Point(384, 346);
-            btnSendMsg.Size = new Size(102, 28);
-            btnSendMsg.Click += (s, e) =>
+            Action dispatchMessage = () =>
             {
                 string msg = _txtMessage.Text.Trim();
                 if (!string.IsNullOrEmpty(msg))
                 {
                     onSendMessage(msg);
                     _txtMessage.Text = "";
+                    RefreshUi();
                 }
             };
-            this.Controls.Add(btnSendMsg);
+
+            _txtMessage.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter)
+                {
+                    e.SuppressKeyPress = true;
+                    dispatchMessage();
+                }
+            };
+
+            Button btnSend = new Button();
+            btnSend.Text = "Enviar";
+            btnSend.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            btnSend.BackColor = _accentPrimary;
+            btnSend.ForeColor = Color.White;
+            btnSend.FlatStyle = FlatStyle.Flat;
+            btnSend.FlatAppearance.BorderSize = 0;
+            btnSend.Cursor = Cursors.Hand;
+            btnSend.Location = new Point(398, 200);
+            btnSend.Size = new Size(98, 32);
+            btnSend.Click += (s, e) => dispatchMessage();
+            chatCard.Controls.Add(btnSend);
+
+            // 4. Rodape discreto
+            Label lblFooter = new Label();
+            lblFooter.Text = "Atualizações silenciosas ativas · Encerramento protegido por Administrador";
+            lblFooter.Font = new Font("Segoe UI", 8f, FontStyle.Regular);
+            lblFooter.ForeColor = _textMuted;
+            lblFooter.Location = new Point(16, 508);
+            lblFooter.Size = new Size(356, 20);
+            this.Controls.Add(lblFooter);
+
+            Button btnMinimize = new Button();
+            btnMinimize.Text = "Minimizar para Bandeja";
+            btnMinimize.Font = new Font("Segoe UI", 8.5f, FontStyle.Regular);
+            btnMinimize.BackColor = Color.White;
+            btnMinimize.ForeColor = _textPrimary;
+            btnMinimize.FlatStyle = FlatStyle.Flat;
+            btnMinimize.FlatAppearance.BorderColor = Color.FromArgb(208, 215, 209);
+            btnMinimize.FlatAppearance.BorderSize = 1;
+            btnMinimize.Cursor = Cursors.Hand;
+            btnMinimize.Location = new Point(378, 501);
+            btnMinimize.Size = new Size(150, 30);
+            btnMinimize.Click += (s, e) => this.Hide();
+            this.Controls.Add(btnMinimize);
+
+            this.Shown += (s, e) => _txtMessage.Focus();
+            this.Activated += (s, e) => { if (_txtMessage.CanFocus) _txtMessage.Focus(); };
+
+            this.FormClosing += (s, e) =>
+            {
+                if (!_allowRealClose && e.CloseReason == CloseReason.UserClosing)
+                {
+                    e.Cancel = true;
+                    this.Hide();
+                }
+            };
 
             _uiTimer = new System.Windows.Forms.Timer();
             _uiTimer.Interval = 1000;
-            _uiTimer.Tick += (s, e) =>
+            _uiTimer.Tick += (s, e) => RefreshUi();
+            _uiTimer.Start();
+
+            RefreshUi();
+        }
+
+        public void ForceCloseFromAdmin()
+        {
+            _allowRealClose = true;
+            try { _uiTimer.Stop(); } catch { }
+            this.Close();
+        }
+
+        private Panel CreateCard(int x, int y, int width, int height)
+        {
+            Panel p = new Panel();
+            p.BackColor = _bgCard;
+            p.Location = new Point(x, y);
+            p.Size = new Size(width, height);
+            p.Paint += (s, e) =>
             {
-                _lblStatus.Text = "Status: " + getStatus();
-                List<string> hist = getChatHistory();
-                lock (hist)
+                using (Pen pen = new Pen(_borderColor, 1))
                 {
-                    if (hist.Count != _lastChatCount)
-                    {
-                        _lastChatCount = hist.Count;
-                        _txtChatHistory.Text = string.Join("\r\n", hist.ToArray()) + "\r\n";
-                        _txtChatHistory.SelectionStart = _txtChatHistory.Text.Length;
-                        _txtChatHistory.ScrollToCaret();
-                    }
+                    e.Graphics.DrawRectangle(pen, 0, 0, p.Width - 1, p.Height - 1);
                 }
             };
-            _uiTimer.Start();
+            return p;
+        }
+
+        private Label CreateMetricTile(Panel parent, string caption, string initialValue, int x, int y, int width)
+        {
+            Panel tile = new Panel();
+            tile.BackColor = _bgSubtle;
+            tile.Location = new Point(x, y);
+            tile.Size = new Size(width, 54);
+            tile.Paint += (s, e) =>
+            {
+                using (Pen pen = new Pen(_borderColor, 1))
+                {
+                    e.Graphics.DrawRectangle(pen, 0, 0, tile.Width - 1, tile.Height - 1);
+                }
+            };
+            parent.Controls.Add(tile);
+
+            Label lblCap = new Label();
+            lblCap.Text = caption;
+            lblCap.Font = new Font("Segoe UI", 7f, FontStyle.Bold);
+            lblCap.ForeColor = _textMuted;
+            lblCap.Location = new Point(10, 7);
+            lblCap.AutoSize = true;
+            tile.Controls.Add(lblCap);
+
+            Label lblVal = new Label();
+            lblVal.Text = initialValue;
+            lblVal.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+            lblVal.ForeColor = _textPrimary;
+            lblVal.Location = new Point(10, 24);
+            lblVal.Size = new Size(width - 16, 22);
+            tile.Controls.Add(lblVal);
+
+            return lblVal;
+        }
+
+        private void RefreshUi()
+        {
+            if (this.IsDisposed) return;
+
+            StationSnapshot snap = _getSnapshot();
+            if (snap != null)
+            {
+                if (snap.IsSyncing)
+                {
+                    _lblStatusPill.Text = "● Sincronizando";
+                    _lblStatusPill.ForeColor = Color.FromArgb(30, 86, 59);
+                    _lblStatusPill.BackColor = Color.FromArgb(230, 244, 236);
+                    _btnSyncNow.Enabled = false;
+                    _btnSyncNow.Text = "Sincronizando...";
+                }
+                else if (snap.IsConnected)
+                {
+                    _lblStatusPill.Text = "● Conectado";
+                    _lblStatusPill.ForeColor = Color.FromArgb(30, 86, 59);
+                    _lblStatusPill.BackColor = Color.FromArgb(230, 244, 236);
+                    _btnSyncNow.Enabled = true;
+                    _btnSyncNow.Text = "Sincronizar Agora";
+                }
+                else
+                {
+                    _lblStatusPill.Text = "● Atenção";
+                    _lblStatusPill.ForeColor = Color.FromArgb(154, 91, 19);
+                    _lblStatusPill.BackColor = Color.FromArgb(253, 243, 231);
+                    _btnSyncNow.Enabled = true;
+                    _btnSyncNow.Text = "Sincronizar Agora";
+                }
+
+                _lblCpuVal.Text = snap.CpuPct > 0 ? string.Format(CultureInfo.InvariantCulture, "{0:0.0}%", snap.CpuPct) : "—";
+                _lblRamVal.Text = snap.RamPct > 0 ? string.Format(CultureInfo.InvariantCulture, "{0:0.0}%", snap.RamPct) : "—";
+                _lblDiskVal.Text = snap.DiskPct > 0 ? string.Format(CultureInfo.InvariantCulture, "{0:0.0}%", snap.DiskPct) : "—";
+                _lblIpVal.Text = string.IsNullOrEmpty(snap.IpAddress) ? "—" : snap.IpAddress;
+                _lblSyncInfo.Text = snap.StatusText;
+            }
+
+            List<ChatEntry> entries = _getChatHistory();
+            if (entries != null && entries.Count != _lastChatCount)
+            {
+                _lastChatCount = entries.Count;
+                RenderChatEntries(entries);
+            }
+        }
+
+        private void RenderChatEntries(List<ChatEntry> entries)
+        {
+            _rtbChat.SuspendLayout();
+            try
+            {
+                _rtbChat.Clear();
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    ChatEntry item = entries[i];
+                    if (i > 0)
+                    {
+                        _rtbChat.AppendText("\n");
+                    }
+
+                    _rtbChat.SelectionFont = new Font("Segoe UI", 8f, FontStyle.Regular);
+                    _rtbChat.SelectionColor = _textMuted;
+                    _rtbChat.AppendText("[" + item.Timestamp + "] ");
+
+                    _rtbChat.SelectionFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+                    if (item.IsSystem)
+                        _rtbChat.SelectionColor = _accentSecondary;
+                    else if (item.IsSelf)
+                        _rtbChat.SelectionColor = _textPrimary;
+                    else
+                        _rtbChat.SelectionColor = _accentPrimary;
+                    _rtbChat.AppendText(item.Sender + ": ");
+
+                    _rtbChat.SelectionFont = new Font("Segoe UI", 9f, FontStyle.Regular);
+                    _rtbChat.SelectionColor = item.IsSystem ? _textMuted : _textPrimary;
+                    _rtbChat.AppendText(item.Text + "\n");
+                }
+                _rtbChat.SelectionStart = _rtbChat.TextLength;
+                _rtbChat.ScrollToCaret();
+            }
+            finally
+            {
+                _rtbChat.ResumeLayout();
+            }
         }
     }
 

@@ -32,7 +32,7 @@ const pendingTasksByAgent = new Map();
 const taskResultWaiters = new Map();
 const heartbeatWaitersByAgent = new Map();
 
-const LATEST_AGENT_VERSION = "2.4.0-native-exe";
+const LATEST_AGENT_VERSION = "2.5.0-native-exe";
 
 function waitForLiveAgentTaskResult(taskId, timeoutMs = 4500) {
   return new Promise((resolve) => {
@@ -1111,7 +1111,7 @@ router.post(
       status: "ok",
       target_version: LATEST_AGENT_VERSION,
       machine_id: machine.id,
-      message: `Ordem de atualização (${LATEST_AGENT_VERSION}) enviada para ${machine.hostname}. A atualização será exibida na tela do cliente.`,
+      message: `Ordem de atualização silenciosa (${LATEST_AGENT_VERSION}) enviada para ${machine.hostname}. A estação será atualizada em segundo plano.`,
     });
   }),
 );
@@ -1137,10 +1137,25 @@ router.post(
       status: "ok",
       target_version: LATEST_AGENT_VERSION,
       queued_machines: machines.length,
-      message: `Atualização automática (${LATEST_AGENT_VERSION}) enviada para todas as ${machines.length} máquina(s) cadastradas.`,
+      message: `Atualização silenciosa (${LATEST_AGENT_VERSION}) enfileirada em segundo plano para todas as ${machines.length} máquina(s) cadastradas.`,
     });
   }),
 );
+
+function compareAgentSemVer(a, b) {
+  const parse = (raw) => {
+    const m = String(raw || "").trim().match(/^v?(\d+)\.(\d+)(?:\.(\d+))?/);
+    if (!m) return null;
+    return [Number(m[1]), Number(m[2]), Number(m[3] || 0)];
+  };
+  const va = parse(a);
+  const vb = parse(b);
+  if (!va || !vb) return 0;
+  for (let i = 0; i < 3; i += 1) {
+    if (va[i] !== vb[i]) return va[i] - vb[i];
+  }
+  return 0;
+}
 
 // 12. Poll de Comandos e Mensagens Autenticado para o Super Agente Nativo (.exe)
 router.get("/agent/pending", requireAgentAuth, asyncHandler(async (req, res) => {
@@ -1213,7 +1228,7 @@ router.get("/agent/pending", requireAgentAuth, asyncHandler(async (req, res) => 
   const installerInfo = getAgentInstallerInfo();
   const autoUpdateAvailable =
     Boolean(currentAgentVersion) &&
-    currentAgentVersion !== installerInfo.latest_version;
+    compareAgentSemVer(currentAgentVersion, installerInfo.latest_version) < 0;
 
   const queuedMsgs = await repository.consumePendingAgentMessages(agentUuid);
 

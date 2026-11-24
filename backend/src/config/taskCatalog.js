@@ -131,7 +131,7 @@ const TASK_CATALOG = Object.freeze({
   UPDATE_AGENT: {
     code: 'UPDATE_AGENT',
     title: 'Atualizar Agente Windows (OTA)',
-    description: 'Envia ordem de atualização remota para o computador baixar e instalar a versão mais recente do Agente mostrando aviso na tela.',
+    description: 'Envia ordem de atualização remota silenciosa para o computador baixar, verificar via SHA-256 e instalar a versão mais recente do Agente em segundo plano.',
     riskLevel: 'MEDIUM',
     allowedRoles: ['TECH_N1', 'ADMIN_N2'],
     validateParams() {

@@ -712,3 +712,46 @@ Verificado no navegador (Vite dev em `10.200.33.30:5181` apontando para backend 
 | Execução ao vivo de migrations MySQL 8.0 | Containers descartáveis MySQL 8.0.46 na VPS (Teste A: banco limpo `01_schema_and_seed.sql`; Teste B: clone somente leitura do banco real + `07` e `08` 2x) | **APROVADO** — Teste A criou todas as 13 tabelas, registrou as 7 migrations em `schema_migrations` e populou os 9 setores (`-5.5/1.5` e CAPS `0`). Teste B preservou os 5 setores reais e as 4 máquinas, criou `machine_messages` e `schema_migrations` com idempotência validada em dupla execução. |
 
 **Parecer do Gate de Qualidade — Ciclo #48:** **APROVADO PELO `@qa`** (aguardando apenas validação visual final no navegador e autorização explícita do usuário no Gate Final para `git commit`/`git push` e deploy na VPS).
+
+---
+
+## Ciclo #50 — Agente Windows Nativo `v2.5.0-native-exe` (Layout Editorial Claro, OTA Silencioso e Proteção Administrativa Windows) (`@qa` + `@security`)
+
+**Data:** 2026-11-24  
+**Escopo:** Modernização completa da experiência do usuário e governança de endpoint no Agente Windows oficial (`agent/native/IpojucaAgent.cs` → `backend/public/IpojucaRMM-Setup.exe`) + alinhamento de versão e contratos no backend/testes.
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Compilação Agente Windows C# `v2.5.0` | `csc.exe /optimize+ /target:winexe ... agent/native/IpojucaAgent.cs` | **APROVADO** — `backend/public/IpojucaRMM-Setup.exe` (`89.600 B`, FileVersion `2.5.0.0`, SHA-256 `88b2dbd62d823b4119692f1b8cff936f88518d7ab4d9f4921a21a0070e6820ad`, `0` erros/avisos). |
+| Remoção de UI de OTA (`UpdateProgressForm`) + Anti-Downgrade | Inspeção por reflexão sobre `IpojucaRMM-Setup.exe` | **APROVADO** — `UpdateProgressForm = False`; motor `TriggerSilentUpdateAsync` 100% em segundo plano com SHA-256 obrigatório (64 hex), cooldown de 10 min em falhas, `--ota-update --silent` oculto e proteção **anti-downgrade SemVer** (`IsRemoteVersionNewer`: `2.4.0 vs 2.5.0 -> False`, `2.5.0 vs 2.5.0 -> False`, `2.6.0 vs 2.5.0 -> True`). |
+| Validação nativa `WindowsAdminAuthenticator` | Reflexão em PowerShell (`ValidateWindowsAdmin`) | **APROVADO** — Usuário inexistente retornou `False` (`"Usuário ou senha do Windows incorretos."`), usuário vazio retornou `False` (`"Informe o nome de usuário Administrador do Windows."`), zero exceções não tratadas; suporte implementado a `LogonUser` (`INTERACTIVE` + fallback `NETWORK`) + UAC `TokenLinkedToken` (class 19). |
+| Instanciação dos novos componentes WinForms | Reflexão headless (`AdminAuthDialog` + `SuperAgentForm`) | **APROVADO** — `AdminAuthDialog` (`3` controles raiz) e `SuperAgentForm` (`544x544`, `5` blocos editoriais claros, `RichTextBox` de chat, métricas `CPU/RAM/DISCO/IP`) construídos e descartados sem erros GDI. |
+| Suíte automatizada backend (Testes #1 a #18) | `npm --prefix backend test` | **18/18 APROVADO** (`fail 0`, `3.83s`), validando `/api/agent/version` (`latest_version: "2.5.0-native-exe"` + SHA-256 válido de 64 hex). |
+
+**Arquivos Modificados:**
+- `agent/native/IpojucaAgent.cs`
+- `backend/public/IpojucaRMM-Setup.exe`
+- `backend/src/routes/api.js`
+- `backend/src/config/taskCatalog.js`
+- `backend/tests/api.test.js`
+- `production_artifacts/QA_Report.md`
+- `production_artifacts/SESSION_HANDOFF.md`
+
+**Parecer do Gate de Qualidade — Ciclo #50:** **APROVADO PELO `@qa`** (aguardando validação manual local do novo `IpojucaRMM-Setup.exe` pelo usuário antes de `git commit`/`git push` e deploy na VPS).
+
+---
+
+## Ciclo #51 — Encerramento via UAC Nativo do Windows (`runas` + `credui.dll`) e Limpeza Visual (`v2.5.0`) (`@qa` + `@security`)
+
+**Data:** 2026-11-24  
+**Escopo:** Substituição do diálogo customizado (`AdminAuthDialog`) pelo prompt nativo **UAC do Windows** (`Verb = "runas"` + `--verify-admin-exit`, com suporte completo a contas Administradoras de rede/domínio AD e locais + fallback nativo `credui.dll`), tarefa agendada em menor privilégio (`/RL LIMITED`), remoção de `Agente RMM Ipojuca (2.5.0-native-exe)` da mensagem inicial do chat e exibição limpa apenas de `v2.5.0` no topo.
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Compilação Agente Windows C# `v2.5.0` | `csc.exe /optimize+ /target:winexe ... agent/native/IpojucaAgent.cs` | **APROVADO** — `backend/public/IpojucaRMM-Setup.exe` (`88.576 B`, FileVersion `2.5.0.0`, SHA-256 `e71766a1d545d0009e111f8520d5b553ac69f98fa5126d20d95bb6250ff81bd2`, `0` erros/avisos; item de menu ajustado para `"Encerrar Agente"`). |
+| Teste CLI do modo auxiliar UAC (`--verify-admin-exit`) | `IpojucaRMM-Setup.exe --verify-admin-exit` (sessão padrão não elevada) | **APROVADO** — Saiu silenciosamente com `ExitCode = 5` (`ERROR_ACCESS_DENIED`), confirmando validação estrita de elevação. |
+| Reflexão de tipos e textos do cabeçalho | Inspeção do `SuperAgentForm` e `WindowsAdminAuthenticator` | **APROVADO** — `OldAdminDialog = False`, `OldUpdater = False`, `RequestAdminAuthorization = True`; cabeçalho: `RMM // Saúde Ipojuca \|\| v2.5.0 \|\| ● Atenção` (sem `-native-exe`). |
+| Validação negativa `ValidateWindowsAdmin` (fallback domínio/local) | Reflexão em PowerShell | **APROVADO** — Retornou `False` (`"Usuário ou senha do Windows incorretos."`), com suporte adicionado a domínio ativo (`Environment.UserDomainName`) + local (`.`). |
+| Suíte automatizada backend (Testes #1 a #18) | `npm --prefix backend test` | **18/18 APROVADO** (`fail 0`, `3.99s`), incluindo proteção anti-downgrade SemVer no Teste #8. |
+
+**Parecer do Gate de Qualidade — Ciclo #51:** **APROVADO PELO `@qa`**.
