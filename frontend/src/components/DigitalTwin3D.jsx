@@ -101,10 +101,24 @@ const SectorTag3D = styled.div`
 `;
 
 function computeBoardBounds(sectors = []) {
-  let minX = -9.0;
-  let maxX = 9.0;
-  let minZ = -6.0;
-  let maxZ = 6.0;
+  if (!sectors.length) {
+    return {
+      minX: -9.0,
+      maxX: 9.0,
+      minZ: -6.0,
+      maxZ: 6.0,
+      spanX: 18.0,
+      spanZ: 12.0,
+      centerX: 0,
+      centerZ: 0,
+      scale: 1,
+    };
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
 
   for (const s of sectors) {
     const bx = Number(s.bounds_x || 0);
@@ -117,8 +131,16 @@ function computeBoardBounds(sectors = []) {
     maxZ = Math.max(maxZ, bz + hd);
   }
 
-  const spanX = Math.max(18.0, maxX - minX);
-  const spanZ = Math.max(12.0, maxZ - minZ);
+  // Margem discreta em volta das salas: o tabuleiro acompanha a planta em vez
+  // de manter um piso fixo grande, que deixava uma laje vazia na maquete.
+  const pad = 0.6;
+  minX -= pad;
+  maxX += pad;
+  minZ -= pad;
+  maxZ += pad;
+
+  const spanX = Math.max(6.0, maxX - minX);
+  const spanZ = Math.max(6.0, maxZ - minZ);
   const centerX = (minX + maxX) / 2;
   const centerZ = (minZ + maxZ) / 2;
   const scale = Math.max(1, spanX / 18.0, spanZ / 12.0);

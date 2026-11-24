@@ -1514,26 +1514,49 @@ class RmmRepository {
         );
       });
 
-    const candidateCols = [-4.5, 4.5, 13.5, -13.5, 22.5, -22.5, 31.5, -31.5, 40.5, -40.5];
-    // As linhas ficam encostadas: o centro de cada linha dista meia profundidade
-    // da divisa, de modo que as salas se tocam sem vão entre elas.
-    const zOffset = halfD;
-    for (const colX of candidateCols) {
-      for (const zSign of [-1, 1]) {
-        const candZ = Number((zSign * zOffset).toFixed(2));
-        if (!collides(colX, candZ)) {
-          return { bounds_x: colX, bounds_z: candZ };
+    const round2 = (v) => Number(Number(v).toFixed(2));
+
+    // Colunas e linhas ja usadas pela unidade, em ordem crescente.
+    const columns = [...new Set(existingSectors.map((s) => round2(Number(s.bounds_x || 0))))].sort(
+      (a, b) => a - b
+    );
+    const rows = [...new Set(existingSectors.map((s) => round2(Number(s.bounds_z || 0))))].sort(
+      (a, b) => a - b
+    );
+
+    const cols = columns.length ? columns : [-halfW, halfW];
+    const rowList = rows.length ? rows : [-halfD];
+
+    // 1. Primeiro encaixe livre na malha existente, linha a linha e coluna a coluna.
+    //    Preencher buracos antes de abrir espaco novo mantem a planta compacta.
+    for (const cz of rowList) {
+      for (const cx of cols) {
+        if (!collides(cx, cz)) {
+          return { bounds_x: cx, bounds_z: cz };
         }
       }
     }
 
+    // 2. Malha cheia: abre uma linha nova encostada na ultima, sem vao entre elas.
+    const lastRow = rowList[rowList.length - 1];
+    const lastRowDepth = existingSectors
+      .filter((s) => Math.abs(round2(Number(s.bounds_z || 0)) - lastRow) < 0.01)
+      .reduce((maxVal, s) => Math.max(maxVal, Number(s.depth_3d || 5.0)), 5.0);
+    const newZ = round2(lastRow + lastRowDepth / 2 + halfD);
+    for (const cx of cols) {
+      if (!collides(cx, newZ)) {
+        return { bounds_x: cx, bounds_z: newZ };
+      }
+    }
+
+    // 3. Ultimo recurso: nova coluna a direita da malha.
     const maxRightEdge = existingSectors.reduce(
       (maxVal, s) => Math.max(maxVal, Number(s.bounds_x || 0) + Number(s.width_3d || 9.0) / 2),
-      4.5
+      -halfW
     );
     return {
-      bounds_x: Number((maxRightEdge + halfW).toFixed(2)),
-      bounds_z: Number((-zOffset).toFixed(2)),
+      bounds_x: round2(maxRightEdge + halfW),
+      bounds_z: newZ,
     };
   }
 

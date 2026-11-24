@@ -419,8 +419,8 @@ test('9. Ciclo #26 (CA-107 a CA-113): CRUD Completo de Unidades e Setores, Aloca
     },
   });
   assert.equal(sec5Res.status, 201);
-  assert.equal(sec5Res.data.sector.bounds_x, 13.5);
-  assert.equal(sec5Res.data.sector.bounds_z, -2.5);
+  assert.equal(sec5Res.data.sector.bounds_x, -4.5);
+  assert.equal(sec5Res.data.sector.bounds_z, 7.5);
 
   const sec6Res = await requestJson('POST', '/api/units/1/sectors', {
     headers: { Authorization: `Bearer ${adminLogin.data.token}` },
@@ -431,8 +431,8 @@ test('9. Ciclo #26 (CA-107 a CA-113): CRUD Completo de Unidades e Setores, Aloca
     },
   });
   assert.equal(sec6Res.status, 201);
-  assert.equal(sec6Res.data.sector.bounds_x, 13.5);
-  assert.equal(sec6Res.data.sector.bounds_z, 2.5);
+  assert.equal(sec6Res.data.sector.bounds_x, 4.5);
+  assert.equal(sec6Res.data.sector.bounds_z, 7.5);
 
   // Bloqueio de sigla duplicada na mesma unidade
   const dupSecRes = await requestJson('POST', '/api/units/1/sectors', {
@@ -779,13 +779,26 @@ test('13. Ciclo #45 (CA-140 a CA-143): tamanho automatico do setor e planta sem 
   assert.equal(Number(autoRes.data.sector.width_3d), 9);
   assert.equal(Number(autoRes.data.sector.depth_3d), 5);
 
-  // CA-141: o novo setor encosta na malha existente, sem vao horizontal
-  const rightEdge = Math.max(
-    ...existing.map((s) => Number(s.bounds_x) + Number(s.width_3d) / 2)
-  );
-  const newLeftEdge =
-    Number(autoRes.data.sector.bounds_x) - Number(autoRes.data.sector.width_3d) / 2;
-  assert.equal(Number(newLeftEdge.toFixed(2)), Number(rightEdge.toFixed(2)));
+  // CA-141: o novo setor encosta na malha existente, sem vao entre as salas
+  const newSector = autoRes.data.sector;
+  const nx = Number(newSector.bounds_x);
+  const nz = Number(newSector.bounds_z);
+  const nw = Number(newSector.width_3d);
+  const nd = Number(newSector.depth_3d);
+  const touches = existing.some((s) => {
+    const sx = Number(s.bounds_x);
+    const sz = Number(s.bounds_z);
+    const sw = Number(s.width_3d);
+    const sd = Number(s.depth_3d);
+    const gapX = Math.abs(nx - sx) - (nw + sw) / 2;
+    const gapZ = Math.abs(nz - sz) - (nd + sd) / 2;
+    const overlapX = gapX < -0.01;
+    const overlapZ = gapZ < -0.01;
+    const touchX = Math.abs(gapX) <= 0.01;
+    const touchZ = Math.abs(gapZ) <= 0.01;
+    return (touchZ && overlapX) || (touchX && overlapZ);
+  });
+  assert.equal(touches, true, 'novo setor nao encosta na malha existente');
 
   // CA-142: nenhuma sobreposicao entre setores da mesma unidade
   const after = await requestJson('GET', '/api/units', { headers: auth });
