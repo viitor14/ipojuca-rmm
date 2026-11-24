@@ -139,7 +139,7 @@ const StatusPillBadge = styled.button`
   }
 `;
 
-const _sharedFrameBoxGeometry = new THREE.BoxGeometry(1.38, 0.012, 0.82);
+const _sharedFrameBoxGeometry = new THREE.BoxGeometry(1.44, 0.008, 0.72);
 
 /** Moldura CAD de seleção (azul) ou alerta (âmbar/vermelho) sobre o tampo */
 function StatusPerimeterFrame({ isSelected, isAlert, alertColor }) {
@@ -148,15 +148,15 @@ function StatusPerimeterFrame({ isSelected, isAlert, alertColor }) {
   const bracketColor = isSelected ? '#60A5FA' : alertColor;
 
   return (
-    <group position={[0, 0.005, 0]}>
+    <group position={[0, 0.004, 0]}>
       <lineSegments>
         <edgesGeometry args={[_sharedFrameBoxGeometry]} />
         <lineBasicMaterial color={frameColor} linewidth={2} />
       </lineSegments>
-      {[-0.69, 0.69].map((cx) =>
-        [-0.41, 0.41].map((cz) => (
-          <mesh key={`bracket-${cx}-${cz}`} position={[cx, 0.008, cz]}>
-            <boxGeometry args={[0.06, 0.015, 0.06]} />
+      {[-0.72, 0.72].map((cx) =>
+        [-0.36, 0.36].map((cz) => (
+          <mesh key={`bracket-${cx}-${cz}`} position={[cx, 0.006, cz]}>
+            <boxGeometry args={[0.055, 0.010, 0.055]} />
             <meshBasicMaterial color={bracketColor} />
           </mesh>
         ))
@@ -165,28 +165,17 @@ function StatusPerimeterFrame({ isSelected, isAlert, alertColor }) {
   );
 }
 
-/** Barra superior no gabinete e filete na base do monitor visíveis em 360 graus */
+/** Friso luminoso discreto centralizado no topo do gabinete (visível em 360°) */
 function StatusBeacon3D({ badgeTheme, isOffline }) {
   return (
     <group>
-      {/* Friso luminoso superior no gabinete (visível de frente, de costas e top-down) */}
-      <mesh position={[0.42, 0.354, 0.06]}>
-        <boxGeometry args={[0.12, 0.010, 0.28]} />
+      <mesh position={[0.36, 0.404, 0.0]}>
+        <boxGeometry args={[0.042, 0.006, 0.26]} />
         <meshStandardMaterial
           color={badgeTheme.beacon}
           emissive={badgeTheme.beacon}
           emissiveIntensity={isOffline ? 0.0 : badgeTheme.emissive}
           roughness={0.2}
-        />
-      </mesh>
-      {/* Filete luminoso discreto sobre a base do monitor */}
-      <mesh position={[-0.06, 0.014, 0.10]}>
-        <boxGeometry args={[0.18, 0.005, 0.12]} />
-        <meshStandardMaterial
-          color={badgeTheme.beacon}
-          emissive={badgeTheme.beacon}
-          emissiveIntensity={isOffline ? 0.0 : badgeTheme.emissive * 0.85}
-          roughness={0.25}
         />
       </mesh>
     </group>
@@ -356,6 +345,8 @@ function createDesktopScreenTexture(isOffline) {
   }
 
   const texture = new THREE.CanvasTexture(canvas);
+  texture.flipY = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.generateMipmaps = true;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
@@ -392,7 +383,7 @@ export function WorkstationModel({
   rotation = [0, 0, 0],
 }) {
   const [hovered, setHovered] = useState(false);
-  const { scene } = useGLTF('/models/refined/workstation_pc.glb?v=35');
+  const { scene } = useGLTF('/models/refined/workstation_pc.glb?v=48b');
 
   const statusKey = STATUS_BADGE_THEME[machine.health_status] ? machine.health_status : 'NORMAL';
   const badgeTheme = STATUS_BADGE_THEME[statusKey];
@@ -495,7 +486,7 @@ export function WorkstationModel({
   );
 }
 
-useGLTF.preload('/models/refined/workstation_pc.glb?v=35');
+useGLTF.preload('/models/refined/workstation_pc.glb?v=48b');
 
 /**
  * MODELO PROCEDURAL DE FALLBACK (Preservado para contingência de carregamento)

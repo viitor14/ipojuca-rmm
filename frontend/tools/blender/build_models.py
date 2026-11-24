@@ -209,14 +209,28 @@ def build_ergonomic_chair(M):
 
 
 def build_workstation_pc(M):
-    """0.881 x 0.467 x 0.453 — tela em -Y, teclado em +Y."""
-    box("PcMonitorStand", (0.22, 0.16, 0.016), (-0.06, -0.06, 0.008), M["metal_dark"], bevel=0.005)
-    box("PcMonitorNeck", (0.05, 0.04, 0.16), (-0.06, -0.06, 0.09), M["metal_dark"], bevel=0.006)
-    box("PcMonitorBezel", (0.56, 0.022, 0.34), (-0.06, -0.05, 0.27), M["graphite"], bevel=0.008, segments=4)
-    box("ScreenDisplay", (0.535, 0.006, 0.315), (-0.06, -0.062, 0.27), M["screen"], bevel=0.004)
-    box("PcMonitorChin", (0.56, 0.024, 0.018), (-0.06, -0.05, 0.088), M["graphite"], bevel=0.004)
-    cyl("StatusLed", 0.006, 0.008, (0.16, -0.062, 0.092), M["accent"], rot=(math.pi / 2, 0, 0), verts=16)
-    box("ActivityLed", (0.014, 0.006, 0.006), (0.20, -0.062, 0.092), M["accent"], bevel=0.002)
+    """0.881 x 0.467 x 0.453 — tela, LEDs, teclado e frente do gabinete em +Y (lado da cadeira)."""
+    # Base e haste posicionadas atras do monitor (-Y), nunca atravessando a tela
+    box("PcMonitorStand", (0.22, 0.16, 0.014), (-0.06, -0.075, 0.007), M["metal_dark"], bevel=0.004)
+    box("PcMonitorNeck", (0.048, 0.028, 0.23), (-0.06, -0.095, 0.125), M["metal_dark"], bevel=0.005)
+    box("PcMonitorVesa", (0.075, 0.026, 0.075), (-0.06, -0.074, 0.245), M["graphite"], bevel=0.004)
+
+    # Moldura do monitor (y = -0.061 a -0.039) e tela plana UV limpa voltada para +Y (usuario)
+    box("PcMonitorBezel", (0.56, 0.022, 0.34), (-0.06, -0.05, 0.275), M["graphite"], bevel=0.006, segments=4)
+    bpy.ops.mesh.primitive_plane_add(
+        size=1.0,
+        location=(-0.06, -0.038, 0.280),
+        rotation=(math.pi / 2, 0, math.pi),
+    )
+    screen_obj = bpy.context.object
+    screen_obj.name = "ScreenDisplay"
+    screen_obj.scale = (0.528, 0.304, 1.0)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    screen_obj.data.materials.append(M["screen"])
+
+    box("PcMonitorChin", (0.56, 0.024, 0.020), (-0.06, -0.05, 0.112), M["graphite"], bevel=0.003)
+    cyl("StatusLed", 0.005, 0.006, (0.16, -0.037, 0.112), M["accent"], rot=(math.pi / 2, 0, 0), verts=16)
+    box("ActivityLed", (0.014, 0.005, 0.005), (0.195, -0.037, 0.112), M["accent"], bevel=0.001)
     # gabinete
     box("PcTowerBody", (0.19, 0.42, 0.40), (0.36, 0.0, 0.20), M["graphite"], bevel=0.012, segments=4)
     box("PcTowerFront", (0.175, 0.014, 0.38), (0.36, 0.212, 0.20), M["metal_dark"], bevel=0.006)
@@ -235,7 +249,7 @@ def build_workstation_pc(M):
                 bevel=0.002,
                 segments=1,
             )
-    box("PcMouse", (0.062, 0.10, 0.028), (0.24, 0.20, 0.014), M["graphite"], bevel=0.014, segments=5, smooth=True)
+    box("PcMouse", (0.062, 0.10, 0.028), (0.21, 0.20, 0.014), M["graphite"], bevel=0.014, segments=5, smooth=True)
 
 
 def build_thermal_printer(M):

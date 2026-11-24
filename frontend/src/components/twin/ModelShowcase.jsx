@@ -16,8 +16,8 @@ import * as THREE from 'three';
 
 const REFINED = '/models/refined';
 
-function Piece({ file, position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
-  const { scene } = useGLTF(`${REFINED}/${file}.glb?v=35`);
+function Piece({ file, version = '35', position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
+  const { scene } = useGLTF(`${REFINED}/${file}.glb?v=${version}`);
   const clone = useMemo(() => {
     const c = scene.clone(true);
     c.traverse((o) => {
@@ -33,12 +33,10 @@ function Piece({ file, position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) 
 
 function Workstation() {
   return (
-    <group position={[0, 0, 0]}>
+    <group position={[0, 0, 0]} rotation={[0, Math.PI, 0]}>
       <Piece file="office_desk" />
-      {/* Cadeira no lado -Z (lado das gavetas), girada para encarar o monitor */}
-      <Piece file="ergonomic_chair" position={[-0.12, 0, -0.62]} rotation={[0, Math.PI, 0]} />
-      <Piece file="workstation_pc" position={[0, 0.768, 0]} />
-      <Piece file="thermal_printer" position={[-0.52, 0.768, 0.02]} />
+      <Piece file="ergonomic_chair" position={[-0.15, 0, -0.52]} rotation={[0, Math.PI, 0]} />
+      <Piece file="workstation_pc" version="48b" position={[0, 0.816, 0]} />
     </group>
   );
 }
@@ -138,6 +136,7 @@ export default function ModelShowcase({ angle = 'iso' }) {
   );
 }
 
-['office_desk', 'ergonomic_chair', 'workstation_pc', 'thermal_printer'].forEach((f) => {
+['office_desk', 'ergonomic_chair'].forEach((f) => {
   useGLTF.preload(`${REFINED}/${f}.glb?v=35`);
 });
+useGLTF.preload(`${REFINED}/workstation_pc.glb?v=48b`);
