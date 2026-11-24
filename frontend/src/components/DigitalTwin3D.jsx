@@ -21,6 +21,7 @@ import {
   RefinedPlant,
 } from './models/RefinedFurniture';
 import { getReceptionVariant } from './twin/receptionThemes';
+import { computeCorridorBands } from './twin/floorPlan';
 
 const StageContainer = styled.div`
   position: absolute;
@@ -354,6 +355,36 @@ function getHabblaudeTexture(type, p1, p2) {
 }
 
 /* Base de Diorama Isométrico Adaptativa ao Tamanho da Unidade */
+function CorridorFloor({ sectors = [] }) {
+  const bands = useMemo(() => computeCorridorBands(sectors), [sectors]);
+  if (!bands.length) return null;
+
+  return (
+    <group>
+      {bands.map((band, index) => {
+        const width = band.x1 - band.x0;
+        const depth = band.z1 - band.z0;
+        const cx = (band.x0 + band.x1) / 2;
+        const cz = (band.z0 + band.z1) / 2;
+        return (
+          <group key={`corridor-${index}`} position={[cx, 0, cz]}>
+            {/* Piso de circulação em vinílico claro, distinto do porcelanato das salas */}
+            <mesh receiveShadow position={[0, 0.018, 0]}>
+              <boxGeometry args={[width, 0.02, depth]} />
+              <meshStandardMaterial color="#DCD8CF" roughness={0.62} metalness={0.02} />
+            </mesh>
+            {/* Faixa central discreta, orienta o percurso sem competir com os equipamentos */}
+            <mesh receiveShadow position={[0, 0.029, 0]}>
+              <boxGeometry args={[width - 0.6, 0.004, Math.max(0.12, depth * 0.16)]} />
+              <meshStandardMaterial color="#C4BFB4" roughness={0.7} />
+            </mesh>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 function IsometricBoard({ sectors = [], boardBounds }) {
   const bounds = boardBounds || computeBoardBounds(sectors);
   const { minX, maxX, minZ, maxZ, spanX, spanZ, centerX, centerZ } = bounds;
@@ -550,7 +581,7 @@ const SECTOR_THEMES = {
     wallCapColor: '#1F8A70',
     baseboardColor: '#6B4A32',
     accentColor: '#E07A5F',
-    hasRug: true,
+    hasRug: false,
     rugColor: '#4FA37A',
     rugBorderColor: '#F6E7C8',
     rugSize: [3.2, 2.0],
@@ -565,7 +596,7 @@ const SECTOR_THEMES = {
     wallCapColor: '#8D6E63',
     baseboardColor: '#5C4033',
     accentColor: '#3D8B7D',
-    hasRug: true,
+    hasRug: false,
     rugColor: '#7FB98A',
     rugBorderColor: '#DAD7CD',
     rugSize: [2.6, 1.8],
@@ -592,7 +623,7 @@ const SECTOR_THEMES = {
     wallColor: '#D7E3E7',
     wallCapColor: '#8D6E63',
     baseboardColor: '#5C4033',
-    hasRug: true,
+    hasRug: false,
     rugColor: '#386641',
     rugBorderColor: '#E9D8A6',
     rugSize: [3.0, 2.2],
@@ -1627,6 +1658,7 @@ export function DigitalTwin3D({
 
         {/* Base da Maquete (Adaptativa à quantidade e largura dos setores) */}
         <IsometricBoard sectors={sectors} boardBounds={boardBounds} />
+        <CorridorFloor sectors={sectors} />
 
         {/* Salas e Setores da Unidade com Paredes Cutaway */}
         {sectors.map((sector) => {

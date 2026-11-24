@@ -116,13 +116,13 @@ class RmmRepository {
     ];
 
     this.sectors = [
-      { id: 1, unit_id: 1, code: 'REC', name: 'Recepção e Triagem', room_theme: 'REC', bounds_x: -4.5, bounds_z: -2.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 2, unit_id: 1, code: 'CONS-01', name: 'Consultório Médico 01', room_theme: 'CONS', bounds_x: 4.5, bounds_z: -2.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 3, unit_id: 1, code: 'FARM', name: 'Farmácia e Vacinação', room_theme: 'FARM', bounds_x: -4.5, bounds_z: 2.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 4, unit_id: 1, code: 'ADM', name: 'Coordenação / Enfermagem', room_theme: 'ADM', bounds_x: 4.5, bounds_z: 2.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 5, unit_id: 2, code: 'REC-POLI', name: 'Recepção Central Policlínica', room_theme: 'REC', bounds_x: -4.5, bounds_z: -2.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 6, unit_id: 2, code: 'LAB-POLI', name: 'Laboratório e Exames', room_theme: 'ADM', bounds_x: 4.5, bounds_z: -2.5, width_3d: 9.0, depth_3d: 5.0 },
-      { id: 7, unit_id: 2, code: 'REG-POLI', name: 'Regulação Médica', room_theme: 'ADM', bounds_x: 0.0, bounds_z: 2.5, width_3d: 18.0, depth_3d: 5.0 },
+      { id: 1, unit_id: 1, code: 'REC', name: 'Recepção e Triagem', room_theme: 'REC', bounds_x: -4.5, bounds_z: -5.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 2, unit_id: 1, code: 'CONS-01', name: 'Consultório Médico 01', room_theme: 'CONS', bounds_x: 4.5, bounds_z: -5.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 3, unit_id: 1, code: 'FARM', name: 'Farmácia e Vacinação', room_theme: 'FARM', bounds_x: -4.5, bounds_z: 1.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 4, unit_id: 1, code: 'ADM', name: 'Coordenação / Enfermagem', room_theme: 'ADM', bounds_x: 4.5, bounds_z: 1.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 5, unit_id: 2, code: 'REC-POLI', name: 'Recepção Central Policlínica', room_theme: 'REC', bounds_x: -4.5, bounds_z: -5.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 6, unit_id: 2, code: 'LAB-POLI', name: 'Laboratório e Exames', room_theme: 'ADM', bounds_x: 4.5, bounds_z: -5.5, width_3d: 9.0, depth_3d: 5.0 },
+      { id: 7, unit_id: 2, code: 'REG-POLI', name: 'Regulação Médica', room_theme: 'ADM', bounds_x: 0.0, bounds_z: 1.5, width_3d: 18.0, depth_3d: 5.0 },
       { id: 8, unit_id: 3, code: 'ACOLH', name: 'Acolhimento e Prontuário CAPS', room_theme: 'TI', bounds_x: -4.5, bounds_z: 0.0, width_3d: 9.0, depth_3d: 10.0 },
       { id: 9, unit_id: 3, code: 'PSI-01', name: 'Consultório Multiprofissional', room_theme: 'CONS', bounds_x: 4.5, bounds_z: 0.0, width_3d: 9.0, depth_3d: 10.0 },
     ];
