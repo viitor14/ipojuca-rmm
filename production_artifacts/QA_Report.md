@@ -801,3 +801,17 @@ Verificado no navegador (Vite dev em `10.200.33.30:5181` apontando para backend 
 | Inspeção visual real (`1440×900`, `1280×720`, mobile `390×844`) | CDP em navegador headless contra `frontend/dist` + API real | **APROVADO** — `JS_ERRORS = 0`, `MOBILE = 390/390`, toggle de senha (`type: "text"`), erro inline (`"Credenciais inválidas."`) e indicador real `/api/health` (`"Serviço RMM operacional"`) validados. |
 
 **Parecer do Gate de Qualidade — Ciclo #54:** **APROVADO PELO `@qa`**.
+
+---
+
+## Correção Térmica Sem Elevação (`v2.5.2-native-exe`) & Deploy Frontend Sem Cache (`@engineer` + `@qa`)
+
+**Data:** 2026-11-25  
+**Causa raiz:** `MSAcpi_ThermalZoneTemperature` (`root\WMI`) exige privilégio administrativo no Windows 10/11 e retornava `Acesso negado` no modo usuário padrão, fazendo `temperature_c` ficar `null` (`N/D`).  
+**Correção:** `HardwareCollector.ReadRealTemperatureC()` agora consulta prioritariamente `Win32_PerfFormattedData_Counters_ThermalZoneInformation` e `Win32_PerfRawData_Counters_ThermalZoneInformation` em `root\CIMV2` (sem necessidade de elevação), com fallback para `MSAcpi_ThermalZoneTemperature` e `Win32_TemperatureProbe`, mantendo retorno honesto `null` caso o hardware não exponha sensor. Incluído `docker compose build --no-cache frontend` em `infrastructure/scripts/deploy_rmm_update.sh`.
+
+| Verificação | Resultado |
+| :--- | :--- |
+| Compilação `csc.exe` (`v2.5.2.0`) | **APROVADO** — `backend/public/IpojucaRMM-Setup.exe` (`90.624 B`, SHA-256 `287e59dc150decfbd4798f404d76e42e3924b34d5e88afd544531b0a3cc28c4a`). |
+| Leitura real não elevada nesta estação | **APROVADO** — `ReadRealTemperatureC() = 29.9°C`, `CollectMetrics()["temperature_c"] = 29.9°C`. |
+| Suíte backend (`npm --prefix backend test`) | **18/18 APROVADO** (`fail 0`, `latest_version = "2.5.2-native-exe"`). |

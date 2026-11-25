@@ -50,6 +50,7 @@ echo "[1/5] Atualizando codigo (git pull)..."
 run git pull origin main
 
 echo "[2/5] Rebuild e subida dos containers (mysql, backend, frontend)..."
+run docker compose build --no-cache frontend
 run docker compose up -d --build
 
 if [ "$DRY_RUN" = "1" ]; then

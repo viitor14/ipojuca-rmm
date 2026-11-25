@@ -32,7 +32,7 @@ const pendingTasksByAgent = new Map();
 const taskResultWaiters = new Map();
 const heartbeatWaitersByAgent = new Map();
 
-const LATEST_AGENT_VERSION = "2.5.1-native-exe";
+const LATEST_AGENT_VERSION = "2.5.2-native-exe";
 
 function waitForLiveAgentTaskResult(taskId, timeoutMs = 4500) {
   return new Promise((resolve) => {

@@ -25,14 +25,14 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA Silencioso e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.5.1.0")]
+[assembly: AssemblyVersion("2.5.2.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.5.1-native-exe";
-        public const string DISPLAY_VERSION = "2.5.1";
+        public const string CURRENT_VERSION = "2.5.2-native-exe";
+        public const string DISPLAY_VERSION = "2.5.2";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -2124,10 +2124,63 @@ namespace IpojucaRMM
             return "UNKNOWN";
         }
 
-        private static double? ReadRealTemperatureC()
+        private static double? QueryThermalZonePerfClass(string wmiClassName)
         {
             try
             {
+                double? hottestC = null;
+                using (ManagementObjectSearcher s = new ManagementObjectSearcher(@"\\.\root\CIMV2", "SELECT HighPrecisionTemperature, Temperature FROM " + wmiClassName))
+                {
+                    foreach (ManagementObject obj in s.Get())
+                    {
+                        double candidate = -999.0;
+                        if (obj["HighPrecisionTemperature"] != null)
+                        {
+                            double hp = Convert.ToDouble(obj["HighPrecisionTemperature"]);
+                            if (hp > 2000.0 && hp < 4500.0)
+                            {
+                                candidate = Math.Round((hp / 10.0) - 273.15, 1);
+                            }
+                        }
+                        if ((candidate < 15.0 || candidate > 115.0) && obj["Temperature"] != null)
+                        {
+                            double rawK = Convert.ToDouble(obj["Temperature"]);
+                            if (rawK > 200.0 && rawK < 450.0)
+                            {
+                                candidate = Math.Round(rawK - 273.15, 1);
+                            }
+                        }
+                        if (candidate >= 15.0 && candidate <= 115.0)
+                        {
+                            if (!hottestC.HasValue || candidate > hottestC.Value)
+                            {
+                                hottestC = candidate;
+                            }
+                        }
+                    }
+                }
+                return hottestC;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static double? ReadRealTemperatureC()
+        {
+            // 1. Sensor nativo Windows 10/11 via CIMV2 (funciona sem privilegio de Administrador)
+            double? perfFormatted = QueryThermalZonePerfClass("Win32_PerfFormattedData_Counters_ThermalZoneInformation");
+            if (perfFormatted.HasValue) return perfFormatted;
+
+            // 2. Fallback para contador bruto CIMV2 (tambem sem elevacao)
+            double? perfRaw = QueryThermalZonePerfClass("Win32_PerfRawData_Counters_ThermalZoneInformation");
+            if (perfRaw.HasValue) return perfRaw;
+
+            // 3. Fallback ACPI WMI (disponivel quando executado elevado)
+            try
+            {
+                double? hottestAcpi = null;
                 ManagementScope scope = new ManagementScope(@"\\.\root\WMI");
                 scope.Connect();
                 using (ManagementObjectSearcher s = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature")))
@@ -2138,12 +2191,36 @@ namespace IpojucaRMM
                         {
                             double tenthsKelvin = Convert.ToDouble(obj["CurrentTemperature"]);
                             double celsius = Math.Round((tenthsKelvin / 10.0) - 273.15, 1);
-                            if (celsius >= 10.0 && celsius <= 120.0) return celsius;
+                            if (celsius >= 15.0 && celsius <= 115.0)
+                            {
+                                if (!hottestAcpi.HasValue || celsius > hottestAcpi.Value)
+                                    hottestAcpi = celsius;
+                            }
+                        }
+                    }
+                }
+                if (hottestAcpi.HasValue) return hottestAcpi;
+            }
+            catch { }
+
+            // 4. Fallback Win32_TemperatureProbe (quando preenchido pelo firmware/SMBIOS)
+            try
+            {
+                using (ManagementObjectSearcher s = new ManagementObjectSearcher(@"\\.\root\CIMV2", "SELECT CurrentReading FROM Win32_TemperatureProbe"))
+                {
+                    foreach (ManagementObject obj in s.Get())
+                    {
+                        if (obj["CurrentReading"] != null)
+                        {
+                            double tenthsC = Convert.ToDouble(obj["CurrentReading"]);
+                            double celsius = Math.Round(tenthsC / 10.0, 1);
+                            if (celsius >= 15.0 && celsius <= 115.0) return celsius;
                         }
                     }
                 }
             }
             catch { }
+
             return null;
         }
 
