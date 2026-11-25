@@ -25,16 +25,17 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA Silencioso e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Pulso RMM")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.6.0.0")]
+[assembly: AssemblyVersion("2.6.1.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.6.0-native-exe";
-        public const string DISPLAY_VERSION = "2.6.0";
+        public const string CURRENT_VERSION = "2.6.1-native-exe";
+        public const string DISPLAY_VERSION = "2.6.1";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
+        public bool Enrolled = false;
         public int UnitId = 1;
         public int SectorId = 1;
         public int HeartbeatIntervalMs = 14400000; // 4 horas
@@ -80,6 +81,13 @@ namespace IpojucaRMM
         [STAThread]
         public static void Main(string[] args)
         {
+            // Forca TLS 1.2 no .NET Framework 4.x para compatibilidade com HTTPS/Nginx moderno (@security S-01)
+            try
+            {
+                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | SecurityProtocolType.Tls;
+            }
+            catch { }
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
@@ -88,6 +96,7 @@ namespace IpojucaRMM
             bool isOtaUpdate = false;
             bool isVerifyAdminExit = false;
             string customUrl = null;
+            string customEnrollKey = null;
 
             foreach (string arg in args)
             {
@@ -103,9 +112,11 @@ namespace IpojucaRMM
                     isOtaUpdate = true;
                 else if (arg.StartsWith("--url=", StringComparison.OrdinalIgnoreCase))
                     customUrl = arg.Substring(6).Trim();
+                else if (arg.StartsWith("--enroll=", StringComparison.OrdinalIgnoreCase))
+                    customEnrollKey = arg.Substring(9).Trim();
             }
 
-            // Modo auxiliar silencioso acionado via UAC nativo do Windows (Verb = "runas")
+            // Modo auxiliar silencioso acionado via UAC nativo do Windows (somente quando em diretorio protegido)
             if (isVerifyAdminExit)
             {
                 Environment.Exit(WindowsAdminAuthenticator.IsCurrentProcessElevated() ? 0 : 5);
@@ -125,7 +136,7 @@ namespace IpojucaRMM
                 Path.GetFullPath(installedExePath).TrimEnd('\\'),
                 StringComparison.OrdinalIgnoreCase)))
             {
-                RunInstaller(currentExePath, installDir, installedExePath, customUrl, isSilentInstall || isOtaUpdate, isOtaUpdate);
+                RunInstaller(currentExePath, installDir, installedExePath, customUrl, customEnrollKey, isSilentInstall || isOtaUpdate, isOtaUpdate);
                 return;
             }
 
@@ -159,8 +170,8 @@ namespace IpojucaRMM
                 if (!isBackgroundMode)
                 {
                     MessageBox.Show(
-                        "O Agente RMM Ipojuca já está em execução em segundo plano nesta máquina.\n\nClique no ícone verde próximo ao relógio do Windows (Bandeja do Sistema) para abrir o painel de suporte.",
-                        "RMM Ipojuca — Já Ativo",
+                        "O Agente Pulso RMM já está em execução em segundo plano nesta máquina.\n\nClique no ícone verde próximo ao relógio do Windows (Bandeja do Sistema) para abrir o painel de suporte.",
+                        "Pulso RMM — Já Ativo",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information
                     );
@@ -168,7 +179,7 @@ namespace IpojucaRMM
                 return;
             }
 
-            Application.Run(new TrayAgentContext(installDir, customUrl));
+            Application.Run(new TrayAgentContext(installDir, customUrl, customEnrollKey));
         }
 
         public static void DisableAutoStart()
@@ -207,7 +218,7 @@ namespace IpojucaRMM
             }
         }
 
-        private static void RunInstaller(string sourceExe, string installDir, string targetExe, string customUrl, bool silent, bool isOtaUpdate)
+        private static void RunInstaller(string sourceExe, string installDir, string targetExe, string customUrl, string customEnrollKey, bool silent, bool isOtaUpdate)
         {
             string logPath = Path.Combine(installDir, "agent.log");
             try
@@ -217,7 +228,8 @@ namespace IpojucaRMM
                     Directory.CreateDirectory(installDir);
                 }
 
-                // Aguarda encerramento de instância anterior caso esteja atualizando
+                // Aguarda encerramento de instância anterior instalada no diretorio oficial (@security S-09)
+                string fullInstallDir = Path.GetFullPath(installDir).TrimEnd('\\') + "\\";
                 string[] runningNames = new string[] { "IpojucaRMM-Agent", "IpojucaRMM-Setup", "IpojucaRMM-Updater-Temp" };
                 for (int attempt = 0; attempt < 10; attempt++)
                 {
@@ -229,8 +241,23 @@ namespace IpojucaRMM
                             {
                                 if (proc.Id != Process.GetCurrentProcess().Id)
                                 {
-                                    proc.Kill();
-                                    proc.WaitForExit(2000);
+                                    bool safeTarget = true;
+                                    try
+                                    {
+                                        string procPath = proc.MainModule != null ? proc.MainModule.FileName : "";
+                                        if (!string.IsNullOrEmpty(procPath) &&
+                                            !procPath.StartsWith(fullInstallDir, StringComparison.OrdinalIgnoreCase) &&
+                                            !string.Equals(procPath, sourceExe, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            safeTarget = false;
+                                        }
+                                    }
+                                    catch { }
+                                    if (safeTarget)
+                                    {
+                                        proc.Kill();
+                                        proc.WaitForExit(2000);
+                                    }
                                 }
                             }
                             catch { }
@@ -247,8 +274,8 @@ namespace IpojucaRMM
                     }
                 }
 
-                // Salva ou atualiza configuração preservando AgentUuid e AgentToken
-                AgentConfig cfg = TrayAgentContext.LoadOrCreateConfig(installDir, customUrl);
+                // Salva ou atualiza configuração preservando AgentUuid e AgentToken (protegido por DPAPI)
+                AgentConfig cfg = TrayAgentContext.LoadOrCreateConfig(installDir, customUrl, customEnrollKey);
 
                 // Registra inicialização automática no Registro do Windows (HKCU\...\Run)
                 using (RegistryKey runKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
@@ -297,7 +324,7 @@ namespace IpojucaRMM
                 else if (!silent)
                 {
                     MessageBox.Show(
-                        "Agente RMM Ipojuca instalado e iniciado em segundo plano com sucesso!\n\n" +
+                        "Agente Pulso RMM instalado e iniciado em segundo plano com sucesso!\n\n" +
                         "• Versão: v" + AgentConfig.DISPLAY_VERSION + "\n" +
                         "• Computador: " + Environment.MachineName + "\n" +
                         "• Identificador: " + cfg.AgentUuid + "\n" +
@@ -305,7 +332,7 @@ namespace IpojucaRMM
                         "• Atualizações: Silenciosas em segundo plano\n" +
                         "• Encerramento: Protegido por conta de Administrador do Windows\n\n" +
                         "O agente está ativo perto do relógio do Windows (Bandeja do Sistema).",
-                        "Instalação Concluída — RMM Ipojuca",
+                        "Instalação Concluída — Pulso RMM",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information
                     );
@@ -326,7 +353,7 @@ namespace IpojucaRMM
                 if (!silent && !isOtaUpdate)
                 {
                     MessageBox.Show(
-                        "Erro ao instalar o Agente RMM Ipojuca:\n" + ex.Message,
+                        "Erro ao instalar o Agente Pulso RMM:\n" + ex.Message,
                         "Erro na Instalação",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error
@@ -361,12 +388,12 @@ namespace IpojucaRMM
         private bool _adminDialogOpen = false;
         private bool _suppressDisconnectOnExit = false;
 
-        public TrayAgentContext(string installDir, string customUrl)
+        public TrayAgentContext(string installDir, string customUrl, string customEnrollKey = null)
         {
             _installDir = installDir;
             if (!Directory.Exists(_installDir)) Directory.CreateDirectory(_installDir);
             _logFile = Path.Combine(_installDir, "agent.log");
-            _config = LoadOrCreateConfig(_installDir, customUrl);
+            _config = LoadOrCreateConfig(_installDir, customUrl, customEnrollKey);
             _uiDispatcher = new Control();
             _uiDispatcher.CreateControl();
 
@@ -610,6 +637,8 @@ namespace IpojucaRMM
                     HttpWebRequest vReq = (HttpWebRequest)WebRequest.Create(_config.BackendUrl.TrimEnd('/') + "/api/agent/version");
                     vReq.Method = "GET";
                     vReq.Timeout = 8000;
+                    vReq.Headers["X-Agent-UUID"] = _config.AgentUuid;
+                    vReq.Headers["X-Agent-Token"] = _config.AgentToken;
                     using (HttpWebResponse vResp = (HttpWebResponse)vReq.GetResponse())
                     using (StreamReader sr = new StreamReader(vResp.GetResponseStream(), Encoding.UTF8))
                     {
@@ -648,6 +677,8 @@ namespace IpojucaRMM
                     HttpWebRequest dlReq = (HttpWebRequest)WebRequest.Create(downloadUrl);
                     dlReq.Method = "GET";
                     dlReq.Timeout = 45000;
+                    dlReq.Headers["X-Agent-UUID"] = _config.AgentUuid;
+                    dlReq.Headers["X-Agent-Token"] = _config.AgentToken;
                     using (HttpWebResponse dlResp = (HttpWebResponse)dlReq.GetResponse())
                     using (Stream netStream = dlResp.GetResponseStream())
                     using (FileStream fileStream = new FileStream(tempUpdaterPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -710,7 +741,62 @@ namespace IpojucaRMM
             });
         }
 
-        public static AgentConfig LoadOrCreateConfig(string installDir, string overrideUrl)
+        private static readonly byte[] DpapiEntropy = Encoding.UTF8.GetBytes("PulsoRMM-AgentToken-v1");
+
+        public static string ProtectSecretDpapi(string plainText)
+        {
+            if (string.IsNullOrEmpty(plainText)) return "";
+            try
+            {
+                byte[] plainBytes = Encoding.UTF8.GetBytes(plainText);
+                byte[] encBytes = ProtectedData.Protect(plainBytes, DpapiEntropy, DataProtectionScope.CurrentUser);
+                return "dpapi:" + Convert.ToBase64String(encBytes);
+            }
+            catch
+            {
+                return plainText;
+            }
+        }
+
+        public static string UnprotectSecretDpapi(string stored)
+        {
+            if (string.IsNullOrEmpty(stored)) return "";
+            if (!stored.StartsWith("dpapi:", StringComparison.Ordinal)) return stored;
+            try
+            {
+                byte[] encBytes = Convert.FromBase64String(stored.Substring(6));
+                byte[] plainBytes = ProtectedData.Unprotect(encBytes, DpapiEntropy, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(plainBytes);
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        public static void SaveConfig(string installDir, AgentConfig cfg)
+        {
+            try
+            {
+                string cfgPath = Path.Combine(installDir, "agent-identity.json");
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                string outJson = serializer.Serialize(new Dictionary<string, object>
+                {
+                    { "BackendUrl", cfg.BackendUrl },
+                    { "EnrollmentKey", cfg.Enrolled ? "" : (cfg.EnrollmentKey ?? "") },
+                    { "Enrolled", cfg.Enrolled },
+                    { "UnitId", cfg.UnitId },
+                    { "SectorId", cfg.SectorId },
+                    { "HeartbeatIntervalMs", cfg.HeartbeatIntervalMs },
+                    { "AgentUuid", cfg.AgentUuid },
+                    { "AgentToken", ProtectSecretDpapi(cfg.AgentToken) }
+                });
+                File.WriteAllText(cfgPath, outJson, Encoding.UTF8);
+            }
+            catch { }
+        }
+
+        public static AgentConfig LoadOrCreateConfig(string installDir, string overrideUrl, string overrideEnrollKey = null)
         {
             string cfgPath = Path.Combine(installDir, "agent-identity.json");
             JavaScriptSerializer serializer = new JavaScriptSerializer();
@@ -725,12 +811,17 @@ namespace IpojucaRMM
                     if (data != null)
                     {
                         if (data.ContainsKey("BackendUrl") && data["BackendUrl"] != null) cfg.BackendUrl = data["BackendUrl"].ToString();
-                        if (data.ContainsKey("EnrollmentKey") && data["EnrollmentKey"] != null) cfg.EnrollmentKey = data["EnrollmentKey"].ToString();
+                        if (data.ContainsKey("Enrolled") && data["Enrolled"] != null) cfg.Enrolled = Convert.ToBoolean(data["Enrolled"]);
+                        if (data.ContainsKey("EnrollmentKey") && data["EnrollmentKey"] != null)
+                        {
+                            string savedEnroll = data["EnrollmentKey"].ToString();
+                            if (!string.IsNullOrEmpty(savedEnroll) || cfg.Enrolled) cfg.EnrollmentKey = savedEnroll;
+                        }
                         if (data.ContainsKey("UnitId") && data["UnitId"] != null) cfg.UnitId = Convert.ToInt32(data["UnitId"]);
                         if (data.ContainsKey("SectorId") && data["SectorId"] != null) cfg.SectorId = Convert.ToInt32(data["SectorId"]);
                         if (data.ContainsKey("HeartbeatIntervalMs") && data["HeartbeatIntervalMs"] != null) cfg.HeartbeatIntervalMs = Convert.ToInt32(data["HeartbeatIntervalMs"]);
                         if (data.ContainsKey("AgentUuid") && data["AgentUuid"] != null) cfg.AgentUuid = data["AgentUuid"].ToString();
-                        if (data.ContainsKey("AgentToken") && data["AgentToken"] != null) cfg.AgentToken = data["AgentToken"].ToString();
+                        if (data.ContainsKey("AgentToken") && data["AgentToken"] != null) cfg.AgentToken = UnprotectSecretDpapi(data["AgentToken"].ToString());
                     }
                 }
                 catch { }
@@ -739,6 +830,12 @@ namespace IpojucaRMM
             if (!string.IsNullOrEmpty(overrideUrl))
             {
                 cfg.BackendUrl = overrideUrl.TrimEnd('/');
+            }
+
+            if (!string.IsNullOrEmpty(overrideEnrollKey))
+            {
+                cfg.EnrollmentKey = overrideEnrollKey;
+                cfg.Enrolled = false;
             }
 
             string cleanHost = Environment.MachineName.ToLowerInvariant();
@@ -768,22 +865,7 @@ namespace IpojucaRMM
                 cfg.AgentToken = sbHex.ToString();
             }
 
-            try
-            {
-                string outJson = serializer.Serialize(new Dictionary<string, object>
-                {
-                    { "BackendUrl", cfg.BackendUrl },
-                    { "EnrollmentKey", cfg.EnrollmentKey },
-                    { "UnitId", cfg.UnitId },
-                    { "SectorId", cfg.SectorId },
-                    { "HeartbeatIntervalMs", cfg.HeartbeatIntervalMs },
-                    { "AgentUuid", cfg.AgentUuid },
-                    { "AgentToken", cfg.AgentToken }
-                });
-                File.WriteAllText(cfgPath, outJson, Encoding.UTF8);
-            }
-            catch { }
-
+            SaveConfig(installDir, cfg);
             return cfg;
         }
 
@@ -858,7 +940,10 @@ namespace IpojucaRMM
                 req.Timeout = 12000;
                 req.Headers["X-Agent-UUID"] = _config.AgentUuid;
                 req.Headers["X-Agent-Token"] = _config.AgentToken;
-                req.Headers["X-Enrollment-Key"] = _config.EnrollmentKey;
+                if (!_config.Enrolled && !string.IsNullOrEmpty(_config.EnrollmentKey))
+                {
+                    req.Headers["X-Enrollment-Key"] = _config.EnrollmentKey;
+                }
 
                 byte[] bytes = Encoding.UTF8.GetBytes(jsonBody);
                 req.ContentLength = bytes.Length;
@@ -871,6 +956,12 @@ namespace IpojucaRMM
                 using (StreamReader reader = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
                 {
                     string responseText = reader.ReadToEnd();
+                    if (!_config.Enrolled)
+                    {
+                        _config.Enrolled = true;
+                        _config.EnrollmentKey = "";
+                        SaveConfig(_installDir, _config);
+                    }
                     _lastSyncTime = DateTime.Now;
                     string clock = _lastSyncTime.ToString("HH:mm:ss");
                     lock (_snapshotLock)
@@ -2547,18 +2638,35 @@ namespace IpojucaRMM
             }
         }
 
+        public static bool IsInstalledInSystemProtectedDirectory()
+        {
+            try
+            {
+                string exePath = Path.GetFullPath(Application.ExecutablePath);
+                string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+                if (!string.IsNullOrEmpty(pf) && exePath.StartsWith(Path.GetFullPath(pf).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (!string.IsNullOrEmpty(pf86) && exePath.StartsWith(Path.GetFullPath(pf86).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            catch { }
+            return false;
+        }
+
         /// <summary>
-        /// Aciona a tela nativa UAC do Windows (Controle de Conta de Usuario / Verb = "runas"),
-        /// suportando nativamente administradores locais e contas administradoras de rede/dominio (AD/Entra ID).
-        /// Caso o processo ja esteja elevado, aciona o prompt nativo Seguranca do Windows (credui.dll).
+        /// Valida autorizacao administrativa do Windows sem risco de LPE em %LocalAppData% (@security S-02).
+        /// Quando instalado em pasta gravavel pelo usuario (%LocalAppData%), utiliza exclusivamente o prompt nativo
+        /// Seguranca do Windows (credui.dll + LogonUser + IsTokenAdministrator) sem elevar o executavel local.
+        /// Somente aciona Verb = "runas" (UAC) quando o binario reside em diretorio protegido pelo sistema (Program Files).
         /// </summary>
         public static bool RequestAdminAuthorization(IntPtr ownerHwnd, out string authMethod, out string detailMessage)
         {
-            authMethod = "WINDOWS_UAC";
             detailMessage = "";
 
-            if (!IsCurrentProcessElevated())
+            if (IsInstalledInSystemProtectedDirectory() && !IsCurrentProcessElevated())
             {
+                authMethod = "WINDOWS_UAC";
                 return RequestViaNativeUac(out detailMessage);
             }
 
@@ -2627,12 +2735,13 @@ namespace IpojucaRMM
                 CREDUI_INFO uiInfo = new CREDUI_INFO();
                 uiInfo.cbSize = Marshal.SizeOf(typeof(CREDUI_INFO));
                 uiInfo.hwndParent = ownerHwnd;
-                uiInfo.pszCaptionText = "Segurança do Windows — RMM Ipojuca";
+                uiInfo.pszCaptionText = "Segurança do Windows — Pulso RMM";
                 uiInfo.pszMessageText = "Informe uma conta Administradora (local ou de rede) para encerrar o agente nesta máquina.";
                 uiInfo.hbmBanner = IntPtr.Zero;
 
                 IntPtr outCredBuf = IntPtr.Zero;
                 uint outCredSize = 0;
+                StringBuilder sbPass = new StringBuilder(256);
                 try
                 {
                     uint result = CredUIPromptForWindowsCredentials(
@@ -2663,7 +2772,6 @@ namespace IpojucaRMM
                     int maxPass = 256;
                     StringBuilder sbUser = new StringBuilder(maxUser);
                     StringBuilder sbDomain = new StringBuilder(maxDomain);
-                    StringBuilder sbPass = new StringBuilder(maxPass);
 
                     if (!CredUnPackAuthenticationBuffer(0, outCredBuf, outCredSize, sbUser, ref maxUser, sbDomain, ref maxDomain, sbPass, ref maxPass))
                     {
@@ -2689,6 +2797,8 @@ namespace IpojucaRMM
                 }
                 finally
                 {
+                    for (int i = 0; i < sbPass.Length; i++) sbPass[i] = '\0';
+                    sbPass.Length = 0;
                     if (outCredBuf != IntPtr.Zero)
                     {
                         try { Marshal.FreeCoTaskMem(outCredBuf); } catch { }

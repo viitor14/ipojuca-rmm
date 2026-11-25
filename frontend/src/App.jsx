@@ -1257,6 +1257,10 @@ function DashboardApp() {
   });
 
   const handleLogout = useCallback((notice = '') => {
+    const currentToken = loadSessionToken();
+    if (currentToken) {
+      rmmApi.logout(currentToken);
+    }
     saveSessionToken(null);
     setAuth({ token: null, user: null, checking: false });
     setSocketConnected(false);
@@ -1267,6 +1271,17 @@ function DashboardApp() {
     setAlerts([]);
     setSessionNotice(notice);
   }, []);
+
+  const handleDownloadAgent = useCallback(async () => {
+    if (!auth.token) return;
+    try {
+      await rmmApi.downloadAgentInstaller(auth.token);
+    } catch (err) {
+      if (err?.status === 401) {
+        handleLogout('Sua sessão expirou. Faça login novamente.');
+      }
+    }
+  }, [auth.token, handleLogout]);
 
   const handleLoginSubmit = useCallback(async (email, password) => {
     const res = await rmmApi.login(email, password);
@@ -1752,10 +1767,9 @@ function DashboardApp() {
 
           <TopRightCluster>
             <SubtleIconBtn
-              as="a"
-              href="/api/agent/download"
-              download="IpojucaRMM-Setup.exe"
-              title="Baixar instalador oficial do Agente Windows (.exe)"
+              type="button"
+              onClick={handleDownloadAgent}
+              title="Baixar instalador autenticado do Agente Windows (.exe)"
             >
               <IconDownload size={14} />
               <span className="hide-compact">Agente</span>
@@ -2221,17 +2235,22 @@ function DashboardApp() {
                   }}
                 >
                   <span>Nenhuma estação encontrada nesta unidade.</span>
-                  <a
-                    href="/api/agent/download"
-                    download="IpojucaRMM-Setup.exe"
+                  <button
+                    type="button"
+                    onClick={handleDownloadAgent}
                     style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
                       color: theme.colors.brandPrimary,
                       textDecoration: 'underline',
                       fontWeight: 600,
+                      fontSize: 'inherit',
                     }}
                   >
                     Baixar Agente (.exe)
-                  </a>
+                  </button>
                 </div>
               )}
 

@@ -10,10 +10,10 @@
 
 ---
 
-## 1. Status Atual do Projeto (Atualizado no Ciclo #57 — 2026-11-25)
+## 1. Status Atual do Projeto (Atualizado no Ciclo #58 — 2026-11-25)
 
 1. **Implantação na VPS (`31.97.86.253` / `root@srv912524`):**
-   - Repositório Oficial: `https://github.com/viitor14/ipojuca-rmm.git` (branch `main`, produção ativa no commit `985c7a4` com identidade **`Pulso RMM`** e agente **`v2.5.2-native-exe`**).
+   - Repositório Oficial: `https://github.com/viitor14/ipojuca-rmm.git` (branch `main`, último push em `49f6e55` com `Pulso RMM` + `v2.6.0-native-exe`; **Ciclo #58 de Hardening Pré-Frota `v2.6.1-native-exe` pronto localmente** aguardando commit/push).
    - **Portas configuradas sem conflito com os outros containers da VPS:**
      - **Frontend (Dashboard 3D Digital Twin):** `http://31.97.86.253:8095`
      - **Backend (API Node.js + Socket.io):** `http://31.97.86.253:4005`
@@ -28,11 +28,12 @@
      - Todos os endpoints de agente (`/api/agent/pending`, `/api/agent/task-result`, `/api/agent/disconnect`, `/api/agent/message`) protegidos por `requireAgentAuth` (`X-Agent-Uuid` + `X-Agent-Token` SHA-256 `timingSafeEqual` + `!is_revoked`) e validação de propriedade da tarefa (`machine_id`).
      - Fim da simulação falsa em `POST /api/command`: quando o agente não responde dentro do timeout, a tarefa permanece honestamente como `DISPATCHED` (`delivery_mode: "queued_for_agent"`) até confirmação real ou expiração automática (`EXPIRED`).
      - Chat bidirecional persistido em banco (`machine_messages`), envio restrito a `TECH_N1`/`ADMIN_N2`, alerta automático de inatividade `>24h` (`INACTIVITY_24H`) e auditoria completa em realocação/exclusão de máquinas, mensagens e desconexões.
-3. **Agente Windows Nativo Oficial (`v2.6.0-native-exe` pronto localmente; `v2.5.2` em produção na VPS):**
-   - Código-fonte oficial: `agent/native/IpojucaAgent.cs` (`.NET Framework 4.x`, zero dependências externas).
-   - Binário único versionado: `backend/public/IpojucaRMM-Setup.exe` (`99.840 B`, FileVersion `2.6.0.0`, SHA-256 `d97b4af851547f99a2be4e1d70c110f98bb035ad97ff1430fc978b93160e15ec`, servido via `GET /api/agent/download` e `GET /api/agent/version`).
+3. **Agente Windows Nativo Oficial (`v2.6.1-native-exe` pronto localmente com Hardening Pré-Frota):**
+   - Código-fonte oficial: `agent/native/IpojucaAgent.cs` (`.NET Framework 4.x`, zero dependências externas — compila com `/r:System.Security.dll` nativo).
+   - Binário único versionado: `backend/public/IpojucaRMM-Setup.exe` (`101.888 B`, FileVersion `2.6.1.0`, SHA-256 `1d623c41a7cd6559d56c8e7bb605f27533a7b939ad09099cb2adf0462c8b6d43`, servido via `GET /api/agent/download` autenticado).
+   - Evoluções do **Ciclo #58 (`v2.6.1` — Hardening Pré-Frota):** TLS 1.2 explícito no `.NET 4.x` (`ServicePointManager`), proteção anti-LPE usando `credui.dll` quando instalado em `%LocalAppData%` (nunca elevando binário de pasta gravável pelo usuário), `AgentToken` criptografado em disco com **Windows DPAPI** (`ProtectedData.Protect`), limpeza da `EnrollmentKey` após o 1º enrollment, suporte CLI `--enroll=<chave>`, OTA enviando `X-Agent-UUID`/`X-Agent-Token`, zero vazamento de `agent_token_hash` no backend/WebSocket, bloqueio `409` contra rebind de estação ativa online, `POST /api/machines/:id/revoke`, `POST /api/auth/logout` (revogação JWT), rate limiters dedicados e CSP no Nginx.
    - Evoluções dos Ciclos #50–#57 (`v2.6.0`):
-     - **Design Editorial `Pulso RMM` no Agente (Ciclo #57):** ícone da bandeja e cabeçalho redesenhados com `PulsoGraphics.DrawBrandMark` (quadrado arredondado `#2D6A4F` + pulso ECG branco), pílula de status auto-ajustável (`PulsoStatusPill`), faixa única de 4 métricas (`CPU`, `RAM`, `Disco`, `Temp.`) sem caixas aninhadas, IPv4 copiável em 1 clique, **chat real em balões GDI+** (`BubbleChatPanel`) e botões arredondados (`PulsoButton`). Bump para `2.6.0-native-exe` garante atualização OTA silenciosa automática em todas as estações na `v2.5.x`.
+     - **Design Editorial `Pulso RMM` no Agente (Ciclo #57):** ícone da bandeja e cabeçalho redesenhados com `PulsoGraphics.DrawBrandMark` (quadrado arredondado `#2D6A4F` + pulso ECG branco), pílula de status auto-ajustável (`PulsoStatusPill`), faixa única de 4 métricas (`CPU`, `RAM`, `Disco`, `Temp.`) sem caixas aninhadas, IPv4 copiável em 1 clique, **chat real em balões GDI+** (`BubbleChatPanel`) e botões arredondados (`PulsoButton`). Bump para `2.6.1-native-exe` garante atualização OTA silenciosa automática.
      - **Sensor de Temperatura Real sem Elevação (`v2.5.2`):** `ReadRealTemperatureC()` consulta `Win32_PerfFormattedData_Counters_ThermalZoneInformation` / `PerfRawData` em `root\CIMV2` (funciona em conta padrão sem `Acesso negado`), com fallback para `MSAcpi_ThermalZoneTemperature` e `Win32_TemperatureProbe`.
      - **Identificação do Usuário no Chat TI (`ResolveLoggedUserSender`, Ciclo #52):** mensagens enviadas pelo usuário exibem seu Nome de Exibição real do Windows/AD (`secur32.dll` `GetUserNameEx`, fallback `Environment.UserName`) em vez de `"Estação <HOSTNAME>"`, mantendo heartbeats/telemetria livres de dados pessoais (LGPD). Bump para `2.5.2-native-exe` aciona OTA silencioso automático nas máquinas em `2.5.0`/`2.5.1`.
      - **Novo Layout Editorial Claro (`SuperAgentForm`, `EditorialMenuRenderer`, ícone de escudo verde `#2D6A4F`):** interface alinhada ao Design System do painel web (`#F4F5F2`/`#FFFFFF`/`#242925`), cabeçalho limpo exibindo apenas `v2.5.0`, 4 cartões de telemetria rápida (`CPU`, `RAM`, `DISCO C:`, `IPv4`), botão **Sincronizar Agora**, **Chat formatado (`RichTextBox`)** com saudação limpa (sem sufixo técnico) + envio via tecla `Enter` e botão `X` minimizando para a bandeja sem encerrar.

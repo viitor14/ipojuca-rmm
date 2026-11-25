@@ -110,3 +110,51 @@ Parecer: sem vulnerabilidade crítica nova. O risco alto de S1 exige decisão do
 2. **Rotação da `AGENT_ENROLLMENT_KEY` (Herdado S1):** `deploy_vps.sh` já gera chave aleatória para novas implantações e `docker-compose.yml` não embute default inseguro, porém máquinas já instaladas com a chave antiga precisarão de janela planejada de rotação/recompilação ou mecanismo de chave por unidade em ciclo futuro.
 
 - **Parecer do Gate de Segurança (Ciclo #48):** **APROVADO PARA HOMOLOGAÇÃO E PREPARO DE DEPLOY** (0 vulnerabilidades críticas/altas de código ou dependências; pendências exclusivamente operacionais de infraestrutura VPS documentadas acima).
+
+---
+
+## 8. Adendo de Auditoria Pré-Implantação em Frota — `Pulso RMM v2.6.0` (Commit `49f6e55`, `@security`)
+
+**Data:** 2026-11-25  
+**Responsável:** `@security` (FASE 10 — `.agents/workflows/startcycle.md`)  
+**Escopo:** Varredura completa de código, binário C# `v2.6.0`, API REST, Socket.io, banco de dados, frontend (`dist/`), Nginx, Docker Compose, n8n e `npm audit` antes de iniciar instalação em massa nas estações.
+
+### 8.1. Resultado das Verificações Automatizadas
+- `npm audit` (`backend`, `frontend`, `agent`): **0 vulnerabilidades**.
+- Varredura de segredos e XSS no frontend (`frontend/src` e `frontend/dist/assets/*.js`): **0 ocorrências** (`DIST_SECRET_HITS = 0`).
+- Varredura SQL em `backend/src/database/repository.js`: **0 interpolações inseguras** (100% prepared statements `?`).
+
+### 8.2. Achados Bloqueadores Identificados Antes da Instalação em Massa (`NO-GO CONDICIONAL`)
+1. **[CRÍTICO — S-01] HTTP puro + OTA sem TLS + ausência de TLS 1.2 no `.NET 4.x`:** `BackendUrl = "http://31.97.86.253:4005"` expõe tokens/chat e permite MitM simultâneo no manifesto `/api/agent/version` e binário `/api/agent/download`. Além disso, falta `ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072` para compatibilidade com Nginx TLS 1.2/1.3.
+2. **[ALTO — S-02] LPE Local no encerramento via `Verb = "runas"` sobre `%LocalAppData%`:** `RequestViaNativeUac` eleva `Application.ExecutablePath` localizado em pasta gravável por usuário comum. Recomendação: adotar `RequestViaNativeCredUi` (`credui.dll` + `LogonUser`) sem elevar o executável de `%LocalAppData%` (ou instalar o binário em `%ProgramFiles%`).
+3. **[ALTO — S-03] Vazamento de `agent_token_hash` (chave HMAC de tarefas) em `findMachineById` → `machine:updated` / `/refresh-telemetry` / `/location`:** expõe a chave de assinatura HMAC individual da máquina para clientes `/dashboard` (inclusive `VIEWER`). Correção: sanitizar `agent_token_hash` em todas as saídas e broadcasts.
+4. **[ALTO — S-04] `AGENT_ENROLLMENT_KEY` padrão no `.exe` + `/api/agent/download` público + rebind automático:** permite extração da chave e registro/rebind não autorizado. Correção: rotacionar chave fora do Git, proteger `/api/agent/download` (JWT ou auth de agente) e restringir rebind automático.
+5. **[MÉDIOS — S-05 a S-08]:** `agent-identity.json` em texto claro (migrar para DPAPI), ausência de CSP no Nginx e rate limit em `/command`/`/agent/message`/`/agent/download`, ausência de rota `POST /api/machines/:id/revoke` e fluxo de troca de senha.
+6. **[BAIXOS — S-09, S-10]:** limpeza de `sbPass` no `finally`, validação de caminho no `Kill()` do instalador, textos legados `"RMM Ipojuca"` e bind `127.0.0.1` das portas Docker quando atrás do Nginx HTTPS.
+
+- **Parecer do Gate de Segurança Pré-Frota:** **NO-GO para instalação em massa** até a remediação de **S-01 a S-04** (liberado apenas para teste piloto restrito em estação da equipe de TI).
+
+---
+
+## 9. Remediação de Hardening Pré-Frota — Ciclo #58 (`v2.6.1-native-exe`, `@security` + `@engineer` + `@qa`)
+
+**Data:** 2026-11-25  
+**Escopo:** Remediação de todos os achados de código identificados na Seção 8 (`S-01` preparo TLS 1.2, `S-02`, `S-03`, `S-04`, `S-05`, `S-06`, `S-07`, `S-09`).
+
+| ID | Remediação Aplicada | Evidência de Verificação | Status |
+| :--- | :--- | :--- | :--- |
+| **S-01 (Código)** | `ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 \| SecurityProtocolType.Tls` adicionado no `Program.Main` do agente (`v2.6.1`) para compatibilidade plena com Nginx TLS 1.2/1.3. | Revisão de `IpojucaAgent.cs` + compilação `csc.exe` `v2.6.1.0`. *(Ativação de HTTPS/domínio na VPS permanece como etapa operacional.)* | **PREPARADO (CÓDIGO)** |
+| **S-02 (ALTO)** | `WindowsAdminAuthenticator.RequestAdminAuthorization` usa exclusivamente **`credui.dll` (`CredUIPromptForWindowsCredentials` + `LogonUser` + `IsTokenAdministrator`)** sempre que o binário residir fora de `Program Files` (`%LocalAppData%`), eliminando o risco de LPE por `Verb = "runas"`. | Reflexão confirmou `IsInstalledInSystemProtectedDirectory() == False` fora de `Program Files`; `sbPass` zerado no `finally`. | **REMEDIADO** |
+| **S-03 (ALTO)** | Criado `sanitizeMachine()` aplicado em `socketHub.broadcastToDashboard("machine:updated")` e em todas as respostas HTTP (`/refresh-telemetry`, `/location`, `/revoke`, `/machines`, `/diagnostics`). | Teste #19 validou `agent_token_hash === undefined` em HTTP e Socket.io. | **REMEDIADO** |
+| **S-04 (ALTO)** | `GET /api/agent/download` protegido por `createRequireOperatorOrAgentAuth` (JWT de operador ou `X-Agent-Uuid`+`X-Agent-Token` do agente); `App.jsx` migrado para download autenticado via Blob; `IpojucaAgent.cs` envia credenciais no OTA e aceita `--enroll=<chave>`; `rebindAgentToMachine` bloqueia sequestro de máquina ativa `ONLINE` (`409` + `SECURITY_BLOCKED_ACTIVE_AGENT_REBIND`). | Teste #10 (`409` em rebind ativo, `200` quando offline), Teste #19 e smoke test HTTP ao vivo (`anon=401`, `op=200`, `agt=200`). | **REMEDIADO** |
+| **S-05 (MÉDIO)** | `AgentToken` salvo em `agent-identity.json` criptografado via **Windows DPAPI** (`ProtectedData.Protect`, `DataProtectionScope.CurrentUser`, prefixo `dpapi:`), com migração automática e limpeza da `EnrollmentKey` após o 1º enrollment bem-sucedido. | Reflexão confirmou `DPAPI_PREFIX=True` e `DPAPI_ROUNDTRIP=True` no binário compilado (`101.888 B`). | **REMEDIADO** |
+| **S-06 (MÉDIO)** | Adicionado cabeçalho `Content-Security-Policy` em `frontend/nginx.conf` e rate limiters dedicados em `/command`, `/agent/message`, `/agent/pending`, `/agent/version` e `/agent/download`. | Revisão de `frontend/nginx.conf` e `backend/src/routes/api.js` + `19/19` testes aprovados. | **REMEDIADO** |
+| **S-07 (MÉDIO)** | Criados `POST /api/machines/:id/revoke` (`ADMIN_N2`, desconecta socket ativo e audita `AGENT_REVOKED`) e `POST /api/auth/logout` (blacklist JWT em memória até expiração natural). | Teste #19 validou `403` para `TECH_N1`, `200` para `ADMIN_N2`, `403` no agente revogado e `401` pós-logout. | **REMEDIADO** |
+| **S-09 (BAIXO)** | Validação de diretório do processo antes de `proc.Kill()` no `RunInstaller`, limpeza de `sbPass` em memória e atualização das mensagens restantes para `Pulso RMM`. | Revisão de `agent/native/IpojucaAgent.cs` + compilação limpa `v2.6.1.0`. | **REMEDIADO** |
+
+### Parecer Atualizado do Gate de Segurança (Pós-Ciclo #58)
+- **Vulnerabilidades críticas ou altas de código:** **0 (ZERO)**.
+- **Status para instalação em rede interna/piloto:** **APROVADO PELO `@security`**.
+- **Checklist operacional restante para internet aberta (VPS):**
+  1. Configurar domínio + HTTPS/WSS na VPS com `infrastructure/nginx/vps-https.conf.example` e fechar portas `4005`/`8095` em `127.0.0.1`.
+  2. Configurar `AGENT_ENROLLMENT_KEY` exclusiva no `.env` da VPS (fora do Git) e distribuir o instalador passando `--url=https://... --enroll=<CHAVE>` (ou recompilado com esses valores) e confirmar senhas reais fortes no MySQL.

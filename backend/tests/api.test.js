@@ -366,7 +366,7 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
 
   const verRes = await requestJson('GET', '/api/agent/version');
   assert.equal(verRes.status, 200);
-  assert.equal(verRes.data.latest_version, '2.6.0-native-exe');
+  assert.equal(verRes.data.latest_version, '2.6.1-native-exe');
   assert.match(String(verRes.data.sha256 || ''), /^[a-f0-9]{64}$/i);
 
   const updateRes = await requestJson(
@@ -395,7 +395,7 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
   // Anti-downgrade: versão igual ou superior à do servidor NÃO recebe auto-update
   const pollSameVer = await requestJson(
     'GET',
-    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.6.0-native-exe&idle_seconds=10',
+    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.6.1-native-exe&idle_seconds=10',
     {
       headers: {
         'X-Agent-Uuid': 'agt-win-posto-teste01',
@@ -661,6 +661,13 @@ test('10. Ciclo #27 (CA-124 a CA-128): identidade de hardware, Upsert por serial
   const moved = await repository.updateMachineLocation(machineId, { unitId: 2, sectorId: 6 });
   assert.ok(moved);
 
+  // Proteção S-04: tentativa de rebind enquanto máquina está ativa ONLINE deve ser bloqueada (409)
+  const hijackAttempt = await send('agt-hijack', 'tok-hijack', { ...inv, hostname: 'USF-HIJACK' });
+  assert.equal(hijackAttempt.status, 409);
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'SECURITY_BLOCKED_ACTIVE_AGENT_REBIND'));
+
+  // Após máquina ficar OFFLINE (formatação/desconexão), reinstalação legítima rebinda sem duplicar
+  await repository.markMachineOfflineById(machineId);
   const reinstall = await send('agt-b', 'tok-b', { ...inv, hostname: 'USF-REC01-NEW', ram_total_mb: 16384 });
   assert.equal(reinstall.status, 200);
   assert.equal(reinstall.data.machine_id, machineId);
@@ -672,13 +679,15 @@ test('10. Ciclo #27 (CA-124 a CA-128): identidade de hardware, Upsert por serial
   assert.equal(rebound.sector_id, 6);
   assert.ok(repository.auditLogs.some((l) => l.action_type === 'AGENT_REBOUND'));
 
+  await repository.markMachineOfflineById(machineId);
   const oldAgent = await send('agt-a', 'tok-a', inv, {});
   assert.equal(oldAgent.status, 200);
-  assert.equal((await repository.listMachines()).length, 1, 'agente antigo reenvia com serial já existente: rebind, sem duplicata');
+  assert.equal((await repository.listMachines()).length, 1, 'agente antigo reenvia com serial já existente quando offline: rebind, sem duplicata');
 
   const changes = await repository.listInventoryChanges(machineId);
   assert.ok(changes.some((c) => c.field_name === 'ram_total_mb' && c.old_value === '8192' && c.new_value === '16384'));
 
+  await repository.markMachineOfflineById(machineId);
   const spoof = await send('agt-evil', 'tok-evil', { ...inv, smbios_uuid: '11111111-2222-3333-4444-555555555555' });
   assert.equal(spoof.status, 409);
   assert.ok(repository.auditLogs.some((l) => l.action_type === 'HARDWARE_KEY_CONFLICT'));
@@ -1340,4 +1349,90 @@ test('18. Ciclo #48: Alerta Automático de Inatividade > 24h (Online Ocioso e Of
   // Segunda checagem não duplica
   const triggeredAgain = await repository.checkInactiveMachinesAndAlert(86400);
   assert.equal(triggeredAgain.length, 0);
+});
+
+test('19. Ciclo #58 (@security): Zero vazamento de agent_token_hash, Download Autenticado, Revogação de Agente e Logout JWT', async () => {
+  repository.resetMemoryStore();
+  const m = await enrollTestMachine();
+
+  const adminLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+  });
+  const techLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'suporte@ipojuca.pe.gov.br', password: 'Suporte@Rmm2026' },
+  });
+  const viewerLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'gestao@ipojuca.pe.gov.br', password: 'Gestao@Rmm2026' },
+  });
+  assert.equal(adminLogin.status, 200);
+  assert.equal(techLogin.status, 200);
+  assert.equal(viewerLogin.status, 200);
+
+  // 1. S-03: agent_token_hash NUNCA pode vazar em /refresh-telemetry, /location ou broadcast Socket.io
+  let capturedBroadcast = null;
+  const origIo = socketHub.io;
+  socketHub.io = {
+    of: () => ({
+      emit(evt, data) {
+        if (evt === 'machine:updated') capturedBroadcast = data;
+      },
+    }),
+  };
+  try {
+    const refreshRes = await requestJson('POST', `/api/machines/${m.id}/refresh-telemetry`, {
+      headers: { Authorization: `Bearer ${viewerLogin.data.token}` },
+    });
+    assert.equal(refreshRes.status, 200);
+    assert.equal(refreshRes.data.machine?.agent_token_hash, undefined);
+
+    const locRes = await requestJson('POST', `/api/machines/${m.id}/location`, {
+      headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+      body: { unit_id: 1, sector_id: 2 },
+    });
+    assert.equal(locRes.status, 200);
+    assert.equal(locRes.data.machine?.agent_token_hash, undefined);
+    assert.ok(capturedBroadcast, 'broadcast machine:updated deve ser emitido');
+    assert.equal(capturedBroadcast.agent_token_hash, undefined);
+  } finally {
+    socketHub.io = origIo;
+  }
+
+  // 2. S-04: GET /api/agent/download exige Operador JWT OU Agente autenticado (bloqueia acesso anônimo com 401)
+  const anonDl = await requestJson('GET', '/api/agent/download');
+  assert.equal(anonDl.status, 401);
+
+  // 3. S-07: Revogação de agente restrita a ADMIN_N2 e bloqueia imediatamente o agente revogado
+  const techRevoke = await requestJson('POST', `/api/machines/${m.id}/revoke`, {
+    headers: { Authorization: `Bearer ${techLogin.data.token}` },
+    body: { revoked: true },
+  });
+  assert.equal(techRevoke.status, 403);
+
+  const adminRevoke = await requestJson('POST', `/api/machines/${m.id}/revoke`, {
+    headers: { Authorization: `Bearer ${adminLogin.data.token}` },
+    body: { revoked: true, reason: 'Estação extraviada' },
+  });
+  assert.equal(adminRevoke.status, 200);
+  assert.equal(adminRevoke.data.status, 'revoked');
+  assert.equal(adminRevoke.data.machine?.agent_token_hash, undefined);
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'AGENT_REVOKED'));
+
+  const revokedPoll = await requestJson('GET', '/api/agent/pending', {
+    headers: {
+      'X-Agent-Uuid': 'agt-usf-nso-rec01',
+      'X-Agent-Token': 'tok-usf-nso-rec01-secret',
+    },
+  });
+  assert.equal(revokedPoll.status, 403);
+
+  // 4. S-07: Logout revoga o JWT no servidor imediatamente
+  const logoutRes = await requestJson('POST', '/api/auth/logout', {
+    headers: { Authorization: `Bearer ${viewerLogin.data.token}` },
+  });
+  assert.equal(logoutRes.status, 200);
+
+  const afterLogoutMe = await requestJson('GET', '/api/auth/me', {
+    headers: { Authorization: `Bearer ${viewerLogin.data.token}` },
+  });
+  assert.equal(afterLogoutMe.status, 401);
 });

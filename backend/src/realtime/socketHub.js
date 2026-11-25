@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const repository = require('../database/repository');
-const { verifyJwtToken, hashAgentToken } = require('../middlewares/auth');
+const { verifyJwtToken, hashAgentToken, sanitizeMachine } = require('../middlewares/auth');
 
 /**
  * Hub de Tempo Real Socket.io (@lead, @engineer, @security).
@@ -136,7 +136,26 @@ class SocketHub {
 
   broadcastToDashboard(event, data) {
     if (!this.io) return;
-    this.io.of('/dashboard').emit(event, data);
+    const safePayload =
+      event === 'machine:updated' && data && typeof data === 'object'
+        ? sanitizeMachine(data)
+        : data;
+    this.io.of('/dashboard').emit(event, safePayload);
+  }
+
+  disconnectAgentByMachineId(machineId) {
+    const id = Number(machineId);
+    const agentSocket = this.connectedAgents.get(id);
+    if (agentSocket) {
+      this.connectedAgents.delete(id);
+      try {
+        agentSocket.disconnect(true);
+      } catch {
+        // Ignora falha ao desconectar socket revogado
+      }
+      return true;
+    }
+    return false;
   }
 
   dispatchTaskToAgent(machineId, taskPayload) {

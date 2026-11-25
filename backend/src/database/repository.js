@@ -583,6 +583,31 @@ class RmmRepository {
     if (existing.is_revoked) {
       throw createDomainError('Equipamento com credencial revogada não pode ser reassociado.', 403);
     }
+
+    // Protecao contra sequestro em tempo real de estacao ativa (@security S-04):
+    // so permite rebind automatico se a maquina ja estiver OFFLINE ou sem contato ha > 5 min.
+    const lastSeenMs = existing.last_seen_at ? new Date(existing.last_seen_at).getTime() : 0;
+    const isRecentlyActive =
+      existing.health_status !== 'OFFLINE' &&
+      lastSeenMs > 0 &&
+      Date.now() - lastSeenMs < 5 * 60 * 1000;
+    if (isRecentlyActive && existing.agent_uuid !== agentUuid) {
+      await this.recordAuditLog({
+        machineId: existing.id,
+        actionType: 'SECURITY_BLOCKED_ACTIVE_AGENT_REBIND',
+        ipAddress,
+        details: {
+          attemptedAgentUuid: agentUuid,
+          currentAgentUuid: existing.agent_uuid,
+          reason: 'Rebind bloqueado enquanto estação está ativa ONLINE.',
+        },
+      });
+      throw createDomainError(
+        'Reassociação bloqueada: equipamento encontra-se ativo online. Desconecte ou revogue a estação antes de reinstalar.',
+        409
+      );
+    }
+
     if (
       existing.smbios_uuid &&
       identity.smbios_uuid &&
@@ -1708,6 +1733,32 @@ class RmmRepository {
     if (idx === -1) return false;
     this.machines.splice(idx, 1);
     return true;
+  }
+
+  async setMachineRevoked(machineId, revoked = true) {
+    const id = Number(machineId);
+    const flag = revoked ? 1 : 0;
+    if (this.mode === 'mysql') {
+      const [result] = await this.pool.execute(
+        `UPDATE machines
+            SET is_revoked = ?,
+                health_status = CASE WHEN ? = 1 THEN 'OFFLINE' ELSE health_status END,
+                updated_at = NOW()
+          WHERE id = ?`,
+        [flag, flag, id]
+      );
+      if (Number(result?.affectedRows || 0) === 0) return null;
+      return this.findMachineById(id);
+    }
+
+    const machine = this.machines.find((m) => m.id === id);
+    if (!machine) return null;
+    machine.is_revoked = flag;
+    if (flag === 1) {
+      machine.health_status = 'OFFLINE';
+    }
+    machine.updated_at = new Date().toISOString();
+    return this.findMachineById(id);
   }
 
   async updateMachineLocation(machineId, { unitId, sectorId }) {

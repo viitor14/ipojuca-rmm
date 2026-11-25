@@ -4,6 +4,8 @@ const crypto = require("crypto");
 const repository = require("../database/repository");
 const {
   createJwtToken,
+  revokeJwtToken,
+  sanitizeMachine,
   hashPassword,
   verifyPassword,
   isLegacyPasswordHash,
@@ -11,6 +13,7 @@ const {
   requireAuth,
   requireRole,
   createRequireAgentAuth,
+  createRequireOperatorOrAgentAuth,
   asyncHandler,
   createRateLimiter,
 } = require("../middlewares/auth");
@@ -23,6 +26,7 @@ const path = require("path");
 
 const router = express.Router();
 const requireAgentAuth = createRequireAgentAuth(repository);
+const requireOperatorOrAgentAuth = createRequireOperatorOrAgentAuth(repository);
 
 // Filas em memória para sinalização rápida de polling do Super Agente Nativo (.exe)
 // (Histórico de chat e tarefas ficam persistidos no banco/repositório)
@@ -32,7 +36,7 @@ const pendingTasksByAgent = new Map();
 const taskResultWaiters = new Map();
 const heartbeatWaitersByAgent = new Map();
 
-const LATEST_AGENT_VERSION = "2.6.0-native-exe";
+const LATEST_AGENT_VERSION = "2.6.1-native-exe";
 
 function waitForLiveAgentTaskResult(taskId, timeoutMs = 4500) {
   return new Promise((resolve) => {
@@ -131,6 +135,22 @@ const refreshLimiter = createRateLimiter({
   windowMs: 60000,
   maxRequests: 30,
 });
+const commandLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 60,
+});
+const agentMessageLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 30,
+});
+const downloadLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 20,
+});
+const agentPendingLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 120,
+});
 
 // 1. Healthcheck da API e Observabilidade
 router.get("/health", (req, res) => {
@@ -147,7 +167,10 @@ router.get("/health", (req, res) => {
       "printers:catalog",
       "printers:discovery",
       "auth:session-me",
+      "auth:logout-revoke",
       "agent:authenticated-poll",
+      "agent:auth-download",
+      "agent:revoke",
       "tasks:honest-queue",
       "alerts:inactivity-24h",
     ],
@@ -155,7 +178,7 @@ router.get("/health", (req, res) => {
   });
 });
 
-// 2. Login de Operadores (RBAC) e Verificação de Sessão
+// 2. Login de Operadores (RBAC), Sessão e Logout com Revogação Real
 router.get("/auth/me", requireAuth, (req, res) => {
   return res.json({
     user: {
@@ -166,6 +189,18 @@ router.get("/auth/me", requireAuth, (req, res) => {
     },
   });
 });
+
+router.post("/auth/logout", requireAuth, asyncHandler(async (req, res) => {
+  const token = (req.headers.authorization || "").slice(7).trim();
+  revokeJwtToken(token);
+  await repository.recordAuditLog({
+    userId: req.user.id,
+    actionType: "AUTH_LOGOUT",
+    ipAddress: req.ip,
+    details: { role: req.user.role },
+  });
+  return res.json({ status: "logged_out" });
+}));
 
 router.post("/auth/login", authLimiter, asyncHandler(async (req, res) => {
   const { email, password } = req.body || {};
@@ -333,8 +368,10 @@ router.post("/heartbeat", heartbeatLimiter, async (req, res) => {
       }
     }
 
-    // Emite atualização imediata para o Digital Twin 3D via Socket.io e resolve waiters manuais
-    socketHub.broadcastToDashboard("machine:updated", updatedMachine);    notifyLiveAgentHeartbeat(String(agentUuid), updatedMachine);
+    // Emite atualização imediata sanitizada para o Digital Twin 3D via Socket.io e resolve waiters manuais
+    const safeUpdatedMachine = sanitizeMachine(updatedMachine);
+    socketHub.broadcastToDashboard("machine:updated", safeUpdatedMachine);
+    notifyLiveAgentHeartbeat(String(agentUuid), safeUpdatedMachine);
 
     let alertTriggered = null;
     if (evaluation.health_status === "CRITICAL") {
@@ -778,7 +815,7 @@ router.post("/machines/:id/refresh-telemetry", requireAuth, refreshLimiter, asyn
       return res.json({
         status: "ok",
         mode: "agent_live_pull_completed",
-        machine: liveMachine,
+        machine: sanitizeMachine(liveMachine),
         message: `Telemetria coletada em tempo real do agente (${liveMachine.ip_address} | CPU ${Number(liveMachine.cpu_usage_pct).toFixed(1)}% | RAM ${Number(liveMachine.ram_usage_pct).toFixed(1)}%).`,
       });
     }
@@ -788,7 +825,7 @@ router.post("/machines/:id/refresh-telemetry", requireAuth, refreshLimiter, asyn
       return res.json({
         status: "ok",
         mode: "snapshot_refreshed",
-        machine: updated,
+        machine: sanitizeMachine(updated),
         message: "Solicitação enfileirada para o Agente Windows em segundo plano.",
       });
     }
@@ -858,6 +895,7 @@ router.post(
   "/command",
   requireAuth,
   requireRole(["TECH_N1", "ADMIN_N2"]),
+  commandLimiter,
   async (req, res) => {
     try {
       const { machine_id, task_code, parameters = {}, reason } = req.body || {};
@@ -1066,12 +1104,12 @@ router.get(
   }),
 );
 
-// 11. Download Direto e Manifesto de Versão do Instalador Executável Nativo (.exe)
-router.get("/agent/version", (req, res) => {
+// 11. Download Autenticado e Manifesto de Versão do Instalador Executável Nativo (.exe)
+router.get("/agent/version", downloadLimiter, (req, res) => {
   return res.json(getAgentInstallerInfo());
 });
 
-router.get("/agent/download", (req, res) => {
+router.get("/agent/download", downloadLimiter, requireOperatorOrAgentAuth, (req, res) => {
   const exePath = path.join(__dirname, "../../public/IpojucaRMM-Setup.exe");
   if (!fs.existsSync(exePath)) {
     return res
@@ -1079,6 +1117,7 @@ router.get("/agent/download", (req, res) => {
       .json({ error: "Instalador IpojucaRMM-Setup.exe não encontrado no servidor." });
   }
   res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Cache-Control", "no-store");
   res.setHeader(
     "Content-Disposition",
     'attachment; filename="IpojucaRMM-Setup.exe"',
@@ -1158,7 +1197,7 @@ function compareAgentSemVer(a, b) {
 }
 
 // 12. Poll de Comandos e Mensagens Autenticado para o Super Agente Nativo (.exe)
-router.get("/agent/pending", requireAgentAuth, asyncHandler(async (req, res) => {
+router.get("/agent/pending", agentPendingLimiter, requireAgentAuth, asyncHandler(async (req, res) => {
   const machine = req.machine;
   const agentUuid = machine.agent_uuid;
   const currentAgentVersion = String(
@@ -1334,8 +1373,45 @@ router.post(
         sector_id: updated.sector_id,
       },
     });
-    socketHub.broadcastToDashboard("machine:updated", updated);
-    return res.json({ status: "ok", machine: updated });
+    const safeUpdated = sanitizeMachine(updated);
+    socketHub.broadcastToDashboard("machine:updated", safeUpdated);
+    return res.json({ status: "ok", machine: safeUpdated });
+  }),
+);
+
+// 12.07. Revogação / Reativação de Credencial de Agente Comprometido (@security S-07, restrito a ADMIN_N2)
+router.post(
+  "/machines/:id/revoke",
+  requireAuth,
+  requireRole(["ADMIN_N2"]),
+  asyncHandler(async (req, res) => {
+    const machineId = Number(req.params.id);
+    const revokeFlag = req.body?.revoked !== false;
+    const updated = await repository.setMachineRevoked(machineId, revokeFlag);
+    if (!updated) {
+      return res.status(404).json({ error: "Computador não encontrado." });
+    }
+    if (revokeFlag) {
+      socketHub.disconnectAgentByMachineId(machineId);
+      pendingTasksByAgent.delete(updated.agent_uuid);
+    }
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      machineId: updated.id,
+      actionType: revokeFlag ? "AGENT_REVOKED" : "AGENT_UNREVOKED",
+      ipAddress: req.ip,
+      details: {
+        hostname: updated.hostname,
+        agent_uuid: updated.agent_uuid,
+        reason: String(req.body?.reason || "").slice(0, 200),
+      },
+    });
+    const safeUpdated = sanitizeMachine(updated);
+    socketHub.broadcastToDashboard("machine:updated", safeUpdated);
+    return res.json({
+      status: revokeFlag ? "revoked" : "active",
+      machine: safeUpdated,
+    });
   }),
 );
 
@@ -1382,7 +1458,7 @@ router.delete(
 );
 
 // 13. Canal Super Agente Cliente -> Servidor (Autenticado)
-router.post("/agent/message", requireAgentAuth, asyncHandler(async (req, res) => {
+router.post("/agent/message", agentMessageLimiter, requireAgentAuth, asyncHandler(async (req, res) => {
   const messageText = String(req.body?.message || "").trim().slice(0, 500);
   const sender = String(req.body?.sender || req.machine.hostname || req.machine.agent_uuid)
     .trim()

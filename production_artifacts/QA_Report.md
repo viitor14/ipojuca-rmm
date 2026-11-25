@@ -867,3 +867,20 @@ Verificado no navegador (Vite dev em `10.200.33.30:5181` apontando para backend 
 | Suíte automatizada backend | `npm --prefix backend test` | **18/18 APROVADO** (`fail 0`, `6.63s`, validando `latest_version = "2.6.0-native-exe"` + SHA-256 64 hex). |
 
 **Parecer do Gate de Qualidade — Ciclo #57:** **APROVADO PELO `@qa`**.
+
+---
+
+## Ciclo #58 — Hardening de Segurança Pré-Frota (`v2.6.1-native-exe`) (`@security` + `@engineer` + `@frontend` + `@qa`)
+
+**Data:** 2026-11-25  
+**Escopo:** Remediação completa dos achados de código da auditoria pré-frota (`S-01` TLS 1.2, `S-02` anti-LPE CredUI, `S-03` remoção de `agent_token_hash` em broadcasts/HTTP, `S-04` download autenticado + bloqueio de rebind em máquina ativa `ONLINE` + `--enroll`, `S-05` DPAPI no `agent-identity.json`, `S-06` Nginx CSP + rate limiters, `S-07` `/machines/:id/revoke` + logout JWT, `S-09` higiene de memória/processos e marca `Pulso RMM`).
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Compilação `csc.exe` (`v2.6.1.0` + `System.Security.dll`) | `csc.exe /optimize+ /target:winexe ... /r:System.Security.dll agent/native/IpojucaAgent.cs` | **APROVADO** — `IpojucaRMM-Setup.exe` (`101.888 B`, `FileVersion = 2.6.1.0`, SHA-256 `1d623c41a7cd6559d56c8e7bb605f27533a7b939ad09099cb2adf0462c8b6d43`, `0` erros/avisos). |
+| Reflexão de Segurança no `.exe` (`S-02`, `S-05`, SemVer, Temp) | Reflexão .NET sobre `IpojucaRMM-Setup.exe` | **APROVADO** — `DPAPI_PREFIX=True`, `DPAPI_ROUNDTRIP=True`, `PROTECTED_DIR=False` (CredUI sem `runas` em `%LocalAppData%`), `SEMVER_UP=True` (`2.6.1 > 2.6.0`), `LIVE_TEMP=29.9°C`. |
+| Build Frontend (`vite build`) + Varredura de Segredos | `npm --prefix frontend run build` + `Select-String` | **APROVADO** — `673` módulos (`17.45s`), download autenticado via Blob em `App.jsx`, `SECRET_SCAN_HITS = 0`. |
+| Suíte Automatizada Backend (Testes #1 a #19) | `npm --prefix backend test` | **19/19 APROVADO** (`fail 0`, `7.78s`), incluindo Teste #10 (bloqueio `409` em rebind ativo) e novo **Teste #19** (`S-03`, `S-04`, `S-07`). |
+| Smoke Test HTTP Real de `/api/agent/download` | Servidor Express real (`fetch`) | **APROVADO** — `anon = 401`, `op (Bearer JWT) = 200 (101.888 B)`, `agt (X-Agent-Uuid/Token) = 200 (101.888 B)`. |
+
+**Parecer do Gate de Qualidade — Ciclo #58:** **APROVADO PELO `@qa` E `@security`**.

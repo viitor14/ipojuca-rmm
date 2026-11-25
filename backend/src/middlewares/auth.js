@@ -32,8 +32,45 @@ function createJwtToken(payload, expiresInSeconds = 28800) {
   return `${signingInput}.${signature}`;
 }
 
+// Blacklist em memoria de JWTs encerrados no logout ate sua expiracao natural (@security S-07)
+const revokedJwtTokens = new Map();
+const MAX_REVOKED_TOKENS = 10000;
+
+const revokedCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [k, expMs] of revokedJwtTokens.entries()) {
+    if (now > expMs) revokedJwtTokens.delete(k);
+  }
+}, 60000);
+revokedCleanupTimer.unref();
+
+function hashJwtForRevocation(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex');
+}
+
+function revokeJwtToken(token) {
+  if (!token || typeof token !== 'string') return false;
+  const decoded = verifyJwtToken(token);
+  const expMs = decoded && typeof decoded.exp === 'number'
+    ? decoded.exp * 1000
+    : Date.now() + 28800 * 1000;
+  if (revokedJwtTokens.size >= MAX_REVOKED_TOKENS) {
+    const oldest = revokedJwtTokens.keys().next().value;
+    if (oldest) revokedJwtTokens.delete(oldest);
+  }
+  revokedJwtTokens.set(hashJwtForRevocation(token), expMs);
+  return true;
+}
+
+function sanitizeMachine(machine) {
+  if (!machine || typeof machine !== 'object') return machine;
+  const { agent_token_hash, ...safe } = machine;
+  return safe;
+}
+
 function verifyJwtToken(token) {
   if (!token || typeof token !== 'string') return null;
+  if (revokedJwtTokens.has(hashJwtForRevocation(token))) return null;
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   const [encodedHeader, encodedBody, signature] = parts;
@@ -193,6 +230,30 @@ function createRequireAgentAuth(repository) {
   };
 }
 
+/**
+ * Autenticacao hibrida para download de artefatos do Agente (@security S-04):
+ * aceita Operador autenticado (Bearer JWT) OU Agente Windows autenticado (X-Agent-Uuid + X-Agent-Token).
+ */
+function createRequireOperatorOrAgentAuth(repository) {
+  const requireAgentAuth = createRequireAgentAuth(repository);
+  return (req, res, next) => {
+    if (process.env.ALLOW_PUBLIC_AGENT_DOWNLOAD === '1') {
+      return next();
+    }
+    const authHeader = req.headers.authorization || '';
+    if (authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      const decoded = verifyJwtToken(token);
+      if (decoded) {
+        req.user = decoded;
+        return next();
+      }
+      return res.status(401).json({ error: 'Sessão expirada ou token inválido.' });
+    }
+    return requireAgentAuth(req, res, next);
+  };
+}
+
 /** Wrapper para rotas async no Express 4: evita UnhandledPromiseRejection */
 function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -243,6 +304,8 @@ function createRateLimiter({ windowMs = 60000, maxRequests = 120 } = {}) {
 module.exports = {
   createJwtToken,
   verifyJwtToken,
+  revokeJwtToken,
+  sanitizeMachine,
   hashPassword,
   verifyPassword,
   isLegacyPasswordHash,
@@ -250,6 +313,7 @@ module.exports = {
   requireAuth,
   requireRole,
   createRequireAgentAuth,
+  createRequireOperatorOrAgentAuth,
   asyncHandler,
   createRateLimiter,
 };

@@ -32,6 +32,38 @@ export const rmmApi = {
   getMe(token) {
     return request('/api/auth/me', { token });
   },
+  logout(token) {
+    if (!token) return Promise.resolve();
+    return request('/api/auth/logout', { method: 'POST', token }).catch(() => {});
+  },
+  async downloadAgentInstaller(token) {
+    const res = await fetch(`${API_BASE}/api/agent/download`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const err = new Error(data.error || `Falha ao baixar instalador (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'IpojucaRMM-Setup.exe';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 4000);
+  },
+  revokeMachine(token, machineId, revoked = true, reason = '') {
+    return request(`/api/machines/${machineId}/revoke`, {
+      method: 'POST',
+      token,
+      body: { revoked, reason },
+    });
+  },
   getUnits(token) {
     return request('/api/units', { token });
   },
