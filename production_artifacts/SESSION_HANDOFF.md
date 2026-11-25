@@ -10,7 +10,7 @@
 
 ---
 
-## 1. Status Atual do Projeto (Atualizado no Ciclo #52 — 2026-11-24)
+## 1. Status Atual do Projeto (Atualizado no Ciclo #54 — 2026-11-25)
 
 1. **Implantação na VPS (`31.97.86.253` / `root@srv912524`):**
    - Repositório Oficial: `https://github.com/viitor14/ipojuca-rmm.git` (branch `main`, produção ativa no commit `ca896fd` após deploy bem-sucedido do Ciclo #48 + correção 3D da mesa e `docker-compose.yml`).
@@ -39,11 +39,13 @@
    - O diretório `agent/src/` permanece apenas como módulo de referência/testes automatizados.
 4. **Banco de Dados & Migrations (`infrastructure/mysql/`):**
    - Migrations `02` a `08` aplicadas com sucesso em produção na VPS com controle em `schema_migrations` via `infrastructure/scripts/deploy_rmm_update.sh`.
-5. **Frontend, Digital Twin 3D e Modo Pixel Art (`frontend/src/`):**
-   - Lazy loading (`React.lazy` + `Suspense`) de `DigitalTwin3D` e `ModelShowcase` reduzindo o chunk inicial em 74%; modelo `workstation_pc.glb` corrigido (monitor orientado corretamente, sem impressora sobre a mesa, LED centralizado).
-6. **Qualidade & Segurança Verificados (Ciclo #50):**
-   - `npm --prefix backend test`: **18/18 aprovados** (`fail 0`, `3.83s`).
-   - Compilação `csc.exe` (`v2.5.0.0`) + reflexão `WindowsAdminAuthenticator` + instanciação `AdminAuthDialog`/`SuperAgentForm`: **APROVADOS**.
+5. **Frontend, Digital Twin 3D e Modo Pixel Art (`frontend/src/` — Ciclo #53 pronto localmente):**
+   - Lazy loading (`React.lazy` + `Suspense`) de `DigitalTwin3D` e `ModelShowcase`; modelo `workstation_pc.glb` corrigido (monitor orientado corretamente, sem impressora sobre a mesa, LED centralizado).
+   - **Redesign Editorial do Dashboard & Tela de Login (Ciclos #53 e #54 — skill `design-taste-frontend`):** barra superior unificada (`54px`) com seletor de unidades sem cortes + avatar de operador, controles de visualização `Pixel Art / 3D` centralizados (incluindo camadas 3D apenas quando em modo 3D), trilho esquerdo contínuo e recolhível sem caixas aninhadas, nova biblioteca de ícones SVG inline (`Icons.jsx`, zero emojis), gaveta de diagnóstico com faixa unificada de métricas (`tabular-nums`), chat modernizado em balões destacando o nome real do usuário AD (`v2.5.1`) e nova tela de Login em duas colunas com diagrama vetorial de topologia, campos `44px`, toggle de exibir/ocultar senha e indicador real via `GET /api/health`. Skill de terceiros ignorada em `.gitignore` (restaurável via `skills-lock.json`).
+6. **Qualidade & Segurança Verificados (Ciclos #53 e #54):**
+   - `npm --prefix frontend run build`: **APROVADO** (`673` módulos, `0` segredos vazados em `frontend/dist/`).
+   - Inspeção visual em navegador headless real (Dashboard `1440×900`/`1280×720` e Login `1440×900`/`1280×720`/`390×844`): **APROVADA** (`0` erros JS, `0` overflow horizontal).
+   - `npm --prefix backend test`: **18/18 aprovados** (`fail 0`).
 
 ---
 

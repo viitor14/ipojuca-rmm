@@ -83,10 +83,10 @@ const ModalCard = styled.div`
   width: 100%;
   max-width: 560px;
   max-height: 90vh;
-  background: #ffffff;
-  border: 1px solid #e4e8e3;
-  border-radius: 10px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.16);
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.lg};
+  box-shadow: ${({ theme }) => theme.shadows.lg};
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -331,34 +331,44 @@ const FooterActions = styled.div`
 `;
 
 const ActionBtn = styled.button`
-  padding: 8px 14px;
-  border-radius: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 7px;
   font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
   border: 1px solid
-    ${({ $variant }) =>
+    ${({ $variant, theme }) =>
       $variant === 'primary'
-        ? '#52796B'
+        ? theme.colors.brandPrimary
         : $variant === 'danger'
-          ? '#DC2626'
-          : '#CBD3CB'};
-  background: ${({ $variant }) =>
+          ? theme.colors.status.CRITICAL
+          : theme.colors.borderStrong};
+  background: ${({ $variant, theme }) =>
     $variant === 'primary'
-      ? '#52796B'
+      ? theme.colors.brandPrimary
       : $variant === 'danger'
-        ? '#DC2626'
-        : '#FFFFFF'};
-  color: ${({ $variant }) =>
-    $variant === 'primary' || $variant === 'danger' ? '#FFFFFF' : '#242925'};
+        ? theme.colors.status.CRITICAL
+        : theme.colors.bgSurface};
+  color: ${({ $variant, theme }) =>
+    $variant === 'primary' || $variant === 'danger'
+      ? '#FFFFFF'
+      : theme.colors.textPrimary};
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   &:hover:not(:disabled) {
-    opacity: 0.92;
+    filter: brightness(0.95);
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.985);
   }
 
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: not-allowed;
   }
 `;

@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import styled, { ThemeProvider, keyframes } from 'styled-components';
+import styled, { ThemeProvider } from 'styled-components';
 import { theme, STATUS_LABELS, fixTextEncoding, isAgentOutdated } from './styles/theme';
 import { GlobalStyles } from './styles/GlobalStyles';
 import { rmmApi, connectDashboardSocket } from './services/api';
@@ -8,16 +8,52 @@ import { LoginScreen } from './components/LoginScreen';
 import { getReceptionVariant } from './components/twin/receptionThemes';
 import { DiagnosticDrawer } from './components/DiagnosticDrawer';
 import { UnitSectorManagerModal } from './components/UnitSectorManagerModal';
+import {
+  BrandMark,
+  IconPlus,
+  IconEdit,
+  IconTrash,
+  IconChevronDown,
+  IconChevronLeft,
+  IconRotateCcw,
+  IconDownload,
+  IconUploadCloud,
+  IconLogout,
+  IconSearch,
+  IconPrinter,
+  IconLayers,
+  IconTag,
+  IconPanelLeft,
+  IconCube,
+  IconGrid,
+  IconAlertTriangle,
+} from './components/Icons';
 
 const DigitalTwin3D = lazy(() =>
   import('./components/DigitalTwin3D').then((m) => ({ default: m.DigitalTwin3D }))
 );
 const ModelShowcase = lazy(() => import('./components/twin/ModelShowcase'));
 
-const pulseDot = keyframes`
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.35; transform: scale(0.85); }
-`;
+const ROLE_DISPLAY = {
+  ADMIN_N2: 'Admin N2',
+  TECH_N1: 'Suporte N1',
+  VIEWER: 'Gestão',
+};
+
+function formatOperatorName(name) {
+  return String(name || 'Operador')
+    .replace(/\s*\((Admin\s*N2|Suporte\s*N1|Tech\s*N1|Gest[aã]o|Viewer)\)\s*$/i, '')
+    .trim();
+}
+
+function getInitials(name) {
+  const parts = formatOperatorName(name)
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return 'TI';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
 
 const HudOverlay = styled.div`
   position: fixed;
@@ -26,297 +62,339 @@ const HudOverlay = styled.div`
   z-index: 10;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 14px 18px;
 `;
 
-const TopCommandDeck = styled.header`
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  pointer-events: none;
-`;
-
-const TopHeaderRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  pointer-events: none;
-  flex-wrap: wrap;
-`;
-
-const CenterControlShell = styled.div`
-  align-self: center;
+const TopBar = styled.header`
   pointer-events: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(10px);
-  border: 1px solid #e4e8e3;
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  padding: ${({ $collapsed }) => ($collapsed ? '4px 10px' : '5px 8px')};
-  max-width: 100%;
-  transition: all 0.2s ease;
-`;
-
-const ControlDivider = styled.span`
-  width: 1px;
-  height: 18px;
-  background: #e4e8e3;
-  margin: 0 3px;
-  display: inline-block;
-`;
-
-const MastheadPod = styled.div`
-  pointer-events: auto;
-  background: #ffffff;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-  padding: 8px 14px;
+  height: 54px;
+  flex-shrink: 0;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  padding: 0 18px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 16px;
+`;
 
-  .brand-group {
+const BrandCluster = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+
+  .brand-copy {
     display: flex;
     flex-direction: column;
+    line-height: 1.15;
   }
 
   .brand-title {
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     font-weight: 700;
-    color: #242925;
-    letter-spacing: -0.01em;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    letter-spacing: -0.02em;
+    white-space: nowrap;
   }
 
-  .brand-sub {
-    font-size: 0.68rem;
-    color: #737b75;
-    display: flex;
+  .brand-status {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.textSecondary};
     margin-top: 1px;
+    white-space: nowrap;
   }
 `;
 
-const LiveBeacon = styled.span`
-  width: 7px;
-  height: 7px;
+const StatusDot = styled.span`
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: ${({ $online }) => ($online ? '#2D6A4F' : '#D97706')};
+  background: ${({ $color }) => $color || '#2D6A4F'};
   display: inline-block;
-  animation: ${pulseDot} 2s infinite;
+  flex-shrink: 0;
 `;
 
-const UnitSwitcherPod = styled.div`
-  pointer-events: auto;
+const UnitNavCluster = styled.nav`
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 6px;
+`;
+
+const UnitTabsScroller = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   gap: 4px;
-  background: #ffffff;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-  max-width: 100%;
-`;
+  overflow-x: auto;
+  padding: 2px 0;
 
-const UnitActionBtn = styled.button`
-  background: ${({ $tone }) =>
-    $tone === 'primary' ? 'rgba(82, 121, 107, 0.12)' : '#f4f5f2'};
-  color: ${({ $tone }) => ($tone === 'primary' ? '#2D6A4F' : '#52796B')};
-  border: 1px solid
-    ${({ $tone }) => ($tone === 'primary' ? 'rgba(82, 121, 107, 0.35)' : '#e4e8e3')};
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.68rem;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: ${({ $tone }) =>
-      $tone === 'primary' ? 'rgba(82, 121, 107, 0.2)' : '#ecefeb'};
-    color: #242925;
+  &::-webkit-scrollbar {
+    height: 3px;
   }
 `;
 
-const UnitSwitchBtn = styled.button`
-  background: ${({ $active }) => ($active ? '#ECEFEB' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#242925' : '#737B75')};
-  border: 1px solid ${({ $active }) => ($active ? '#CBD3CB' : 'transparent')};
-  border-radius: 6px;
-  padding: 5px 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s ease;
-
-  &:hover {
-    color: #242925;
-    background: #f4f5f2;
-  }
-
-  .u-code {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.58rem;
-    font-weight: 700;
-    color: #52796b;
-    display: block;
-  }
-
-  .u-name {
-    font-size: 0.74rem;
-    font-weight: 600;
-    display: block;
-    margin-top: 1px;
-  }
-`;
-
-const UserSessionPod = styled.div`
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-  padding: 4px 6px;
-`;
-
-const CamModeBtn = styled.button`
-  padding: 6px 10px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.7rem;
-  font-weight: 600;
-  cursor: pointer;
-  border-radius: 6px;
-  background: ${({ $active }) => ($active ? '#ECEFEB' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#242925' : '#737B75')};
-  border: 1px solid ${({ $active }) => ($active ? '#CBD3CB' : 'transparent')};
-  transition: all 0.15s ease;
-
-  &:hover {
-    color: #242925;
-    background: #f4f5f2;
-  }
-`;
-
-const UserSessionPill = styled.div`
+const UnitManageGroup = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  background: #f4f5f2;
-  border: 1px solid #e4e8e3;
-  border-radius: 6px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.68rem;
-  color: #242925;
+  gap: 4px;
+  flex-shrink: 0;
+`;
 
-  .u-role {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.6rem;
-    font-weight: 700;
-    color: #52796b;
+const UnitTabBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  max-width: 210px;
+  flex-shrink: 0;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.borderStrong : 'transparent'};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.bgSurfaceSubtle : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.textPrimary : theme.colors.textSecondary};
+  font-size: 0.76rem;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  .u-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .u-logout {
-    background: #ffffff;
-    border: 1px solid #cbd3cb;
-    border-radius: 4px;
-    padding: 2px 7px;
-    font-size: 0.64rem;
-    font-weight: 700;
-    color: #737b75;
-    cursor: pointer;
+  &:hover {
+    background: ${({ theme }) => theme.colors.bgSurfaceHover};
+    color: ${({ theme }) => theme.colors.textPrimary};
+  }
 
-    &:hover {
-      border-color: #dc2626;
-      color: #dc2626;
-      background: #fef2f2;
+  &:active {
+    transform: scale(0.985);
+  }
+
+  .u-count {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-variant-numeric: tabular-nums;
+    font-size: 0.68rem;
+    font-weight: 600;
+    flex-shrink: 0;
+    color: ${({ $active, theme }) =>
+      $active ? theme.colors.brandPrimary : theme.colors.textMuted};
+    background: ${({ $active }) =>
+      $active ? 'rgba(45, 106, 79, 0.1)' : 'rgba(30, 36, 32, 0.05)'};
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+
+  @media (max-width: 1360px) {
+    max-width: 165px;
+    padding: 0 8px;
+  }
+`;
+
+const SubtleIconBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: ${({ $iconOnly }) => ($iconOnly ? '0 8px' : '0 10px')};
+  border-radius: ${({ theme }) => theme.radius.sm};
+  border: 1px solid
+    ${({ $accent, theme }) =>
+      $accent ? 'rgba(45, 106, 79, 0.26)' : theme.colors.borderSubtle};
+  background: ${({ $accent, theme }) =>
+    $accent ? theme.colors.brandPrimarySubtle : theme.colors.bgSurface};
+  color: ${({ $accent, $danger, theme }) =>
+    $danger
+      ? theme.colors.status.CRITICAL
+      : $accent
+        ? theme.colors.brandPrimary
+        : theme.colors.textSecondary};
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &:hover:not(:disabled) {
+    background: ${({ $accent, $danger, theme }) =>
+      $danger
+        ? 'rgba(200, 30, 30, 0.08)'
+        : $accent
+          ? 'rgba(45, 106, 79, 0.16)'
+          : theme.colors.bgSurfaceHover};
+    border-color: ${({ $danger, theme }) =>
+      $danger ? 'rgba(200, 30, 30, 0.35)' : theme.colors.borderStrong};
+    color: ${({ $danger, $accent, theme }) =>
+      $danger
+        ? theme.colors.status.CRITICAL
+        : $accent
+          ? theme.colors.brandPrimaryHover
+          : theme.colors.textPrimary};
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const TopRightCluster = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+
+  @media (max-width: 1120px) {
+    .hide-compact {
+      display: none;
     }
   }
 `;
 
-const AlertMiniRow = styled.div`
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: ${({ $severity }) =>
-    $severity === 'CRITICAL' ? '#FEF2F2' : '#FFFBEB'};
-  border: 1px solid
-    ${({ $severity }) => ($severity === 'CRITICAL' ? '#FECACA' : '#FDE68A')};
-  margin-bottom: 5px;
-  font-size: 0.68rem;
-  line-height: 1.35;
-
-  .a-top {
-    display: flex;
-    justify-content: space-between;
-    font-weight: 700;
-    color: ${({ $severity }) =>
-      $severity === 'CRITICAL' ? '#991B1B' : '#92400E'};
-  }
-
-  .a-msg {
-    color: #3f4741;
-    margin-top: 2px;
-  }
-
-  .a-meta {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.6rem;
-    color: #737b75;
-    margin-top: 2px;
-  }
+const HairlineV = styled.span`
+  width: 1px;
+  height: 20px;
+  background: ${({ theme }) => theme.colors.borderSubtle};
+  display: inline-block;
+  flex-shrink: 0;
 `;
 
-const ConfirmBackdrop = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: rgba(36, 41, 37, 0.42);
-  backdrop-filter: blur(4px);
-  display: flex;
+const UserMenuChip = styled.div`
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 18px;
+  gap: 8px;
+  padding: 3px 4px 3px 5px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+
+  .u-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: rgba(45, 106, 79, 0.12);
+    color: ${({ theme }) => theme.colors.brandPrimary};
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: -0.02em;
+  }
+
+  .u-meta {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+    padding-right: 4px;
+  }
+
+  .u-name {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    max-width: 132px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .u-role {
+    font-size: 0.66rem;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.textSecondary};
+  }
 `;
 
-const ConfirmCard = styled.div`
-  width: 100%;
-  max-width: 460px;
-  background: #ffffff;
-  border: 1px solid #e4e8e3;
-  border-radius: 10px;
-  padding: 18px 20px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.14);
+const WorkspaceFrame = styled.div`
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  color: #242925;
+  justify-content: space-between;
+  padding: 12px 16px 14px;
+  gap: 10px;
+  pointer-events: none;
 `;
 
-const StageFallback = styled.div`
-  position: fixed;
-  inset: 0;
-  background: #eaece8;
+const ViewportToolbarRow = styled.div`
   display: flex;
-  align-items: center;
   justify-content: center;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.8rem;
-  color: #52796b;
+  align-items: center;
+  pointer-events: none;
+  flex-shrink: 0;
+`;
+
+const ViewportControlPill = styled.div`
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  background: ${({ theme }) => theme.colors.bgGlassHeavy};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.md};
+  box-shadow: ${({ theme }) => theme.shadows.sm};
+  padding: 4px;
+  max-width: 100%;
+`;
+
+const SegmentedBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.borderStrong : 'transparent'};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.bgSurfaceSubtle : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.textPrimary : theme.colors.textSecondary};
+  font-size: 0.74rem;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.bgSurfaceHover};
+    color: ${({ theme }) => theme.colors.textPrimary};
+  }
+
+  &:active {
+    transform: scale(0.985);
+  }
 `;
 
 const MiddleWorkspace = styled.div`
@@ -325,23 +403,45 @@ const MiddleWorkspace = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-top: 10px;
-  margin-bottom: 10px;
+  gap: 14px;
   pointer-events: none;
   overflow: hidden;
 `;
 
-const LeftRadarColumn = styled.div`
-  width: 290px;
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+const LeftRailToggleChip = styled.button`
   pointer-events: auto;
-  overflow-y: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.md};
+  box-shadow: ${({ theme }) => theme.shadows.sm};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  & > * {
-    flex-shrink: 0;
+  &:hover {
+    transform: translateY(-1px);
+    border-color: ${({ theme }) => theme.colors.borderStrong};
+    box-shadow: ${({ theme }) => theme.shadows.md};
+  }
+
+  .alert-pill {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #991b1b;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    padding: 1px 6px;
+    border-radius: 999px;
   }
 
   @media (max-width: 960px) {
@@ -349,158 +449,298 @@ const LeftRadarColumn = styled.div`
   }
 `;
 
-const RadarCard = styled.div`
-  background: #ffffff;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-  padding: 12px 14px;
+const LeftRailPanel = styled.aside`
+  pointer-events: auto;
+  width: 280px;
+  max-height: 100%;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.lg};
+  box-shadow: ${({ theme }) => theme.shadows.sm};
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 
-  .card-tag {
-    font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: #737b75;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  @media (max-width: 960px) {
+    display: none;
   }
 `;
 
-const KpiMatrix = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+const RailSection = styled.section`
+  padding: 14px 16px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+
+  &:last-child {
+    border-bottom: none;
+  }
 `;
 
-const KpiCell = styled.div`
-  background: #f8faf8;
-  border: 1px solid #e4e8e3;
-  border-radius: 6px;
-  padding: 6px 4px;
-  text-align: center;
+const RailSectionHead = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  .sec-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    letter-spacing: -0.01em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sec-meta {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-variant-numeric: tabular-nums;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.textSecondary};
+  }
+
+  .sec-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+`;
+
+const KpiStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+`;
+
+const KpiColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding-top: 7px;
+  border-top: 2px solid ${({ $color }) => $color};
 
   .num {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.15rem;
     font-weight: 700;
-    color: ${({ $color }) => $color};
-    line-height: 1.1;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    line-height: 1.15;
   }
+
   .lbl {
-    font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.58rem;
-    font-weight: 600;
-    color: #737b75;
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.textSecondary};
     margin-top: 2px;
   }
 `;
 
-const LayerToggleGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
-`;
-
-const LayerChip = styled.button`
-  padding: 6px 8px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.66rem;
-  font-weight: 600;
-  border-radius: 6px;
-  cursor: pointer;
-  background: ${({ $on }) => ($on ? '#ECEFEB' : '#FFFFFF')};
-  color: ${({ $on }) => ($on ? '#242925' : '#737B75')};
-  border: 1px solid ${({ $on }) => ($on ? '#CBD3CB' : '#E4E8E3')};
-  display: flex;
-  justify-content: space-between;
+const TextActionBtn = styled.button`
+  display: inline-flex;
   align-items: center;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: #f4f5f2;
-    color: #242925;
-  }
-`;
-
-const SectorMiniRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: ${({ $selected }) => ($selected ? '#ECEFEB' : '#f8faf8')};
-  border: 1px solid ${({ $selected }) => ($selected ? '#52796B' : '#e4e8e3')};
-  border-radius: 6px;
-  margin-bottom: 5px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.7rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: ${({ $selected }) => ($selected ? '#E2E6E1' : '#f0f3ef')};
-    border-color: #52796b;
-  }
-
-  .s-name {
-    color: #242925;
-    font-weight: 600;
-  }
-  .s-meta {
-    color: #737b75;
-    font-size: 0.64rem;
-  }
-  .s-right {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex-shrink: 0;
-  }
-`;
-
-const InlineMiniBtn = styled.button`
-  background: #ffffff;
-  border: 1px solid #d6dcd6;
-  color: ${({ $danger }) => ($danger ? '#DC2626' : '#52796B')};
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 2px 4px;
   border-radius: 4px;
-  width: 20px;
-  height: 20px;
-  font-size: 0.66rem;
-  font-weight: 700;
-  line-height: 1;
+  color: ${({ theme }) => theme.colors.brandPrimary};
+  font-size: 0.72rem;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.brandPrimarySubtle};
+  }
+`;
+
+const RailIconBtn = styled.button`
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${({ $danger, theme }) =>
+    $danger ? theme.colors.status.CRITICAL : theme.colors.textSecondary};
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  transition: all 0.12s ease;
+  cursor: pointer;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   &:hover {
-    background: ${({ $danger }) => ($danger ? '#FEF2F2' : '#ECEFEB')};
-    border-color: ${({ $danger }) => ($danger ? '#DC2626' : '#52796B')};
+    background: ${({ $danger, theme }) =>
+      $danger ? 'rgba(200, 30, 30, 0.08)' : theme.colors.bgSurfaceHover};
+    color: ${({ $danger, theme }) =>
+      $danger ? theme.colors.status.CRITICAL : theme.colors.textPrimary};
   }
 `;
 
-const CardAddChipBtn = styled.button`
-  background: rgba(82, 121, 107, 0.12);
-  border: 1px solid rgba(82, 121, 107, 0.35);
-  color: #2d6a4f;
-  border-radius: 5px;
-  padding: 2px 7px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.62rem;
-  font-weight: 700;
+const SectorRowList = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const SectorListRow = styled.div`
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 10px;
+  border-bottom: 1px solid rgba(30, 36, 32, 0.06);
+  border-radius: 6px;
+  background: ${({ $selected, theme }) =>
+    $selected ? theme.colors.brandPrimarySubtle : 'transparent'};
   cursor: pointer;
-  text-transform: none;
-  letter-spacing: 0;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 2.5px;
+    border-radius: 2px;
+    background: ${({ $selected, theme }) =>
+      $selected ? theme.colors.brandPrimary : 'transparent'};
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
 
   &:hover {
-    background: rgba(82, 121, 107, 0.22);
+    background: ${({ $selected, theme }) =>
+      $selected ? 'rgba(45, 106, 79, 0.13)' : theme.colors.bgSurfaceSubtle};
   }
+
+  .s-info {
+    min-width: 0;
+  }
+
+  .s-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .s-code {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.68rem;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    margin-top: 1px;
+  }
+
+  .s-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .s-count {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-variant-numeric: tabular-nums;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(30, 36, 32, 0.05);
+  }
+
+  .s-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    opacity: 0.45;
+    transition: opacity 150ms ease;
+  }
+
+  &:hover .s-controls,
+  &:focus-within .s-controls {
+    opacity: 1;
+  }
+`;
+
+const AlertRow = styled.button`
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-left: 2.5px solid
+    ${({ $severity, theme }) =>
+      $severity === 'CRITICAL'
+        ? theme.colors.status.CRITICAL
+        : theme.colors.status.WARNING};
+  border-radius: 0 6px 6px 0;
+  background: ${({ $severity }) =>
+    $severity === 'CRITICAL'
+      ? 'rgba(200, 30, 30, 0.05)'
+      : 'rgba(180, 83, 9, 0.05)'};
+  margin-bottom: 6px;
+  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  &:hover {
+    background: ${({ $severity, $clickable }) =>
+      !$clickable
+        ? undefined
+        : $severity === 'CRITICAL'
+          ? 'rgba(200, 30, 30, 0.09)'
+          : 'rgba(180, 83, 9, 0.09)'};
+  }
+
+  .a-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.textPrimary};
+  }
+
+  .a-tag {
+    font-size: 0.66rem;
+    font-weight: 700;
+    color: ${({ $severity, theme }) =>
+      $severity === 'CRITICAL'
+        ? theme.colors.status.CRITICAL
+        : theme.colors.status.WARNING};
+    white-space: nowrap;
+  }
+
+  .a-msg {
+    font-size: 0.74rem;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    line-height: 1.38;
+    margin-top: 2px;
+  }
+
+  .a-meta {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.66rem;
+    color: ${({ theme }) => theme.colors.textMuted};
+    margin-top: 3px;
+  }
+`;
+
+const EmptyNote = styled.p`
+  font-size: 0.76rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  line-height: 1.45;
 `;
 
 const DockShell = styled.div`
@@ -516,45 +756,42 @@ const DockToggleBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
-  padding: 0 16px;
+  height: 26px;
+  padding: 0 14px;
   margin-bottom: -1px;
-  background: #ffffff;
-  color: #52796b;
-  border: 1px solid #e4e8e3;
-  border-bottom: ${({ $collapsed }) =>
-    $collapsed ? '1px solid #e4e8e3' : '1px solid transparent'};
-  border-radius: 6px 6px 0 0;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.68rem;
-  font-weight: 700;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  color: ${({ theme }) => theme.colors.textSecondary};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-bottom: ${({ $collapsed, theme }) =>
+    $collapsed ? `1px solid ${theme.colors.borderSubtle}` : '1px solid transparent'};
+  border-radius: 8px 8px 0 0;
+  font-size: 0.74rem;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.03);
-  transition: all 0.15s ease;
+  transition: color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   .arrow {
-    display: inline-block;
-    font-size: 0.72rem;
-    transition: transform 0.25s ease;
+    display: inline-flex;
+    transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
     transform: rotate(${({ $collapsed }) => ($collapsed ? '180deg' : '0deg')});
   }
 
   &:hover {
-    background: #f8faf8;
-    color: #242925;
+    background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+    color: ${({ theme }) => theme.colors.textPrimary};
   }
 `;
 
 const BottomMatrixDock = styled.footer`
   pointer-events: auto;
   align-self: stretch;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  background: ${({ theme }) => theme.colors.bgGlassHeavy};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.lg};
+  box-shadow: ${({ theme }) => theme.shadows.sm};
   padding: ${({ $collapsed }) => ($collapsed ? '0 14px' : '10px 14px')};
-  max-height: ${({ $collapsed }) => ($collapsed ? '0px' : '195px')};
+  max-height: ${({ $collapsed }) => ($collapsed ? '0px' : '168px')};
   opacity: ${({ $collapsed }) => ($collapsed ? 0 : 1)};
   border-width: ${({ $collapsed }) => ($collapsed ? '0' : '1px')};
   visibility: ${({ $collapsed }) => ($collapsed ? 'hidden' : 'visible')};
@@ -563,94 +800,158 @@ const BottomMatrixDock = styled.footer`
   gap: 10px;
   overflow-x: auto;
   overflow-y: hidden;
-  transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease,
-    visibility 0.25s;
+  transition: max-height 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 180ms ease,
+    visibility 220ms;
 `;
 
 const DockControlsBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding-right: 12px;
-  border-right: 1px solid #e4e8e3;
-  min-width: 190px;
+  gap: 6px;
+  padding-right: 14px;
+  border-right: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  min-width: 204px;
+  flex-shrink: 0;
 
   .dock-title {
-    font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    color: #242925;
+    color: ${({ theme }) => theme.colors.textPrimary};
     white-space: nowrap;
+    letter-spacing: -0.01em;
+  }
+
+  .dock-sub {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    font-variant-numeric: tabular-nums;
+  }
+
+  .search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    color: ${({ theme }) => theme.colors.textMuted};
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 9px;
+    pointer-events: none;
+    display: inline-flex;
   }
 
   .dock-search {
-    background: #f4f5f2;
-    border: 1px solid #e4e8e3;
-    border-radius: 6px;
-    color: #242925;
-    font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.7rem;
-    padding: 5px 8px;
-    outline: none;
+    width: 100%;
+    height: 32px;
+    background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+    border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+    border-radius: 7px;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    font-size: 0.76rem;
+    padding: 0 10px 0 30px;
+    transition: border-color 140ms ease, background 140ms ease;
+
+    &::placeholder {
+      color: ${({ theme }) => theme.colors.textMuted};
+    }
 
     &:focus {
-      border-color: #52796b;
-      background: #ffffff;
+      outline: none;
+      border-color: ${({ theme }) => theme.colors.brandPrimary};
+      background: ${({ theme }) => theme.colors.bgSurface};
+      box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
     }
   }
 `;
 
 const NodeKeycap = styled.button`
-  min-width: 175px;
-  padding: 8px 11px;
-  background: ${({ $selected }) => ($selected ? '#F2F6F4' : '#FFFFFF')};
-  border: 1px solid ${({ $selected }) => ($selected ? '#52796B' : '#E4E8E3')};
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-  color: #242925;
+  min-width: 188px;
+  flex-shrink: 0;
+  padding: 9px 12px;
+  background: ${({ $selected, $inact }) =>
+    $selected ? '#F1F7F4' : $inact ? '#FFFDF5' : '#FFFFFF'};
+  border: 1px solid
+    ${({ $selected, $inact, theme }) =>
+      $selected
+        ? theme.colors.brandPrimary
+        : $inact
+          ? 'rgba(180, 83, 9, 0.45)'
+          : theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.md};
+  color: ${({ theme }) => theme.colors.textPrimary};
   text-align: left;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   &:hover {
-    border-color: #52796b;
-    transform: translateY(-1px);
+    border-color: ${({ theme }) => theme.colors.brandPrimary};
+    transform: translateY(-2px);
+    box-shadow: ${({ theme }) => theme.shadows.md};
+  }
+
+  &:active {
+    transform: translateY(0) scale(0.985);
   }
 
   .n-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.64rem;
-    color: #737b75;
-    font-weight: 600;
+    gap: 8px;
+    font-size: 0.7rem;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    font-weight: 500;
   }
 
-  .n-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: ${({ $color }) => $color};
-    display: inline-block;
-    margin-right: 4px;
+  .n-sector {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.68rem;
   }
 
   .n-host {
-    font-size: 0.8rem;
+    font-size: 0.84rem;
     font-weight: 700;
-    color: #242925;
-    margin: 3px 0 2px;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    letter-spacing: -0.01em;
+    margin: 4px 0 2px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 6px;
+  }
+
+  .n-prn {
+    display: inline-flex;
+    align-items: center;
+    color: ${({ $prnOk, theme }) =>
+      $prnOk ? theme.colors.brandPrimary : theme.colors.status.CRITICAL};
+    opacity: ${({ $prnOk }) => ($prnOk ? 0.72 : 1)};
   }
 
   .n-metrics {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.64rem;
-    color: #737b75;
-    margin-bottom: 5px;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.68rem;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    margin-bottom: 4px;
+  }
+
+  .n-activity {
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .n-bars {
@@ -661,14 +962,134 @@ const NodeKeycap = styled.button`
 
   .bar-track {
     height: 3px;
-    background: #e4e8e3;
+    background: rgba(30, 36, 32, 0.08);
     border-radius: 2px;
     overflow: hidden;
     i {
       display: block;
       height: 100%;
+      border-radius: 2px;
     }
   }
+`;
+
+const ConfirmBackdrop = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(30, 36, 32, 0.42);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+`;
+
+const ConfirmCard = styled.div`
+  width: 100%;
+  max-width: 460px;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.lg};
+  padding: 22px 24px;
+  box-shadow: ${({ theme }) => theme.shadows.lg};
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: ${({ theme }) => theme.colors.textPrimary};
+
+  h3 {
+    font-size: 1.02rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: ${({ theme }) => theme.colors.textPrimary};
+  }
+
+  p {
+    font-size: 0.84rem;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    line-height: 1.5;
+  }
+
+  .modal-result {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 6px;
+    border-top: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  }
+`;
+
+const ModalPrimaryBtn = styled.button`
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 7px;
+  border: none;
+  background: ${({ theme }) => theme.colors.brandPrimary};
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.colors.brandPrimaryHover};
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const ModalSecondaryBtn = styled.button`
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => theme.colors.borderStrong};
+  background: ${({ theme }) => theme.colors.bgSurface};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.colors.bgSurfaceHover};
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+`;
+
+const StageFallback = styled.div`
+  position: fixed;
+  inset: 0;
+  background: ${({ theme }) => theme.colors.bgCanvas};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.82rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
 const INACTIVITY_ALERT_SECONDS = 86400; // 24 horas
@@ -775,6 +1196,13 @@ function DashboardApp() {
       return false;
     }
   });
+  const [leftRailCollapsed, setLeftRailCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem('rmm.leftRailCollapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
 
   const selectedUnitIdRef = useRef(selectedUnitId);
   const selectedMachineIdRef = useRef(selectedMachineId);
@@ -805,6 +1233,17 @@ function DashboardApp() {
       /* armazenamento indisponível */
     }
   }, [topControlsCollapsed]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        'rmm.leftRailCollapsed',
+        leftRailCollapsed ? '1' : '0'
+      );
+    } catch {
+      /* armazenamento indisponível */
+    }
+  }, [leftRailCollapsed]);
 
   const [nowTimestamp, setNowTimestamp] = useState(Date.now());
   const [sceneLayers, setSceneLayers] = useState({
@@ -1190,7 +1629,7 @@ function DashboardApp() {
     return (
       <ThemeProvider theme={theme}>
         <GlobalStyles />
-        <StageFallback>Validando sessão RMM Ipojuca...</StageFallback>
+        <StageFallback>Validando sessão Pulso RMM...</StageFallback>
       </ThemeProvider>
     );
   }
@@ -1242,596 +1681,657 @@ function DashboardApp() {
         </Suspense>
       )}
 
-      {/* INTERFACE ADMINISTRATIVA EDITORIAL MINIMALISTA */}
+      {/* INTERFACE ADMINISTRATIVA EDITORIAL */}
       <HudOverlay>
-        <TopCommandDeck>
-          <TopHeaderRow>
-            <MastheadPod>
-              <div className="brand-group">
-                <div className="brand-title">RMM // Saúde Ipojuca</div>
-                <div className="brand-sub">
-                  <LiveBeacon $online={socketConnected} />
-                  <span>Gêmeo Digital &amp; Telemetria</span>
-                </div>
-              </div>
-            </MastheadPod>
+        <TopBar>
+          <BrandCluster>
+            <BrandMark size={26} />
+            <div className="brand-copy">
+              <span className="brand-title">Pulso RMM</span>
+              <span className="brand-status">
+                <StatusDot $color={socketConnected ? theme.colors.status.NORMAL : theme.colors.status.WARNING} />
+                <span>{socketConnected ? 'Tempo real ativo' : 'Reconectando'}</span>
+              </span>
+            </div>
+          </BrandCluster>
 
-            <UnitSwitcherPod>
-              {units.map((u) => (
-                <UnitSwitchBtn
-                  key={u.id}
-                  $active={u.id === Number(selectedUnitId)}
-                  onClick={() => {
-                    setSelectedUnitId(u.id);
-                    setSelectedMachineId(null);
-                    setSelectedSectorId(null);
-                    setDiagnostics(null);
-                    setCameraMode('ISO');
-                  }}
-                >
-                  <span className="u-code">[{u.code}] • {u.summary?.total || 0} PCs</span>
-                  <span className="u-name">{fixTextEncoding(u.name)}</span>
-                </UnitSwitchBtn>
-              ))}
-              {canManageStructure && (
-                <>
-                  <UnitActionBtn
-                    type="button"
-                    $tone="primary"
-                    onClick={() => openManagerModal('CREATE_UNIT')}
-                    title="Cadastrar nova Unidade de Saúde"
-                  >
-                    + Unidade
-                  </UnitActionBtn>
-                  {activeUnit && (
-                    <UnitActionBtn
-                      type="button"
-                      onClick={() => openManagerModal('EDIT_UNIT')}
-                      title="Editar ou excluir unidade selecionada"
-                    >
-                      ✎ Unidade
-                    </UnitActionBtn>
-                  )}
-                </>
-              )}
-            </UnitSwitcherPod>
+          <HairlineV aria-hidden="true" />
 
-            <UserSessionPod>
-              <UserSessionPill title={auth.user.email}>
-                <span className="u-role">{auth.user.role}</span>
-                <span>{auth.user.name}</span>
-                <button
-                  type="button"
-                  className="u-logout"
-                  onClick={() => handleLogout('')}
-                  title="Encerrar sessão"
-                >
-                  Sair
-                </button>
-              </UserSessionPill>
-            </UserSessionPod>
-          </TopHeaderRow>
-
-          <CenterControlShell $collapsed={topControlsCollapsed}>
-            {topControlsCollapsed ? (
-              <>
-                <span
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    color: '#52796B',
-                    padding: '0 4px',
-                  }}
-                >
-                  {twinMode === 'PIXEL' ? 'PIXEL ART' : `3D • ${cameraMode}`}
-                </span>
-                <CamModeBtn
-                  type="button"
-                  onClick={() => setTopControlsCollapsed(false)}
-                  title="Expandir barra de controles e downloads"
-                  aria-expanded="false"
-                >
-                  ▼ Controles
-                </CamModeBtn>
-              </>
-            ) : (
-              <>
-                <CamModeBtn
-                  type="button"
-                  $active={twinMode === 'PIXEL'}
-                  onClick={() => setTwinMode('PIXEL')}
-                  title="Maquete isométrica em pixel art (Canvas 2D)"
-                >
-                  PIXEL
-                </CamModeBtn>
-                <CamModeBtn
-                  type="button"
-                  $active={twinMode === '3D'}
-                  onClick={() => setTwinMode('3D')}
-                  title="Inspeção tridimensional (Three.js)"
-                >
-                  3D
-                </CamModeBtn>
-
-                {twinMode === '3D' && (
-                  <>
-                    <ControlDivider aria-hidden="true" />
-                    <CamModeBtn
-                      type="button"
-                      $active={cameraMode === 'ISO'}
-                      onClick={() => {
-                        setSelectedSectorId(null);
-                        setCameraMode('ISO');
-                      }}
-                    >
-                      ISO 3D
-                    </CamModeBtn>
-                    <CamModeBtn
-                      type="button"
-                      $active={cameraMode === 'TOP'}
-                      onClick={() => setCameraMode('TOP')}
-                    >
-                      CAD TOPO
-                    </CamModeBtn>
-                    <CamModeBtn
-                      type="button"
-                      $active={cameraMode === 'FOCUS'}
-                      onClick={() => setCameraMode('FOCUS')}
-                    >
-                      FOCO
-                    </CamModeBtn>
-                    <CamModeBtn
-                      type="button"
-                      $active={cameraMode === 'ORBIT'}
-                      onClick={() =>
-                        setCameraMode((prev) => (prev === 'ORBIT' ? 'ISO' : 'ORBIT'))
-                      }
-                      title="Giro orbital suave ao redor da maquete"
-                    >
-                      360°
-                    </CamModeBtn>
-                  </>
-                )}
-
-                <ControlDivider aria-hidden="true" />
-
-                <CamModeBtn
-                  as="a"
-                  href="/api/agent/download"
-                  download="IpojucaRMM-Setup.exe"
-                  style={{
-                    textDecoration: 'none',
-                    color: '#52796B',
-                    background: 'rgba(82, 121, 107, 0.1)',
-                    fontWeight: 700,
-                  }}
-                  title="Baixar instalador oficial do Agente Windows (.exe)"
-                >
-                  ↓ AGENTE (.EXE)
-                </CamModeBtn>
-
-                {auth.user?.role === 'ADMIN_N2' && (
-                  <CamModeBtn
-                    type="button"
-                    onClick={() => setUpdateAllConfirm({ open: true, busy: false, resultMsg: '' })}
-                    style={{
-                      color: '#2D6A4F',
-                      background: 'rgba(45, 106, 79, 0.08)',
-                      fontWeight: 700,
-                    }}
-                    title="Atualizar agentes via OTA"
-                  >
-                    ↑ ATUALIZAR TODOS
-                  </CamModeBtn>
-                )}
-
-                <ControlDivider aria-hidden="true" />
-
-                <CamModeBtn
-                  type="button"
-                  onClick={() => setTopControlsCollapsed(true)}
-                  title="Recolher barra de controles"
-                  aria-expanded="true"
-                  style={{ color: '#52796B', padding: '6px 8px' }}
-                >
-                  ▲
-                </CamModeBtn>
-              </>
-            )}
-          </CenterControlShell>
-        </TopCommandDeck>
-
-        <MiddleWorkspace>
-          <LeftRadarColumn>
-            <RadarCard>
-              <div className="card-tag">
-                <span>REDE GLOBAL</span>
-                <span>{totalSummary.total} ESTAÇÕES</span>
-              </div>
-              <KpiMatrix>
-                <KpiCell $color={theme.colors.status.NORMAL}>
-                  <div className="num">
-                    {totalSummary.NORMAL + totalSummary.WARNING + totalSummary.CRITICAL}
-                  </div>
-                  <div className="lbl">ONLINE</div>
-                </KpiCell>
-                <KpiCell $color={theme.colors.status.WARNING}>
-                  <div className="num">{totalSummary.WARNING}</div>
-                  <div className="lbl">ATENÇÃO</div>
-                </KpiCell>
-                <KpiCell $color={theme.colors.status.CRITICAL}>
-                  <div className="num">{totalSummary.CRITICAL}</div>
-                  <div className="lbl">CRÍTICO</div>
-                </KpiCell>
-                <KpiCell $color={theme.colors.status.OFFLINE}>
-                  <div className="num">{totalSummary.OFFLINE}</div>
-                  <div className="lbl">OFFLINE</div>
-                </KpiCell>
-              </KpiMatrix>
-            </RadarCard>
-
-            <RadarCard>
-              <div className="card-tag">
-                <span>CAMADAS DA MAQUETE</span>
-              </div>
-              <LayerToggleGrid>
-                <LayerChip
-                  $on={sceneLayers.furniture}
-                  onClick={() => toggleLayer('furniture')}
-                >
-                  <span>Mobiliário</span>
-                  <span>{sceneLayers.furniture ? 'Ligado' : 'Desl.'}</span>
-                </LayerChip>
-                <LayerChip
-                  $on={sceneLayers.labels}
-                  onClick={() => toggleLayer('labels')}
-                >
-                  <span>Rótulos</span>
-                  <span>{sceneLayers.labels ? 'Ligado' : 'Desl.'}</span>
-                </LayerChip>
-              </LayerToggleGrid>
-            </RadarCard>
-
-            <RadarCard>
-              <div className="card-tag">
-                <span>SETORES ({(activeUnit?.sectors || []).length})</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {selectedSectorId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedSectorId(null);
-                        setCameraMode('ISO');
-                      }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#52796B',
-                        fontSize: '0.64rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        padding: 0,
-                      }}
-                      title="Voltar para a visão geral da maquete"
-                    >
-                      ↺ Geral
-                    </button>
-                  )}
-                  {canManageStructure && activeUnit && (
-                    <CardAddChipBtn
-                      type="button"
-                      onClick={() => openManagerModal('CREATE_SECTOR')}
-                      title="Criar novo setor nesta unidade"
-                    >
-                      + Setor
-                    </CardAddChipBtn>
-                  )}
-                </div>
-              </div>
-              {(activeUnit?.sectors || []).length === 0 && (
-                <div style={{ fontSize: '0.69rem', color: '#737B75', padding: '4px 0' }}>
-                  Nenhum setor cadastrado.{' '}
-                  {canManageStructure && 'Clique em "+ Setor" para criar uma sala 3D.'}
-                </div>
-              )}
-              {(activeUnit?.sectors || []).map((sec) => {
-                const secNodes = machines.filter(
-                  (m) => Number(m.sector_id) === Number(sec.id)
-                );
-                const isSecSelected = selectedSectorId === sec.id;
+          <UnitNavCluster aria-label="Unidades de Saúde">
+            <UnitTabsScroller>
+              {units.map((u) => {
+                const isUnitActive = u.id === Number(selectedUnitId);
+                const unitLabel = fixTextEncoding(u.name);
                 return (
-                  <SectorMiniRow
-                    key={sec.id}
-                    $selected={isSecSelected}
+                  <UnitTabBtn
+                    key={u.id}
+                    type="button"
+                    $active={isUnitActive}
+                    aria-current={isUnitActive ? 'page' : undefined}
+                    title={`${unitLabel} (${u.summary?.total || 0} estações)`}
                     onClick={() => {
-                      if (isSecSelected) {
-                        setSelectedSectorId(null);
-                        setCameraMode('ISO');
-                      } else {
-                        setSelectedSectorId(sec.id);
-                        setCameraMode('SECTOR');
-                      }
+                      setSelectedUnitId(u.id);
+                      setSelectedMachineId(null);
+                      setSelectedSectorId(null);
+                      setDiagnostics(null);
+                      setCameraMode('ISO');
                     }}
-                    title={`Aproximar câmera no setor ${fixTextEncoding(sec.name)}`}
                   >
-                    <div>
-                      <div className="s-name">{fixTextEncoding(sec.name)}</div>
-                      <div className="s-meta">[{sec.code}]</div>
-                    </div>
-                    <div className="s-right">
-                      <span className="s-meta">{secNodes.length} PC(S)</span>
-                      {canManageStructure && (
-                        <>
-                          <InlineMiniBtn
-                            type="button"
-                            title={`Editar setor ${fixTextEncoding(sec.name)}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openManagerModal('EDIT_SECTOR', sec);
-                            }}
-                          >
-                            ✎
-                          </InlineMiniBtn>
-                          <InlineMiniBtn
-                            type="button"
-                            $danger
-                            title={`Excluir setor ${fixTextEncoding(sec.name)}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openManagerModal('DELETE_SECTOR', sec);
-                            }}
-                          >
-                            ✕
-                          </InlineMiniBtn>
-                        </>
-                      )}
-                    </div>
-                  </SectorMiniRow>
+                    <span className="u-name">{unitLabel}</span>
+                    <span className="u-count">{u.summary?.total || 0}</span>
+                  </UnitTabBtn>
                 );
               })}
-            </RadarCard>
+            </UnitTabsScroller>
+            {canManageStructure && (
+              <UnitManageGroup>
+                <SubtleIconBtn
+                  type="button"
+                  $accent
+                  $iconOnly
+                  onClick={() => openManagerModal('CREATE_UNIT')}
+                  title="Cadastrar nova Unidade de Saúde"
+                  aria-label="Cadastrar nova Unidade de Saúde"
+                >
+                  <IconPlus size={14} />
+                </SubtleIconBtn>
+                {activeUnit && (
+                  <SubtleIconBtn
+                    type="button"
+                    $iconOnly
+                    onClick={() => openManagerModal('EDIT_UNIT')}
+                    title="Editar ou excluir unidade selecionada"
+                    aria-label="Editar unidade selecionada"
+                  >
+                    <IconEdit size={14} />
+                  </SubtleIconBtn>
+                )}
+              </UnitManageGroup>
+            )}
+          </UnitNavCluster>
 
-            <RadarCard>
-              {(() => {
-                const liveInactivityAlerts = machines
-                  .map((m) => ({ machine: m, info: getInactivityInfo(m, nowTimestamp) }))
-                  .filter(({ info }) => info.isInactive24h)
-                  .filter(
-                    ({ machine }) =>
-                      !alerts.some(
-                        (a) =>
-                          Number(a.machine_id) === Number(machine.id) &&
-                          a.metric_name === 'INACTIVITY_24H' &&
-                          a.status !== 'RESOLVED'
-                      )
-                  )
-                  .map(({ machine, info }) => ({
-                    id: `live-inact-${machine.id}`,
-                    machine_id: machine.id,
-                    hostname: machine.hostname,
-                    unit_name: machine.unit_name || activeUnit?.name || '',
-                    severity: 'WARNING',
-                    metric_name: 'INACTIVITY_24H',
-                    status: 'INATIVO >24H',
-                    message:
-                      info.mode === 'OFFLINE'
-                        ? `Estação desligada/sem comunicação há ${formatShortDuration(info.seconds)} (>24h).`
-                        : `Estação ligada sem interação há ${formatShortDuration(info.seconds)} (>24h).`,
-                  }));
+          <TopRightCluster>
+            <SubtleIconBtn
+              as="a"
+              href="/api/agent/download"
+              download="IpojucaRMM-Setup.exe"
+              title="Baixar instalador oficial do Agente Windows (.exe)"
+            >
+              <IconDownload size={14} />
+              <span className="hide-compact">Agente</span>
+            </SubtleIconBtn>
 
-                const combinedAlerts = [...liveInactivityAlerts, ...alerts];
-                const activeCount = combinedAlerts.filter((a) => a.status !== 'RESOLVED').length;
+            {auth.user?.role === 'ADMIN_N2' && (
+              <SubtleIconBtn
+                type="button"
+                $accent
+                onClick={() => setUpdateAllConfirm({ open: true, busy: false, resultMsg: '' })}
+                title="Enviar atualização silenciosa (OTA) para todas as máquinas"
+              >
+                <IconUploadCloud size={14} />
+                <span className="hide-compact">Atualizar todos</span>
+              </SubtleIconBtn>
+            )}
 
+            <HairlineV aria-hidden="true" />
+
+            <UserMenuChip title={auth.user.email}>
+              <span className="u-avatar">{getInitials(auth.user.name)}</span>
+              <div className="u-meta">
+                <span className="u-name">{formatOperatorName(auth.user.name)}</span>
+                <span className="u-role">{ROLE_DISPLAY[auth.user.role] || auth.user.role}</span>
+              </div>
+              <RailIconBtn
+                type="button"
+                $danger
+                onClick={() => handleLogout('')}
+                title="Encerrar sessão"
+                aria-label="Encerrar sessão"
+              >
+                <IconLogout size={14} />
+              </RailIconBtn>
+            </UserMenuChip>
+          </TopRightCluster>
+        </TopBar>
+
+        <WorkspaceFrame>
+          <ViewportToolbarRow>
+            <ViewportControlPill>
+              {topControlsCollapsed ? (
+                <>
+                  <span
+                    style={{
+                      fontFamily: theme.fonts.mono,
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      color: theme.colors.textSecondary,
+                      padding: '0 8px',
+                    }}
+                  >
+                    {twinMode === 'PIXEL' ? 'Pixel Art' : `3D · ${cameraMode}`}
+                  </span>
+                  <SegmentedBtn
+                    type="button"
+                    onClick={() => setTopControlsCollapsed(false)}
+                    title="Expandir controles de visualização"
+                    aria-expanded="false"
+                  >
+                    <IconChevronDown size={14} />
+                    <span>Visualização</span>
+                  </SegmentedBtn>
+                </>
+              ) : (
+                <>
+                  <SegmentedBtn
+                    type="button"
+                    $active={twinMode === 'PIXEL'}
+                    onClick={() => setTwinMode('PIXEL')}
+                    title="Planta isométrica em Pixel Art"
+                  >
+                    <IconGrid size={13} />
+                    <span>Pixel Art</span>
+                  </SegmentedBtn>
+                  <SegmentedBtn
+                    type="button"
+                    $active={twinMode === '3D'}
+                    onClick={() => setTwinMode('3D')}
+                    title="Maquete tridimensional interativa"
+                  >
+                    <IconCube size={13} />
+                    <span>3D</span>
+                  </SegmentedBtn>
+
+                  {twinMode === '3D' && (
+                    <>
+                      <HairlineV aria-hidden="true" />
+                      <SegmentedBtn
+                        type="button"
+                        $active={cameraMode === 'ISO'}
+                        onClick={() => {
+                          setSelectedSectorId(null);
+                          setCameraMode('ISO');
+                        }}
+                      >
+                        ISO
+                      </SegmentedBtn>
+                      <SegmentedBtn
+                        type="button"
+                        $active={cameraMode === 'TOP'}
+                        onClick={() => setCameraMode('TOP')}
+                      >
+                        Topo
+                      </SegmentedBtn>
+                      <SegmentedBtn
+                        type="button"
+                        $active={cameraMode === 'FOCUS'}
+                        onClick={() => setCameraMode('FOCUS')}
+                      >
+                        Foco
+                      </SegmentedBtn>
+                      <SegmentedBtn
+                        type="button"
+                        $active={cameraMode === 'ORBIT'}
+                        onClick={() =>
+                          setCameraMode((prev) => (prev === 'ORBIT' ? 'ISO' : 'ORBIT'))
+                        }
+                        title="Giro orbital suave ao redor da maquete"
+                      >
+                        360°
+                      </SegmentedBtn>
+                      <HairlineV aria-hidden="true" />
+                      <SegmentedBtn
+                        type="button"
+                        $active={sceneLayers.furniture}
+                        onClick={() => toggleLayer('furniture')}
+                        title="Alternar mobiliário 3D"
+                      >
+                        <IconLayers size={13} />
+                        <span>Mobiliário</span>
+                      </SegmentedBtn>
+                      <SegmentedBtn
+                        type="button"
+                        $active={sceneLayers.labels}
+                        onClick={() => toggleLayer('labels')}
+                        title="Alternar rótulos das estações"
+                      >
+                        <IconTag size={13} />
+                        <span>Rótulos</span>
+                      </SegmentedBtn>
+                    </>
+                  )}
+
+                  <HairlineV aria-hidden="true" />
+
+                  <SegmentedBtn
+                    type="button"
+                    onClick={() => setTopControlsCollapsed(true)}
+                    title="Recolher barra de visualização"
+                    aria-label="Recolher barra de visualização"
+                    aria-expanded="true"
+                  >
+                    <IconChevronDown size={14} style={{ transform: 'rotate(180deg)' }} />
+                  </SegmentedBtn>
+                </>
+              )}
+            </ViewportControlPill>
+          </ViewportToolbarRow>
+
+          <MiddleWorkspace>
+            {(() => {
+              const liveInactivityAlerts = machines
+                .map((m) => ({ machine: m, info: getInactivityInfo(m, nowTimestamp) }))
+                .filter(({ info }) => info.isInactive24h)
+                .filter(
+                  ({ machine }) =>
+                    !alerts.some(
+                      (a) =>
+                        Number(a.machine_id) === Number(machine.id) &&
+                        a.metric_name === 'INACTIVITY_24H' &&
+                        a.status !== 'RESOLVED'
+                    )
+                )
+                .map(({ machine, info }) => ({
+                  id: `live-inact-${machine.id}`,
+                  machine_id: machine.id,
+                  hostname: machine.hostname,
+                  unit_name: machine.unit_name || activeUnit?.name || '',
+                  severity: 'WARNING',
+                  metric_name: 'INACTIVITY_24H',
+                  status: 'Inativo >24h',
+                  message:
+                    info.mode === 'OFFLINE'
+                      ? `Sem comunicação há ${formatShortDuration(info.seconds)} (>24h).`
+                      : `Ligado sem interação há ${formatShortDuration(info.seconds)} (>24h).`,
+                }));
+
+              const combinedAlerts = [...liveInactivityAlerts, ...alerts];
+              const activeAlertCount = combinedAlerts.filter((a) => a.status !== 'RESOLVED').length;
+
+              if (leftRailCollapsed) {
                 return (
-                  <>
-                    <div className="card-tag">
-                      <span>ALERTAS RECENTES</span>
-                      <span>{activeCount} ATIVO(S)</span>
-                    </div>
-                    {combinedAlerts.length === 0 ? (
-                      <div style={{ fontSize: '0.69rem', color: '#737B75', padding: '4px 0' }}>
-                        Nenhum alerta crítico ou de inatividade (&gt;24h) no momento.
+                  <LeftRailToggleChip
+                    type="button"
+                    onClick={() => setLeftRailCollapsed(false)}
+                    title="Expandir painel lateral de rede, setores e alertas"
+                    aria-expanded="false"
+                  >
+                    <IconPanelLeft size={15} />
+                    <span>Painel</span>
+                    {activeAlertCount > 0 && (
+                      <span className="alert-pill">{activeAlertCount}</span>
+                    )}
+                  </LeftRailToggleChip>
+                );
+              }
+
+              return (
+                <LeftRailPanel aria-label="Resumo da rede, setores e alertas">
+                  <RailSection>
+                    <RailSectionHead>
+                      <span className="sec-title">Rede global</span>
+                      <div className="sec-actions">
+                        <span className="sec-meta">{totalSummary.total} PCs</span>
+                        <RailIconBtn
+                          type="button"
+                          onClick={() => setLeftRailCollapsed(true)}
+                          title="Recolher painel lateral"
+                          aria-label="Recolher painel lateral"
+                        >
+                          <IconChevronLeft size={14} />
+                        </RailIconBtn>
                       </div>
+                    </RailSectionHead>
+                    <KpiStrip>
+                      <KpiColumn $color={theme.colors.status.NORMAL}>
+                        <span className="num">
+                          {totalSummary.NORMAL + totalSummary.WARNING + totalSummary.CRITICAL}
+                        </span>
+                        <span className="lbl">Online</span>
+                      </KpiColumn>
+                      <KpiColumn $color={theme.colors.status.WARNING}>
+                        <span className="num">{totalSummary.WARNING}</span>
+                        <span className="lbl">Atenção</span>
+                      </KpiColumn>
+                      <KpiColumn $color={theme.colors.status.CRITICAL}>
+                        <span className="num">{totalSummary.CRITICAL}</span>
+                        <span className="lbl">Crítico</span>
+                      </KpiColumn>
+                      <KpiColumn $color={theme.colors.status.OFFLINE}>
+                        <span className="num">{totalSummary.OFFLINE}</span>
+                        <span className="lbl">Offline</span>
+                      </KpiColumn>
+                    </KpiStrip>
+                  </RailSection>
+
+                  <RailSection>
+                    <RailSectionHead>
+                      <span className="sec-title">
+                        Setores
+                        <span className="sec-meta">({(activeUnit?.sectors || []).length})</span>
+                      </span>
+                      <div className="sec-actions">
+                        {selectedSectorId && (
+                          <TextActionBtn
+                            type="button"
+                            onClick={() => {
+                              setSelectedSectorId(null);
+                              setCameraMode('ISO');
+                            }}
+                            title="Voltar para a visão geral da maquete"
+                          >
+                            <IconRotateCcw size={12} />
+                            <span>Geral</span>
+                          </TextActionBtn>
+                        )}
+                        {canManageStructure && activeUnit && (
+                          <TextActionBtn
+                            type="button"
+                            onClick={() => openManagerModal('CREATE_SECTOR')}
+                            title="Criar novo setor nesta unidade"
+                          >
+                            <IconPlus size={12} />
+                            <span>Setor</span>
+                          </TextActionBtn>
+                        )}
+                      </div>
+                    </RailSectionHead>
+
+                    {(activeUnit?.sectors || []).length === 0 ? (
+                      <EmptyNote>
+                        Nenhum setor cadastrado.{' '}
+                        {canManageStructure && 'Use "+ Setor" para adicionar uma sala.'}
+                      </EmptyNote>
+                    ) : (
+                      <SectorRowList>
+                        {(activeUnit?.sectors || []).map((sec) => {
+                          const secNodes = machines.filter(
+                            (m) => Number(m.sector_id) === Number(sec.id)
+                          );
+                          const isSecSelected = selectedSectorId === sec.id;
+                          return (
+                            <SectorListRow
+                              key={sec.id}
+                              $selected={isSecSelected}
+                              onClick={() => {
+                                if (isSecSelected) {
+                                  setSelectedSectorId(null);
+                                  setCameraMode('ISO');
+                                } else {
+                                  setSelectedSectorId(sec.id);
+                                  setCameraMode('SECTOR');
+                                }
+                              }}
+                              title={`Filtrar e aproximar no setor ${fixTextEncoding(sec.name)}`}
+                            >
+                              <div className="s-info">
+                                <div className="s-name">{fixTextEncoding(sec.name)}</div>
+                                <div className="s-code">{sec.code}</div>
+                              </div>
+                              <div className="s-right">
+                                <span className="s-count">{secNodes.length}</span>
+                                {canManageStructure && (
+                                  <div className="s-controls">
+                                    <RailIconBtn
+                                      type="button"
+                                      title={`Editar setor ${fixTextEncoding(sec.name)}`}
+                                      aria-label={`Editar setor ${fixTextEncoding(sec.name)}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openManagerModal('EDIT_SECTOR', sec);
+                                      }}
+                                    >
+                                      <IconEdit size={13} />
+                                    </RailIconBtn>
+                                    <RailIconBtn
+                                      type="button"
+                                      $danger
+                                      title={`Excluir setor ${fixTextEncoding(sec.name)}`}
+                                      aria-label={`Excluir setor ${fixTextEncoding(sec.name)}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openManagerModal('DELETE_SECTOR', sec);
+                                      }}
+                                    >
+                                      <IconTrash size={13} />
+                                    </RailIconBtn>
+                                  </div>
+                                )}
+                              </div>
+                            </SectorListRow>
+                          );
+                        })}
+                      </SectorRowList>
+                    )}
+                  </RailSection>
+
+                  <RailSection>
+                    <RailSectionHead>
+                      <span className="sec-title">Alertas recentes</span>
+                      <span className="sec-meta">
+                        {activeAlertCount} {activeAlertCount === 1 ? 'ativo' : 'ativos'}
+                      </span>
+                    </RailSectionHead>
+                    {combinedAlerts.length === 0 ? (
+                      <EmptyNote>
+                        Nenhum alerta crítico ou de inatividade (&gt;24h) no momento.
+                      </EmptyNote>
                     ) : (
                       combinedAlerts.slice(0, 5).map((al) => (
-                        <AlertMiniRow
+                        <AlertRow
                           key={al.id || al.incident_key}
+                          type="button"
                           $severity={al.severity}
+                          $clickable={Boolean(al.machine_id)}
                           onClick={() => {
                             if (al.machine_id) {
                               setSelectedMachineId(Number(al.machine_id));
                               setCameraMode('FOCUS');
                             }
                           }}
-                          style={{ cursor: al.machine_id ? 'pointer' : 'default' }}
-                          title="Clique para focar esta estação"
+                          title={al.machine_id ? 'Clique para focar esta estação' : undefined}
                         >
                           <div className="a-top">
                             <span>{fixTextEncoding(al.hostname || `PC #${al.machine_id}`)}</span>
-                            <span>
+                            <span className="a-tag">
                               {al.metric_name === 'INACTIVITY_24H' && al.status !== 'RESOLVED'
-                                ? 'INATIVO >24H'
+                                ? 'Inativo >24h'
                                 : al.status || al.severity}
                             </span>
                           </div>
                           <div className="a-msg">{fixTextEncoding(al.message)}</div>
                           <div className="a-meta">
                             {fixTextEncoding(al.unit_name || '')}
-                            {al.external_ticket_id ? ` • #${al.external_ticket_id}` : ''}
+                            {al.external_ticket_id ? ` · #${al.external_ticket_id}` : ''}
                           </div>
-                        </AlertMiniRow>
+                        </AlertRow>
                       ))
                     )}
-                  </>
-                );
-              })()}
-            </RadarCard>
-          </LeftRadarColumn>
+                  </RailSection>
+                </LeftRailPanel>
+              );
+            })()}
 
-          <DiagnosticDrawer
-            diagnostics={diagnostics}
-            units={units}
-            chatMessages={chatMessages}
-            taskCatalog={taskCatalog}
-            currentUser={auth.user || { name: 'Operador', role: 'VIEWER' }}
-            onDispatchTask={handleDispatchTask}
-            onLoadPrinters={handleLoadPrinters}
-            onRefreshTelemetryNow={handleRefreshTelemetryNow}
-            onUpdateMachineAgent={handleUpdateMachineAgent}
-            onSendMessage={handleSendMessage}
-            onUpdateLocation={handleUpdateLocation}
-            onDeleteMachine={handleDeleteMachine}
-            onFocusCamera={() => setCameraMode('FOCUS')}
-          />
-        </MiddleWorkspace>
+            <DiagnosticDrawer
+              diagnostics={diagnostics}
+              units={units}
+              chatMessages={chatMessages}
+              taskCatalog={taskCatalog}
+              currentUser={auth.user || { name: 'Operador', role: 'VIEWER' }}
+              onDispatchTask={handleDispatchTask}
+              onLoadPrinters={handleLoadPrinters}
+              onRefreshTelemetryNow={handleRefreshTelemetryNow}
+              onUpdateMachineAgent={handleUpdateMachineAgent}
+              onSendMessage={handleSendMessage}
+              onUpdateLocation={handleUpdateLocation}
+              onDeleteMachine={handleDeleteMachine}
+              onFocusCamera={() => setCameraMode('FOCUS')}
+            />
+          </MiddleWorkspace>
 
-        <DockShell>
-          <DockToggleBtn
-            type="button"
-            $collapsed={dockCollapsed}
-            onClick={() => setDockCollapsed((prev) => !prev)}
-            aria-expanded={!dockCollapsed}
-            aria-controls="rmm-bottom-dock"
-            aria-label={dockCollapsed ? 'Expandir lista de computadores' : 'Recolher lista de computadores'}
-            title={dockCollapsed ? 'Expandir lista de computadores' : 'Recolher lista de computadores'}
-          >
-            <span className="arrow" aria-hidden="true">▼</span>
-            <span>{dockCollapsed ? `${machines.length} PCs da Unidade` : 'Ocultar Barra'}</span>
-          </DockToggleBtn>
-
-          <BottomMatrixDock id="rmm-bottom-dock" $collapsed={dockCollapsed} aria-hidden={dockCollapsed}>
-            <DockControlsBlock>
-              <span className="dock-title">
-                {activeUnit?.code || 'UNIDADE'} — {filteredMachines.length} ESTAÇÕES
+          <DockShell>
+            <DockToggleBtn
+              type="button"
+              $collapsed={dockCollapsed}
+              onClick={() => setDockCollapsed((prev) => !prev)}
+              aria-expanded={!dockCollapsed}
+              aria-controls="rmm-bottom-dock"
+              aria-label={dockCollapsed ? 'Expandir lista de computadores' : 'Recolher lista de computadores'}
+            >
+              <span className="arrow" aria-hidden="true">
+                <IconChevronDown size={13} />
               </span>
-              <input
-                className="dock-search"
-                type="text"
-                placeholder="Filtrar Hostname, IP..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </DockControlsBlock>
+              <span>
+                {dockCollapsed
+                  ? `${machines.length} ${machines.length === 1 ? 'estação' : 'estações'} na unidade`
+                  : 'Ocultar estações'}
+              </span>
+            </DockToggleBtn>
 
-            {filteredMachines.length === 0 && (
-              <div
-                style={{
-                  fontSize: '0.72rem',
-                  color: '#737B75',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                }}
-              >
-                <span>Nenhuma máquina cadastrada nesta unidade.</span>
-                <a
-                  href="/api/agent/download"
-                  download="IpojucaRMM-Setup.exe"
+            <BottomMatrixDock id="rmm-bottom-dock" $collapsed={dockCollapsed} aria-hidden={dockCollapsed}>
+              <DockControlsBlock>
+                <div>
+                  <div className="dock-title">{fixTextEncoding(activeUnit?.name || 'Unidade')}</div>
+                  <div className="dock-sub">
+                    {filteredMachines.length} de {machines.length} estações
+                  </div>
+                </div>
+                <div className="search-wrap">
+                  <span className="search-icon">
+                    <IconSearch size={13} />
+                  </span>
+                  <input
+                    className="dock-search"
+                    type="text"
+                    aria-label="Filtrar estações por hostname, IP ou setor"
+                    placeholder="Filtrar hostname, IP..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </DockControlsBlock>
+
+              {filteredMachines.length === 0 && (
+                <div
                   style={{
-                    color: '#52796B',
-                    textDecoration: 'underline',
-                    fontWeight: 600,
+                    fontSize: '0.78rem',
+                    color: theme.colors.textSecondary,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
                   }}
                 >
-                  Baixar Agente (.exe)
-                </a>
-              </div>
-            )}
-
-            {filteredMachines.map((m, idx) => {
-              const stColor =
-                theme.colors.status[m.health_status] || theme.colors.status.NORMAL;
-              const isSel = selectedMachine?.id === m.id;
-              const cpu = Math.min(100, Math.max(0, Number(m.cpu_usage_pct || 0)));
-              const ram = Math.min(100, Math.max(0, Number(m.ram_usage_pct || 0)));
-              const dsk = Math.min(100, Math.max(0, Number(m.disk_usage_pct || 0)));
-              const idleSec = Math.max(0, Math.floor(Number(m.idle_seconds || 0)));
-              const isLegacy = isAgentOutdated(m.agent_version, '2.3.0');
-              const inact = getInactivityInfo(m, nowTimestamp);
-              const offSec = m.last_seen_at
-                ? Math.max(0, Math.floor((nowTimestamp - new Date(m.last_seen_at).getTime()) / 1000))
-                : 0;
-
-              const activityLabel = inact.isInactive24h
-                ? `⚠ Inativo >24h (${formatShortDuration(inact.seconds)})`
-                : m.health_status === 'OFFLINE'
-                  ? `Desligado há ${formatShortDuration(offSec)}`
-                  : isLegacy
-                    ? `Ativo (${m.agent_version || '2.2.0'})`
-                    : idleSec < 180
-                      ? `Em uso (${formatShortDuration(idleSec)})`
-                      : `Ocioso há ${formatShortDuration(idleSec)}`;
-
-              return (
-                <NodeKeycap
-                  key={m.id}
-                  $selected={isSel}
-                  $color={stColor}
-                  style={
-                    inact.isInactive24h && !isSel
-                      ? { borderColor: '#F59E0B', background: '#FFFDF5' }
-                      : undefined
-                  }
-                  onClick={() => {
-                    setSelectedMachineId(m.id);
-                    setCameraMode('FOCUS');
-                  }}
-                >
-                  <div className="n-top">
-                    <span>
-                      <i className="n-dot" />
-                      {m.sector_code}
-                    </span>
-                    <span>{STATUS_LABELS[m.health_status]}</span>
-                  </div>
-                  <div className="n-host">
-                    <span>{m.hostname}</span>
-                    <span
-                      style={{
-                        fontSize: '0.62rem',
-                        fontFamily: "'JetBrains Mono', monospace",
-                        color: m.spooler_running ? '#2D6A4F' : '#DC2626',
-                      }}
-                    >
-                      {m.spooler_running ? 'PRN:OK' : 'PRN:OFF'}
-                    </span>
-                  </div>
-                  <div className="n-metrics">
-                    CPU {cpu.toFixed(0)}% • RAM {ram.toFixed(0)}% • {m.ip_address}
-                  </div>
-                  <div
+                  <span>Nenhuma estação encontrada nesta unidade.</span>
+                  <a
+                    href="/api/agent/download"
+                    download="IpojucaRMM-Setup.exe"
                     style={{
-                      fontSize: '0.64rem',
-                      color: inact.isInactive24h
-                        ? '#B91C1C'
-                        : m.health_status === 'OFFLINE'
-                          ? '#718096'
-                          : idleSec < 180
-                            ? '#2D6A4F'
-                            : '#D97706',
-                      marginBottom: '5px',
-                      fontWeight: inact.isInactive24h ? 700 : 600,
+                      color: theme.colors.brandPrimary,
+                      textDecoration: 'underline',
+                      fontWeight: 600,
                     }}
                   >
-                    {activityLabel}
-                  </div>
-                  <div className="n-bars">
-                    <div className="bar-track" title={`CPU: ${cpu.toFixed(0)}%`}>
-                      <i style={{ width: `${cpu}%`, background: '#2D6A4F' }} />
+                    Baixar Agente (.exe)
+                  </a>
+                </div>
+              )}
+
+              {filteredMachines.map((m) => {
+                const stColor =
+                  theme.colors.status[m.health_status] || theme.colors.status.NORMAL;
+                const isSel = selectedMachine?.id === m.id;
+                const cpu = Math.min(100, Math.max(0, Number(m.cpu_usage_pct || 0)));
+                const ram = Math.min(100, Math.max(0, Number(m.ram_usage_pct || 0)));
+                const dsk = Math.min(100, Math.max(0, Number(m.disk_usage_pct || 0)));
+                const idleSec = Math.max(0, Math.floor(Number(m.idle_seconds || 0)));
+                const isLegacy = isAgentOutdated(m.agent_version, '2.3.0');
+                const inact = getInactivityInfo(m, nowTimestamp);
+                const offSec = m.last_seen_at
+                  ? Math.max(0, Math.floor((nowTimestamp - new Date(m.last_seen_at).getTime()) / 1000))
+                  : 0;
+
+                const activityLabel = inact.isInactive24h
+                  ? `Inativo >24h (${formatShortDuration(inact.seconds)})`
+                  : m.health_status === 'OFFLINE'
+                    ? `Desligado há ${formatShortDuration(offSec)}`
+                    : isLegacy
+                      ? `Ativo (${m.agent_version || '2.2.0'})`
+                      : idleSec < 180
+                        ? `Em uso (${formatShortDuration(idleSec)})`
+                        : `Ocioso há ${formatShortDuration(idleSec)}`;
+
+                const activityColor = inact.isInactive24h
+                  ? theme.colors.status.CRITICAL
+                  : m.health_status === 'OFFLINE'
+                    ? theme.colors.status.OFFLINE
+                    : idleSec < 180
+                      ? theme.colors.status.NORMAL
+                      : theme.colors.status.WARNING;
+
+                const statusText =
+                  m.health_status === 'NORMAL'
+                    ? 'Online'
+                    : m.health_status === 'WARNING'
+                      ? 'Atenção'
+                      : m.health_status === 'CRITICAL'
+                        ? 'Crítico'
+                        : 'Offline';
+
+                return (
+                  <NodeKeycap
+                    key={m.id}
+                    type="button"
+                    $selected={isSel}
+                    $inact={inact.isInactive24h}
+                    $prnOk={Boolean(m.spooler_running)}
+                    onClick={() => {
+                      setSelectedMachineId(m.id);
+                      setCameraMode('FOCUS');
+                    }}
+                  >
+                    <div className="n-top">
+                      <span className="n-sector">
+                        <StatusDot $color={stColor} />
+                        {m.sector_code}
+                      </span>
+                      <span>{statusText}</span>
                     </div>
-                    <div className="bar-track" title={`RAM: ${ram.toFixed(0)}%`}>
-                      <i style={{ width: `${ram}%`, background: '#52796B' }} />
+                    <div className="n-host">
+                      <span>{m.hostname}</span>
+                      <span
+                        className="n-prn"
+                        title={
+                          m.spooler_running
+                            ? 'Spooler de impressão ativo'
+                            : 'Spooler de impressão parado'
+                        }
+                      >
+                        <IconPrinter size={13} />
+                      </span>
                     </div>
-                    <div className="bar-track" title={`Disco: ${dsk.toFixed(0)}%`}>
-                      <i style={{ width: `${dsk}%`, background: '#718096' }} />
+                    <div className="n-metrics">
+                      CPU {cpu.toFixed(0)}% · RAM {ram.toFixed(0)}% · {m.ip_address}
                     </div>
-                  </div>
-                </NodeKeycap>
-              );
-            })}
-          </BottomMatrixDock>
-        </DockShell>
+                    <div className="n-activity" style={{ color: activityColor }}>
+                      {inact.isInactive24h && <IconAlertTriangle size={12} />}
+                      <span>{activityLabel}</span>
+                    </div>
+                    <div className="n-bars">
+                      <div className="bar-track" title={`CPU: ${cpu.toFixed(0)}%`}>
+                        <i style={{ width: `${cpu}%`, background: theme.colors.status.NORMAL }} />
+                      </div>
+                      <div className="bar-track" title={`RAM: ${ram.toFixed(0)}%`}>
+                        <i style={{ width: `${ram}%`, background: theme.colors.brandPrimaryLight }} />
+                      </div>
+                      <div className="bar-track" title={`Disco: ${dsk.toFixed(0)}%`}>
+                        <i style={{ width: `${dsk}%`, background: theme.colors.status.OFFLINE }} />
+                      </div>
+                    </div>
+                  </NodeKeycap>
+                );
+              })}
+            </BottomMatrixDock>
+          </DockShell>
+        </WorkspaceFrame>
       </HudOverlay>
 
       <UnitSectorManagerModal
@@ -1858,50 +2358,31 @@ function DashboardApp() {
           }
         >
           <ConfirmCard onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
-              Confirmar Atualização Global de Agentes (OTA)
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.78rem', color: '#4A524C', lineHeight: 1.45 }}>
-              Esta operação enviará ordem de atualização automática (verificada via SHA-256) para
-              todas as <strong>{totalSummary.total} estação(ões)</strong> cadastradas na rede de
-              saúde.
+            <h3>Confirmar atualização global de agentes</h3>
+            <p>
+              Esta operação enviará ordem de atualização silenciosa (com verificação obrigatória
+              SHA-256) para todas as <strong>{totalSummary.total} estação(ões)</strong> cadastradas
+              no painel.
             </p>
             {updateAllConfirm.resultMsg && (
-              <div
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: '6px',
-                  background: '#F0FDF4',
-                  border: '1px solid #BBF7D0',
-                  color: '#166534',
-                  fontSize: '0.74rem',
-                  fontWeight: 600,
-                }}
-              >
-                {updateAllConfirm.resultMsg}
-              </div>
+              <div className="modal-result">{updateAllConfirm.resultMsg}</div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <CamModeBtn
+            <div className="modal-actions">
+              <ModalSecondaryBtn
                 type="button"
                 disabled={updateAllConfirm.busy}
                 onClick={() => setUpdateAllConfirm({ open: false, busy: false, resultMsg: '' })}
               >
                 {updateAllConfirm.resultMsg ? 'Fechar' : 'Cancelar'}
-              </CamModeBtn>
+              </ModalSecondaryBtn>
               {!updateAllConfirm.resultMsg && (
-                <CamModeBtn
+                <ModalPrimaryBtn
                   type="button"
                   disabled={updateAllConfirm.busy}
                   onClick={handleConfirmUpdateAllAgents}
-                  style={{
-                    background: '#2D6A4F',
-                    color: '#FFFFFF',
-                    borderColor: '#2D6A4F',
-                  }}
                 >
-                  {updateAllConfirm.busy ? 'Enviando...' : 'Confirmar Atualização Global'}
-                </CamModeBtn>
+                  {updateAllConfirm.busy ? 'Enviando...' : 'Confirmar atualização'}
+                </ModalPrimaryBtn>
               )}
             </div>
           </ConfirmCard>

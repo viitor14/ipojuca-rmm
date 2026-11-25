@@ -1,37 +1,63 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import styled from "styled-components";
-import { STATUS_LABELS, RISK_LABELS, fixTextEncoding, isAgentOutdated, theme } from "../styles/theme";
+import { RISK_LABELS, fixTextEncoding, isAgentOutdated, theme } from "../styles/theme";
+import {
+  IconActivity,
+  IconTerminal,
+  IconCrosshair,
+  IconChevronLeft,
+  IconChevronRight,
+  IconTrash,
+  IconRefresh,
+  IconSend,
+  IconAlertTriangle,
+  IconPrinter,
+  IconClose,
+} from "./Icons";
+
+const STATUS_PRETTY = {
+  NORMAL: "Online",
+  WARNING: "Atenção",
+  CRITICAL: "Crítico",
+  OFFLINE: "Offline",
+};
+
+function cleanDisplayVersion(raw) {
+  const str = String(raw || "2.3.0").trim();
+  const match = str.match(/(\d+\.\d+(?:\.\d+)?)/);
+  return match ? `v${match[1]}` : `v${str}`;
+}
 
 const BladeContainer = styled.aside`
-  width: ${({ $collapsed }) => ($collapsed ? "290px" : "440px")};
+  width: ${({ $collapsed }) => ($collapsed ? "296px" : "432px")};
   max-height: 100%;
   min-height: 0;
-  background: #ffffff;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-  padding: 16px 18px 24px;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.lg};
+  box-shadow: ${({ theme }) => theme.shadows.sm};
+  padding: 16px 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
   pointer-events: auto;
-  transition: width 0.2s ease;
+  transition: width 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   & > * {
     flex-shrink: 0;
   }
 
-  @media (max-width: 1100px) {
-    width: ${({ $collapsed }) => ($collapsed ? "260px" : "380px")};
+  @media (max-width: 1120px) {
+    width: ${({ $collapsed }) => ($collapsed ? "268px" : "384px")};
   }
 `;
 
 const HeaderBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  border-bottom: 1px solid #e4e8e3;
+  gap: 9px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.borderSubtle};
   padding-bottom: 12px;
 `;
 
@@ -44,23 +70,22 @@ const HeaderTopRow = styled.div`
 
 const MicroSerial = styled.div`
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
   font-weight: 600;
-  color: #52796b;
+  color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
 const StatusBadge = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.68rem;
-  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: ${({ $color }) => $color};
-  background: ${({ $bgColor }) => $bgColor || 'rgba(0,0,0,0.05)'};
-  border: 1px solid ${({ $color }) => $color};
+  background: ${({ $bgColor }) => $bgColor || "rgba(30, 36, 32, 0.06)"};
 
   .dot {
     width: 6px;
@@ -71,20 +96,45 @@ const StatusBadge = styled.div`
 `;
 
 const HostHeading = styled.h2`
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 1.15rem;
+  font-size: 1.18rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  color: #242925;
-  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.textPrimary};
+  line-height: 1.2;
   word-break: break-word;
 `;
 
 const SubLocation = styled.div`
-  font-family: ${({ theme }) => theme.fonts.sans};
   font-size: 0.78rem;
-  color: #737b75;
-  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  line-height: 1.38;
+  margin-top: 2px;
+`;
+
+const LocationSelect = styled.select`
+  margin-top: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  font-size: 0.76rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.borderStrong};
+  }
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.brandPrimary};
+    background: ${({ theme }) => theme.colors.bgSurface};
+    box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
+  }
 `;
 
 const ActionToolbar = styled.div`
@@ -92,84 +142,105 @@ const ActionToolbar = styled.div`
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  margin-top: 4px;
+  margin-top: 2px;
 `;
 
 const HeaderActionBtn = styled.button`
-  padding: 5px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 6px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.7rem;
+  font-size: 0.74rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
-  background: ${({ $variant }) =>
+  background: ${({ $variant, theme }) =>
     $variant === "danger"
-      ? "#FEF2F2"
+      ? "rgba(200, 30, 30, 0.06)"
       : $variant === "accent"
-        ? "#ECEFEB"
-        : "#F8FAF8"};
-  color: ${({ $variant }) =>
+        ? theme.colors.brandPrimarySubtle
+        : theme.colors.bgSurfaceSubtle};
+  color: ${({ $variant, theme }) =>
     $variant === "danger"
-      ? "#DC2626"
+      ? theme.colors.status.CRITICAL
       : $variant === "accent"
-        ? "#52796B"
-        : "#242925"};
+        ? theme.colors.brandPrimary
+        : theme.colors.textPrimary};
   border: 1px solid
-    ${({ $variant }) =>
+    ${({ $variant, theme }) =>
       $variant === "danger"
-        ? "#FECACA"
+        ? "rgba(200, 30, 30, 0.22)"
         : $variant === "accent"
-          ? "#CBD3CB"
-          : "#E4E8E3"};
+          ? "rgba(45, 106, 79, 0.22)"
+          : theme.colors.borderSubtle};
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   &:hover {
-    filter: brightness(0.96);
+    background: ${({ $variant, theme }) =>
+      $variant === "danger"
+        ? "rgba(200, 30, 30, 0.11)"
+        : $variant === "accent"
+          ? "rgba(45, 106, 79, 0.15)"
+          : theme.colors.bgSurfaceHover};
+    border-color: ${({ $variant, theme }) =>
+      $variant === "danger"
+        ? "rgba(200, 30, 30, 0.36)"
+        : theme.colors.borderStrong};
+  }
+
+  &:active {
+    transform: scale(0.985);
   }
 `;
 
 const MetricsLinearGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.md};
+  overflow: hidden;
   flex-shrink: 0;
 `;
 
 const MetricCard = styled.div`
-  background: #f8faf8;
-  border: 1px solid #e4e8e3;
-  border-radius: 6px;
-  padding: 8px 10px;
+  padding: 9px 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-
+  gap: 5px;
   min-width: 0;
+  border-right: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+
+  &:last-child {
+    border-right: none;
+  }
 
   .m-head {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 1px;
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    color: #737b75;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.textSecondary};
   }
 
   .m-val {
     font-family: ${({ theme }) => theme.fonts.mono};
+    font-variant-numeric: tabular-nums;
     font-size: 1rem;
     font-weight: 700;
-    color: #242925;
+    color: ${({ theme }) => theme.colors.textPrimary};
   }
 
   .m-track {
-    height: 4px;
-    background: #e4e8e3;
+    height: 3.5px;
+    background: rgba(30, 36, 32, 0.08);
     border-radius: 2px;
     overflow: hidden;
-    margin-top: 2px;
     i {
       display: block;
       height: 100%;
@@ -179,32 +250,31 @@ const MetricCard = styled.div`
 `;
 
 const OscilloscopeCard = styled.div`
-  background: #f8faf8;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.md};
+  padding: 11px 13px;
 
   .osc-head {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.68rem;
+    font-size: 0.74rem;
     font-weight: 600;
-    color: #737b75;
-    margin-bottom: 6px;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    margin-bottom: 8px;
   }
 
   .osc-legend {
     display: flex;
     gap: 12px;
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.66rem;
+    font-size: 0.68rem;
     span {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      color: #242925;
+      color: ${({ theme }) => theme.colors.textPrimary};
     }
     i {
       width: 8px;
@@ -218,111 +288,155 @@ const OscilloscopeCard = styled.div`
 const SpecPlate = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 11px 13px;
-  background: #f8faf8;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
+  gap: 9px;
+  padding: 12px 14px;
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.md};
 
   .spec-grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 10px;
   }
 
   .spec-cell {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
     min-width: 0;
 
-    span {
-      font-family: ${({ theme }) => theme.fonts.sans};
-      font-size: 0.66rem;
-      font-weight: 600;
-      color: #737b75;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
+    span.spec-lbl {
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: ${({ theme }) => theme.colors.textSecondary};
     }
 
     strong {
-      font-family: ${({ theme }) => theme.fonts.sans};
-      font-size: 0.78rem;
-      color: #242925;
+      font-size: 0.8rem;
+      color: ${({ theme }) => theme.colors.textPrimary};
       font-weight: 600;
-      line-height: 1.3;
+      line-height: 1.32;
       word-break: break-word;
     }
 
     strong.mono {
       font-family: ${({ theme }) => theme.fonts.mono};
+      font-variant-numeric: tabular-nums;
       font-size: 0.76rem;
     }
   }
 
   .spec-divider {
     height: 1px;
-    background: #e4e8e3;
+    background: ${({ theme }) => theme.colors.borderSubtle};
   }
 `;
 
 const DrawerTabNav = styled.div`
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
-  background: #f4f5f2;
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
   padding: 3px;
-  border-radius: 8px;
-  border: 1px solid #e4e8e3;
-  margin-top: 2px;
+  border-radius: 9px;
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
 `;
 
 const DrawerTabBtn = styled.button`
-  flex: 1;
-  padding: 7px 10px;
-  border: 1px solid ${({ $active }) => ($active ? "#cbd3cb" : "transparent")};
-  background: ${({ $active }) => ($active ? "#ffffff" : "transparent")};
-  color: ${({ $active }) => ($active ? "#242925" : "#737b75")};
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.borderStrong : "transparent"};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.bgSurface : "transparent"};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.textPrimary : theme.colors.textSecondary};
   border-radius: 6px;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.76rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  box-shadow: ${({ $active }) => ($active ? "0 1px 4px rgba(0,0,0,0.04)" : "none")};
+  box-shadow: ${({ $active, theme }) => ($active ? theme.shadows.sm : "none")};
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   &:hover {
-    color: #242925;
+    color: ${({ theme }) => theme.colors.textPrimary};
   }
 
   .badge-count {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 0.64rem;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: ${({ $active }) => ($active ? "#ecefeb" : "#e4e8e3")};
-    color: #52796b;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.66rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: ${({ $active }) =>
+      $active ? "rgba(45, 106, 79, 0.11)" : "rgba(30, 36, 32, 0.07)"};
+    color: ${({ $active, theme }) =>
+      $active ? theme.colors.brandPrimary : theme.colors.textSecondary};
+  }
+`;
+
+const ActivityBanner = styled.div`
+  flex-shrink: 0;
+  background: ${({ $bg }) => $bg};
+  border-left: 3px solid ${({ $color }) => $color};
+  border-radius: 0 8px 8px 0;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  .act-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: ${({ $color }) => $color};
+  }
+
+  .act-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 700;
+  }
+
+  .act-head {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    margin-top: 1px;
+  }
+
+  .act-sub {
+    font-size: 0.74rem;
+    color: ${({ theme }) => theme.colors.textSecondary};
   }
 `;
 
 const OfflineStaticNotice = styled.div`
-  background: #f8faf8;
-  border: 1px dashed #cbd3cb;
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 0.72rem;
-  color: #5a625c;
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+  border: 1px dashed ${({ theme }) => theme.colors.borderStrong};
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 0.74rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
   display: flex;
   flex-direction: column;
   gap: 2px;
-  line-height: 1.35;
+  line-height: 1.4;
 
   strong {
-    color: #242925;
-    font-size: 0.74rem;
+    color: ${({ theme }) => theme.colors.textPrimary};
+    font-size: 0.76rem;
   }
 `;
 
@@ -330,90 +444,229 @@ const SectionBar = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #737b75;
-  text-transform: uppercase;
-  margin-top: 2px;
+  color: ${({ theme }) => theme.colors.textPrimary};
+  letter-spacing: -0.01em;
 `;
 
 const RefreshTelemetryBtn = styled.button`
   width: 100%;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: #ecefeb;
-  color: #242925;
-  border: 1px solid #cbd3cb;
-  font-family: ${({ theme }) => theme.fonts.sans};
-  font-size: 0.74rem;
-  font-weight: 700;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  border: 1px solid ${({ theme }) => theme.colors.borderStrong};
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   cursor: ${({ disabled }) => (disabled ? "wait" : "pointer")};
-  transition: all 0.15s ease;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   &:hover:not(:disabled) {
-    background: #e2e6e1;
+    background: ${({ theme }) => theme.colors.bgSurfaceHover};
+    border-color: ${({ theme }) => theme.colors.brandPrimary};
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+`;
+
+const ChatPanel = styled.div`
+  flex-shrink: 0;
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.md};
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+`;
+
+const ChatFeed = styled.div`
+  min-height: 92px;
+  max-height: 192px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: 8px;
+`;
+
+const ChatBubbleRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: ${({ $fromTi }) => ($fromTi ? "flex-end" : "flex-start")};
+`;
+
+const ChatBubble = styled.div`
+  max-width: 88%;
+  padding: 7px 10px;
+  border-radius: ${({ $fromTi }) =>
+    $fromTi ? "10px 10px 3px 10px" : "10px 10px 10px 3px"};
+  background: ${({ $fromTi }) => ($fromTi ? "#E9F4EE" : "#F3F5F2")};
+  border: 1px solid
+    ${({ $fromTi }) =>
+      $fromTi ? "rgba(45, 106, 79, 0.18)" : "rgba(30, 36, 32, 0.08)"};
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.textPrimary};
+  word-break: break-word;
+
+  .cb-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 2px;
+  }
+
+  .cb-sender {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: ${({ $fromTi, theme }) =>
+      $fromTi ? theme.colors.brandPrimary : theme.colors.textPrimary};
+  }
+
+  .cb-time {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 0.64rem;
+    color: ${({ theme }) => theme.colors.textMuted};
+  }
+`;
+
+const ChatForm = styled.form`
+  display: flex;
+  gap: 6px;
+
+  input {
+    flex: 1;
+    height: 34px;
+    padding: 0 11px;
+    border-radius: 7px;
+    background: ${({ theme }) => theme.colors.bgSurface};
+    border: 1px solid ${({ theme }) => theme.colors.borderStrong};
+    color: ${({ theme }) => theme.colors.textPrimary};
+    font-size: 0.78rem;
+    transition: border-color 140ms ease;
+
+    &::placeholder {
+      color: ${({ theme }) => theme.colors.textMuted};
+    }
+
+    &:focus {
+      outline: none;
+      border-color: ${({ theme }) => theme.colors.brandPrimary};
+      box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
+    }
+  }
+
+  button {
+    height: 34px;
+    padding: 0 13px;
+    border-radius: 7px;
+    border: none;
+    background: ${({ theme }) => theme.colors.brandPrimary};
+    color: #ffffff;
+    font-size: 0.76rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    &:hover:not(:disabled) {
+      background: ${({ theme }) => theme.colors.brandPrimaryHover};
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.985);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
   }
 `;
 
 const KeycapMatrix = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  gap: 7px;
   flex-shrink: 0;
 `;
 
 const KeycapButton = styled.button`
   position: relative;
-  padding: 8px 9px;
-  border-radius: 6px;
+  padding: 10px 11px;
+  border-radius: 8px;
   text-align: left;
-  background: #ffffff;
-  color: ${({ disabled }) => (disabled ? "#9CA3AF" : "#242925")};
-  border: 1px solid #e4e8e3;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  color: ${({ disabled, theme }) =>
+    disabled ? theme.colors.textMuted : theme.colors.textPrimary};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
-  transition: all 0.15s ease;
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   &:hover:not(:disabled) {
-    border-color: #52796b;
-    background: #f8faf8;
-    transform: translateY(-1px);
+    border-color: ${({ theme }) => theme.colors.brandPrimary};
+    transform: translateY(-2px);
+    box-shadow: ${({ theme }) => theme.shadows.sm};
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0) scale(0.985);
   }
 
   .key-head {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 4px;
-    margin-bottom: 2px;
+    gap: 5px;
+    margin-bottom: 4px;
+  }
+
+  .risk-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${({ $risk, theme }) =>
+      $risk === "HIGH"
+        ? theme.colors.status.CRITICAL
+        : $risk === "MEDIUM"
+          ? theme.colors.status.WARNING
+          : theme.colors.status.NORMAL};
   }
 
   .key-badge {
-    font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.6rem;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: ${({ $risk }) =>
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: ${({ $risk, theme }) =>
       $risk === "HIGH"
-        ? "#FEF2F2"
+        ? theme.colors.status.CRITICAL
         : $risk === "MEDIUM"
-          ? "#FFFBEB"
-          : "#F0FDF4"};
-    color: ${({ $risk }) =>
-      $risk === "HIGH"
-        ? "#DC2626"
-        : $risk === "MEDIUM"
-          ? "#D97706"
-          : "#2D6A4F"};
+          ? theme.colors.status.WARNING
+          : theme.colors.textSecondary};
   }
 
   .key-title {
-    font-family: ${({ theme }) => theme.fonts.sans};
-    font-size: 0.72rem;
+    font-size: 0.76rem;
     font-weight: 600;
-    line-height: 1.25;
+    line-height: 1.28;
     display: block;
     color: inherit;
   }
@@ -421,47 +674,42 @@ const KeycapButton = styled.button`
 
 const TerminalReadout = styled.div`
   flex-shrink: 0;
-  background: #f8faf8;
-  border: 1px solid #e4e8e3;
-  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.md};
   padding: 10px 12px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   line-height: 1.5;
-  min-height: 100px;
-  max-height: 240px;
+  min-height: 86px;
+  max-height: 220px;
   overflow-y: auto;
-  color: #242925;
+  color: ${({ theme }) => theme.colors.textPrimary};
 
   .console-head {
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: #52796b;
+    font-family: ${({ theme }) => theme.fonts.sans};
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.textSecondary};
     margin-bottom: 6px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #e4e8e3;
-    padding-bottom: 4px;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+    padding-bottom: 5px;
   }
 
   .line-ok {
-    color: #2d6a4f;
+    color: ${({ theme }) => theme.colors.status.NORMAL};
     font-weight: 600;
   }
   .line-busy {
-    color: #52796b;
+    color: ${({ theme }) => theme.colors.brandPrimaryLight};
     font-weight: 600;
   }
   .line-err {
-    color: #dc2626;
+    color: ${({ theme }) => theme.colors.status.CRITICAL};
     font-weight: 600;
-  }
-  .line-n8n {
-    color: #d97706;
-    margin-top: 6px;
-    padding-top: 4px;
-    border-top: 1px dashed #e4e8e3;
   }
 `;
 
@@ -469,7 +717,7 @@ const DiagnosticModalBackdrop = styled.div`
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(30, 36, 32, 0.42);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -480,47 +728,131 @@ const DiagnosticModalBackdrop = styled.div`
 
 const DiagnosticModalCard = styled.div`
   width: 100%;
-  max-width: 540px;
-  background: #ffffff;
-  border: 1px solid #e4e8e3;
-  border-radius: 10px;
-  padding: 18px 20px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
+  max-width: 520px;
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-radius: ${({ theme }) => theme.radius.lg};
+  padding: 22px 24px;
+  box-shadow: ${({ theme }) => theme.shadows.lg};
   display: flex;
   flex-direction: column;
+  gap: 14px;
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const ModalHead = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
-  color: #242925;
-  font-family: ${({ theme }) => theme.fonts.sans};
+  padding-bottom: 10px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+
+  h3 {
+    font-size: 1.02rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: ${({ theme }) => theme.colors.textPrimary};
+  }
+
+  .m-sub {
+    font-size: 0.78rem;
+    color: ${({ theme }) => theme.colors.textSecondary};
+    margin-top: 2px;
+  }
+`;
+
+const ModalNotice = styled.div`
+  padding: 10px 12px;
+  border-radius: 0 8px 8px 0;
+  border-left: 3px solid
+    ${({ $tone, theme }) =>
+      $tone === "danger"
+        ? theme.colors.status.CRITICAL
+        : theme.colors.status.WARNING};
+  background: ${({ $tone }) =>
+    $tone === "danger" ? "rgba(200, 30, 30, 0.06)" : "rgba(180, 83, 9, 0.07)"};
+  color: ${({ $tone }) => ($tone === "danger" ? "#991B1B" : "#92400E")};
+  font-size: 0.8rem;
+  line-height: 1.48;
+`;
+
+const ModalFooterRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+`;
+
+const ModalBtn = styled.button`
+  height: 36px;
+  padding: 0 15px;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
+  border: 1px solid
+    ${({ $variant, theme }) =>
+      $variant === "primary"
+        ? theme.colors.brandPrimary
+        : $variant === "danger"
+          ? theme.colors.status.CRITICAL
+          : theme.colors.borderStrong};
+  background: ${({ $variant, theme }) =>
+    $variant === "primary"
+      ? theme.colors.brandPrimary
+      : $variant === "danger"
+        ? theme.colors.status.CRITICAL
+        : theme.colors.bgSurface};
+  color: ${({ $variant, theme }) =>
+    $variant === "primary" || $variant === "danger"
+      ? "#FFFFFF"
+      : theme.colors.textPrimary};
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &:hover:not(:disabled) {
+    filter: brightness(0.95);
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+  }
 `;
 
 const DiagItemsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 6px;
+  gap: 8px;
 `;
 
 const DiagItemBox = styled.div`
-  background: #f8faf8;
-  border: 1px solid #e4e8e3;
-  border-left: 3px solid #52796b;
-  border-radius: 6px;
-  padding: 6px 10px;
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  border-left: 2.5px solid ${({ theme }) => theme.colors.brandPrimary};
+  border-radius: 0 6px 6px 0;
+  padding: 7px 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
 
   .diag-k {
-    font-size: 0.64rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: #737b75;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.textSecondary};
   }
 
   .diag-v {
     font-family: ${({ theme }) => theme.fonts.mono};
     font-size: 0.78rem;
     font-weight: 600;
-    color: #242925;
+    color: ${({ theme }) => theme.colors.textPrimary};
     word-break: break-word;
   }
 `;
@@ -667,6 +999,13 @@ export function DiagnosticDrawer({
   const [printerPicker, setPrinterPicker] = useState(null);
   const [rebootConfirm, setRebootConfirm] = useState({ open: false, task: null });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const chatFeedRef = useRef(null);
+
+  useEffect(() => {
+    if (chatFeedRef.current) {
+      chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
+    }
+  }, [chatMessages.length, activeTab]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowTimestamp(Date.now()), 1000);
@@ -694,7 +1033,7 @@ export function DiagnosticDrawer({
         );
         setFeedback({
           type: "ok",
-          text: `✅ ${activeReport.title}: ${fixTextEncoding(latestTask.output_summary)}`,
+          text: `${activeReport.title}: ${fixTextEncoding(latestTask.output_summary)}`,
         });
       }
     }
@@ -706,8 +1045,8 @@ export function DiagnosticDrawer({
     return (
       <BladeContainer $collapsed={collapsed}>
         <HeaderBlock>
-          <MicroSerial>AGUARDANDO AGENTES</MicroSerial>
-          <HostHeading>Nenhuma Estação Selecionada</HostHeading>
+          <MicroSerial>Aguardando agentes</MicroSerial>
+          <HostHeading>Nenhuma estação selecionada</HostHeading>
           <SubLocation>
             Instale o Agente Windows (IpojucaRMM-Setup.exe) para registrar novas estações nesta unidade.
           </SubLocation>
@@ -768,21 +1107,21 @@ export function DiagnosticDrawer({
     if (isOffline) {
       if (offlineSeconds >= INACTIVITY_24H) {
         return {
-          badge: "⚠ INATIVO >24H",
-          color: "#B91C1C",
-          bg: "#FEF2F2",
-          border: "#FECACA",
-          headline: `Alerta: desligado há ${formatDurationPt(offlineSeconds)} (>24h)`,
+          badge: "Inativo >24h",
+          alertIcon: true,
+          color: "#C81E1E",
+          bg: "rgba(200, 30, 30, 0.06)",
+          headline: `Desligado há ${formatDurationPt(offlineSeconds)} (>24h)`,
           subline: machine.last_seen_at
             ? `Sem comunicação desde ${new Date(machine.last_seen_at).toLocaleString("pt-BR")}`
             : "Sem comunicação há mais de 24 horas",
         };
       }
       return {
-        badge: "DESLIGADO",
-        color: "#718096",
-        bg: "#F8FAFC",
-        border: "#E2E8F0",
+        badge: "Desligado",
+        alertIcon: false,
+        color: "#64748B",
+        bg: "#F6F7F4",
         headline: `Desligado há ${formatDurationPt(offlineSeconds)}`,
         subline: machine.last_seen_at
           ? `Último contato: ${new Date(machine.last_seen_at).toLocaleString("pt-BR")}`
@@ -791,49 +1130,49 @@ export function DiagnosticDrawer({
     }
     if (liveIdleSeconds >= INACTIVITY_24H) {
       return {
-        badge: "⚠ INATIVO >24H",
-        color: "#B91C1C",
-        bg: "#FEF2F2",
-        border: "#FECACA",
-        headline: `Alerta: inativo há ${formatDurationPt(liveIdleSeconds)} (>24h)`,
-        subline: `Equipamento ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} sem interação de teclado/mouse.`,
+        badge: "Inativo >24h",
+        alertIcon: true,
+        color: "#C81E1E",
+        bg: "rgba(200, 30, 30, 0.06)",
+        headline: `Inativo há ${formatDurationPt(liveIdleSeconds)} (>24h)`,
+        subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} sem interação de teclado ou mouse.`,
       };
     }
     if (isLegacyAgent) {
       return {
-        badge: `AGENTE ${machine.agent_version || "2.2.0"}`,
-        color: "#D97706",
-        bg: "#FFFBEB",
-        border: "#FDE68A",
-        headline: `Estação Ativa • Requer v2.3.0`,
-        subline: `Envie a atualização do agente abaixo para ativar o tempo de ociosidade contínuo.`,
+        badge: `Agente ${cleanDisplayVersion(machine.agent_version || "2.2.0")}`,
+        alertIcon: false,
+        color: "#B45309",
+        bg: "rgba(180, 83, 9, 0.07)",
+        headline: "Estação ativa · atualização recomendada",
+        subline: "Envie a atualização do agente para habilitar recursos recentes.",
       };
     }
     if (liveIdleSeconds < 180) {
       return {
-        badge: "EM USO",
+        badge: "Em uso",
+        alertIcon: false,
         color: "#2D6A4F",
-        bg: "#F0FDF4",
-        border: "#BBF7D0",
-        headline: `Em uso ativo agora`,
+        bg: "rgba(45, 106, 79, 0.07)",
+        headline: "Em uso ativo agora",
         subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} (${uptimeHours}h)`,
       };
     }
     if (liveIdleSeconds < 1800) {
       return {
-        badge: "AUSENTE",
-        color: "#D97706",
-        bg: "#FFFBEB",
-        border: "#FDE68A",
+        badge: "Ausente",
+        alertIcon: false,
+        color: "#B45309",
+        bg: "rgba(180, 83, 9, 0.07)",
         headline: `Ocioso há ${formatDurationPt(liveIdleSeconds)}`,
         subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} (${uptimeHours}h)`,
       };
     }
     return {
-      badge: "OCIOSO",
-      color: "#D97706",
-      bg: "#FFFBEB",
-      border: "#FDE68A",
+      badge: "Ocioso",
+      alertIcon: false,
+      color: "#B45309",
+      bg: "rgba(180, 83, 9, 0.07)",
       headline: `Parado há ${formatDurationPt(liveIdleSeconds)}`,
       subline: `Ligado há ${formatDurationPt(machine.uptime_seconds || 0, false)} sem interação`,
     };
@@ -943,7 +1282,7 @@ export function DiagnosticDrawer({
           `Host: ${machine.hostname} | IPv4: ${machine.ip_address} | CPU: ${Number(machine.cpu_usage_pct).toFixed(1)}% | RAM: ${Number(machine.ram_usage_pct).toFixed(1)}% | Disco: ${Number(machine.disk_usage_pct).toFixed(1)}%`;
         setFeedback({
           type: "ok",
-          text: `✅ ${cleanTitle}: ${summaryMsg}`,
+          text: `${cleanTitle}: ${summaryMsg}`,
         });
         setActiveReport({
           taskId: `sync_${Date.now()}`,
@@ -963,7 +1302,7 @@ export function DiagnosticDrawer({
           res.message || "Atualização OTA despachada para o computador.";
         setFeedback({
           type: "ok",
-          text: `✅ ${cleanTitle}: ${summaryMsg}`,
+          text: `${cleanTitle}: ${summaryMsg}`,
         });
         setActiveReport({
           taskId: `ota_${Date.now()}`,
@@ -1080,201 +1419,166 @@ export function DiagnosticDrawer({
 
   return (
     <>
-      <BladeContainer $collapsed={collapsed}>
+      <BladeContainer $collapsed={collapsed} aria-label="Painel de diagnóstico da estação">
         <HeaderBlock>
           <HeaderTopRow>
             <MicroSerial>
-              ESTAÇÃO #{machine.id} • {machine.ip_address} • v{machine.agent_version || "2.3.0"}
+              #{machine.id} · {machine.ip_address} · {cleanDisplayVersion(machine.agent_version)}
             </MicroSerial>
             <StatusBadge $color={statusColor} $bgColor={statusBg}>
               <span className="dot" />
-              {STATUS_LABELS[machine.health_status] || machine.health_status}
+              {STATUS_PRETTY[machine.health_status] || machine.health_status}
             </StatusBadge>
           </HeaderTopRow>
 
           <div>
             <HostHeading>{fixTextEncoding(machine.hostname)}</HostHeading>
             <SubLocation>
-              {fixTextEncoding(machine.unit_name)} • {fixTextEncoding(machine.sector_name)}
+              {fixTextEncoding(machine.unit_name)} · {fixTextEncoding(machine.sector_name)}
             </SubLocation>
             {units.length > 0 && onUpdateLocation && currentUser?.role !== "VIEWER" && (
-              <select
+              <LocationSelect
+                aria-label="Realocar estação para outra unidade ou setor"
                 value={`${machine.unit_id}:${machine.sector_id}`}
                 onChange={handleSectorChange}
-                style={{
-                  marginTop: "6px",
-                  width: "100%",
-                  padding: "5px 8px",
-                  borderRadius: "6px",
-                  background: "#F8FAF8",
-                  color: "#242925",
-                  border: "1px solid #E4E8E3",
-                  fontFamily: "inherit",
-                  fontSize: "0.74rem",
-                  cursor: "pointer",
-                }}
               >
                 {units.map((u) =>
                   (u.sectors || []).map((s) => (
                     <option key={`${u.id}:${s.id}`} value={`${u.id}:${s.id}`}>
-                      📍 {fixTextEncoding(u.name)} — {fixTextEncoding(s.name)}
+                      {fixTextEncoding(u.name)} — {fixTextEncoding(s.name)}
                     </option>
                   ))
                 )}
-              </select>
+              </LocationSelect>
             )}
           </div>
 
           <ActionToolbar>
-            <HeaderActionBtn $variant="accent" onClick={onFocusCamera}>
-              Focar Maquete
+            <HeaderActionBtn type="button" $variant="accent" onClick={onFocusCamera}>
+              <IconCrosshair size={13} />
+              <span>Focar</span>
             </HeaderActionBtn>
-            <HeaderActionBtn onClick={() => setCollapsed((prev) => !prev)}>
-              {collapsed ? "Expandir" : "Recolher"}
+            <HeaderActionBtn type="button" onClick={() => setCollapsed((prev) => !prev)}>
+              {collapsed ? <IconChevronLeft size={13} /> : <IconChevronRight size={13} />}
+              <span>{collapsed ? "Expandir" : "Recolher"}</span>
             </HeaderActionBtn>
             {onDeleteMachine && currentUser?.role !== "VIEWER" && (
               <HeaderActionBtn
+                type="button"
                 $variant="danger"
                 onClick={() => setDeleteConfirmOpen(true)}
               >
-                Remover PC
+                <IconTrash size={13} />
+                <span>Remover</span>
               </HeaderActionBtn>
             )}
           </ActionToolbar>
         </HeaderBlock>
 
-          {/* Métricas Lineares Limpas e Modernas */}
-          <MetricsLinearGrid>
-            <MetricCard>
-              <div className="m-head">
-                <span>CPU</span>
-                <span className="m-val">{displayCpu.toFixed(0)}%</span>
-              </div>
-              <div className="m-track">
-                <i style={{ width: `${Math.min(100, displayCpu)}%`, background: '#2D6A4F' }} />
-              </div>
-            </MetricCard>
+        {/* Faixa Unificada de Métricas */}
+        <MetricsLinearGrid>
+          <MetricCard>
+            <div className="m-head">
+              <span>CPU</span>
+              <span className="m-val">{displayCpu.toFixed(0)}%</span>
+            </div>
+            <div className="m-track">
+              <i style={{ width: `${Math.min(100, displayCpu)}%`, background: theme.colors.status.NORMAL }} />
+            </div>
+          </MetricCard>
 
-            <MetricCard>
-              <div className="m-head">
-                <span>RAM</span>
-                <span className="m-val">{displayRam.toFixed(0)}%</span>
-              </div>
-              <div className="m-track">
-                <i style={{ width: `${Math.min(100, displayRam)}%`, background: '#52796B' }} />
-              </div>
-            </MetricCard>
+          <MetricCard>
+            <div className="m-head">
+              <span>RAM</span>
+              <span className="m-val">{displayRam.toFixed(0)}%</span>
+            </div>
+            <div className="m-track">
+              <i style={{ width: `${Math.min(100, displayRam)}%`, background: theme.colors.brandPrimaryLight }} />
+            </div>
+          </MetricCard>
 
-            <MetricCard>
-              <div className="m-head">
-                <span>DISCO</span>
-                <span className="m-val">{displayDisk.toFixed(0)}%</span>
-              </div>
-              <div className="m-track">
-                <i style={{ width: `${Math.min(100, displayDisk)}%`, background: '#718096' }} />
-              </div>
-            </MetricCard>
+          <MetricCard>
+            <div className="m-head">
+              <span>Disco</span>
+              <span className="m-val">{displayDisk.toFixed(0)}%</span>
+            </div>
+            <div className="m-track">
+              <i style={{ width: `${Math.min(100, displayDisk)}%`, background: theme.colors.status.OFFLINE }} />
+            </div>
+          </MetricCard>
 
-            <MetricCard>
-              <div className="m-head">
-                <span>TEMP</span>
-                <span className="m-val">
-                  {displayTemp > 0 ? `${displayTemp.toFixed(0)}°C` : "N/D"}
-                </span>
-              </div>
-              <div className="m-track">
-                <i
-                  style={{
-                    width: `${displayTemp > 0 ? Math.min(100, (displayTemp / 90) * 100) : 0}%`,
-                    background: "#D97706",
-                  }}
-                />
-              </div>
-            </MetricCard>
-          </MetricsLinearGrid>
+          <MetricCard>
+            <div className="m-head">
+              <span>Temp.</span>
+              <span className="m-val">
+                {displayTemp > 0 ? `${displayTemp.toFixed(0)}°C` : "N/D"}
+              </span>
+            </div>
+            <div className="m-track">
+              <i
+                style={{
+                  width: `${displayTemp > 0 ? Math.min(100, (displayTemp / 90) * 100) : 0}%`,
+                  background: theme.colors.status.WARNING,
+                }}
+              />
+            </div>
+          </MetricCard>
+        </MetricsLinearGrid>
 
-        {/* Abas Superiores Compactas para Eliminar Rolagem Excessiva */}
+        {/* Abas Segmentadas Limpas */}
         {!collapsed && (
-          <DrawerTabNav>
+          <DrawerTabNav role="tablist" aria-label="Seções do painel de diagnóstico">
             <DrawerTabBtn
               type="button"
+              role="tab"
+              aria-selected={activeTab === "DIAG"}
               $active={activeTab === "DIAG"}
               onClick={() => setActiveTab("DIAG")}
             >
-              <span>📊 Diagnóstico &amp; Hardware</span>
+              <IconActivity size={14} />
+              <span>Diagnóstico</span>
             </DrawerTabBtn>
             <DrawerTabBtn
               type="button"
+              role="tab"
+              aria-selected={activeTab === "ACTIONS"}
               $active={activeTab === "ACTIONS"}
               onClick={() => setActiveTab("ACTIONS")}
             >
-              <span>⚡ Ações &amp; Suporte</span>
+              <IconTerminal size={14} />
+              <span>Ações &amp; Chat</span>
               <span className="badge-count">{taskCatalog.length}</span>
             </DrawerTabBtn>
           </DrawerTabNav>
         )}
 
-        {/* CONTEÚDO DA ABA 1: DIAGNÓSTICO & HARDWARE (Também exibido quando recolhido) */}
+        {/* ABA 1: DIAGNÓSTICO & HARDWARE */}
         {(collapsed || activeTab === "DIAG") && (
           <>
-            {/* Aviso Explícito de Equipamento Desconectado (Consistência de Estados) */}
             {isOffline && (
               <OfflineStaticNotice>
-                <strong>EQUIPAMENTO DESCONECTADO</strong>
+                <strong>Equipamento desconectado</strong>
                 <span>
-                  Exibindo última leitura de telemetria registrada em{" "}
+                  Última leitura registrada em{" "}
                   {machine.last_seen_at
                     ? new Date(machine.last_seen_at).toLocaleTimeString("pt-BR")
                     : "horário anterior"}
-                  . Novas métricas pausadas até a reconexão do agente.
+                  . Novas métricas serão retomadas na reconexão.
                 </span>
               </OfflineStaticNotice>
             )}
 
-            {/* Cartão de Atividade e Ociosidade */}
-            <div
-              style={{
-                flexShrink: 0,
-                background: activityState.bg,
-                border: `1px solid ${activityState.border}`,
-                borderRadius: "6px",
-                padding: "8px 12px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "2px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: "0.66rem",
-                  fontWeight: 700,
-                  color: activityState.color,
-                }}
-              >
-                <span>ESTADO DE ATIVIDADE</span>
-                <span>{activityState.badge}</span>
+            <ActivityBanner $bg={activityState.bg} $color={activityState.color}>
+              <div className="act-top">
+                <span>Estado de atividade</span>
+                <span className="act-badge">
+                  {activityState.alertIcon && <IconAlertTriangle size={12} />}
+                  {activityState.badge}
+                </span>
               </div>
-              <div
-                style={{
-                  fontSize: "0.86rem",
-                  fontWeight: 700,
-                  color: "#242925",
-                }}
-              >
-                {activityState.headline}
-              </div>
-              <div
-                style={{
-                  fontSize: "0.72rem",
-                  color: "#737B75",
-                }}
-              >
-                {activityState.subline}
-              </div>
-            </div>
+              <div className="act-head">{activityState.headline}</div>
+              <div className="act-sub">{activityState.subline}</div>
+            </ActivityBanner>
 
             {!collapsed && (
               <>
@@ -1283,21 +1587,28 @@ export function DiagnosticDrawer({
                 <SpecPlate>
                   <div className="spec-grid-2">
                     <div className="spec-cell">
-                      <span>IPv4 / MAC</span>
-                      <strong className="mono">
-                        {machine.ip_address || "0.0.0.0"}
-                      </strong>
-                      <strong className="mono" style={{ fontSize: "0.66rem", color: "#737B75" }}>
+                      <span className="spec-lbl">IPv4 / MAC</span>
+                      <strong className="mono">{machine.ip_address || "0.0.0.0"}</strong>
+                      <strong
+                        className="mono"
+                        style={{ fontSize: "0.68rem", color: theme.colors.textSecondary }}
+                      >
                         {machine.mac_address || "MAC N/D"}
                       </strong>
                     </div>
                     <div className="spec-cell">
-                      <span>Spooler Impressão</span>
+                      <span className="spec-lbl">Spooler de impressão</span>
                       <strong
                         style={{
-                          color: machine.spooler_running ? "#2D6A4F" : "#DC2626",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          color: machine.spooler_running
+                            ? theme.colors.status.NORMAL
+                            : theme.colors.status.CRITICAL,
                         }}
                       >
+                        <IconPrinter size={13} />
                         {machine.spooler_running ? "Ativo" : "Parado"}
                       </strong>
                     </div>
@@ -1307,18 +1618,18 @@ export function DiagnosticDrawer({
 
                   <div className="spec-grid-2">
                     <div className="spec-cell">
-                      <span>Hardware</span>
+                      <span className="spec-lbl">Hardware</span>
                       <strong>
                         {fixTextEncoding(machine.manufacturer || "N/D")}{" "}
                         {fixTextEncoding(machine.model || "")}
                       </strong>
                     </div>
                     <div className="spec-cell">
-                      <span>Serial / Confiança</span>
+                      <span className="spec-lbl">Serial</span>
                       <strong className="mono">
                         {machine.serial_number || "Não informado"}{" "}
-                        <span style={{ color: "#52796B", fontSize: "0.66rem" }}>
-                          [{machine.identity_confidence || "LOW"}]
+                        <span style={{ color: theme.colors.textSecondary, fontSize: "0.68rem" }}>
+                          ({machine.identity_confidence || "LOW"})
                         </span>
                       </strong>
                     </div>
@@ -1327,7 +1638,7 @@ export function DiagnosticDrawer({
                   <div className="spec-divider" />
 
                   <div className="spec-cell">
-                    <span>Processador</span>
+                    <span className="spec-lbl">Processador</span>
                     <strong>
                       {fixTextEncoding(machine.cpu_model || machine.processor || "Não informado")}
                     </strong>
@@ -1337,135 +1648,111 @@ export function DiagnosticDrawer({
 
                   <div className="spec-grid-2">
                     <div className="spec-cell">
-                      <span>Memória / Disco</span>
+                      <span className="spec-lbl">Memória e disco</span>
                       <strong className="mono">
-                        {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(0)} GB •{" "}
+                        {(Number(machine.ram_total_mb || 8192) / 1024).toFixed(0)} GB ·{" "}
                         {machine.disk_total_gb || 0} GB {machine.disk_type || "N/D"}
                       </strong>
                     </div>
                     <div className="spec-cell">
-                      <span>Sistema</span>
+                      <span className="spec-lbl">Sistema</span>
                       <strong>{fixTextEncoding(machine.os_version || "Windows")}</strong>
                     </div>
                   </div>
                 </SpecPlate>
 
                 <RefreshTelemetryBtn
+                  type="button"
                   onClick={handleManualRefresh}
                   disabled={refreshingNow}
                 >
-                  {refreshingNow
-                    ? "Atualizando dados..."
-                    : "Atualizar Telemetria Agora"}
+                  <IconRefresh size={14} />
+                  <span>
+                    {refreshingNow ? "Atualizando telemetria..." : "Atualizar telemetria agora"}
+                  </span>
                 </RefreshTelemetryBtn>
               </>
             )}
           </>
         )}
 
-        {/* CONTEÚDO DA ABA 2: AÇÕES REMOTAS & SUPORTE */}
+        {/* ABA 2: AÇÕES REMOTAS & CHAT */}
         {!collapsed && activeTab === "ACTIONS" && (
           <>
             {onSendMessage && (
-              <div
-                style={{
-                  flexShrink: 0,
-                  background: "#F8FAF8",
-                  border: "1px solid #E4E8E3",
-                  borderRadius: "8px",
-                  padding: "10px 12px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}
-              >
-                <SectionBar style={{ marginTop: 0 }}>
-                  <span>Aviso na Tela do Computador</span>
+              <ChatPanel>
+                <SectionBar>
+                  <span>Chat com o operador</span>
+                  <span
+                    style={{
+                      fontFamily: theme.fonts.mono,
+                      fontSize: "0.68rem",
+                      fontWeight: 500,
+                      color: theme.colors.textSecondary,
+                    }}
+                  >
+                    {chatMessages.length} msg
+                  </span>
                 </SectionBar>
 
-                <div
-                  style={{
-                    minHeight: "50px",
-                    maxHeight: "110px",
-                    overflowY: "auto",
-                    fontSize: "0.74rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                    padding: "6px 8px",
-                    background: "#FFFFFF",
-                    border: "1px solid #E4E8E3",
-                    borderRadius: "6px",
-                  }}
-                >
+                <ChatFeed ref={chatFeedRef}>
                   {chatMessages.length === 0 ? (
-                    <span style={{ color: "#737B75" }}>
-                      Envie uma mensagem direta para o operador deste PC.
+                    <span style={{ fontSize: "0.76rem", color: theme.colors.textSecondary }}>
+                      Nenhuma conversa ainda. Envie um aviso direto para a tela deste equipamento.
                     </span>
                   ) : (
-                    chatMessages.slice(-6).map((m) => (
-                      <div key={m.id}>
-                        <strong style={{ color: "#52796B" }}>
-                          [{m.sender}]:
-                        </strong>{" "}
-                        <span>{fixTextEncoding(m.message)}</span>
-                      </div>
-                    ))
+                    chatMessages.slice(-20).map((m) => {
+                      const fromTi = m.direction === "SERVER_TO_CLIENT";
+                      const timeStr = m.created_at
+                        ? new Date(m.created_at).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "";
+                      return (
+                        <ChatBubbleRow key={m.id} $fromTi={fromTi}>
+                          <ChatBubble $fromTi={fromTi}>
+                            <div className="cb-head">
+                              <span className="cb-sender">{fixTextEncoding(m.sender)}</span>
+                              {timeStr && <span className="cb-time">{timeStr}</span>}
+                            </div>
+                            <div>{fixTextEncoding(m.message)}</div>
+                          </ChatBubble>
+                        </ChatBubbleRow>
+                      );
+                    })
                   )}
-                </div>
+                </ChatFeed>
 
                 {currentUser?.role !== "VIEWER" ? (
-                  <form
-                    onSubmit={handleSendChatMessage}
-                    style={{ display: "flex", gap: "6px" }}
-                  >
+                  <ChatForm onSubmit={handleSendChatMessage}>
                     <input
                       type="text"
-                      placeholder="Digitar aviso..."
+                      aria-label="Mensagem para o operador do computador"
+                      placeholder="Escrever mensagem para a estação..."
                       value={chatText}
                       onChange={(e) => setChatText(e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: "6px 10px",
-                        borderRadius: "6px",
-                        background: "#FFFFFF",
-                        border: "1px solid #E4E8E3",
-                        fontSize: "0.76rem",
-                        outline: "none",
-                      }}
                     />
-                    <button
-                      type="submit"
-                      disabled={sendingChat || !chatText.trim()}
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "6px",
-                        background: "#52796B",
-                        color: "#FFFFFF",
-                        border: "none",
-                        fontWeight: 600,
-                        fontSize: "0.74rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Enviar
+                    <button type="submit" disabled={sendingChat || !chatText.trim()}>
+                      <IconSend size={13} />
+                      <span>Enviar</span>
                     </button>
-                  </form>
+                  </ChatForm>
                 ) : (
-                  <div style={{ fontSize: "0.7rem", color: "#737B75" }}>
-                    Modo somente leitura ({currentUser?.role}): apenas Suporte N1 ou Admin N2 pode enviar avisos.
+                  <div style={{ fontSize: "0.74rem", color: theme.colors.textSecondary }}>
+                    Modo somente leitura: apenas Suporte N1 ou Admin N2 pode enviar mensagens.
                   </div>
                 )}
-              </div>
+              </ChatPanel>
             )}
 
             <SectionBar>
-              <span>Ações Remotas Autorizadas</span>
+              <span>Ações remotas autorizadas</span>
             </SectionBar>
 
             <TerminalReadout>
               <div className="console-head">
-                <span>Retorno das Tarefas</span>
+                <span>Retorno das tarefas</span>
                 <span>{busyTask ? "Executando..." : "Pronto"}</span>
               </div>
               {feedback ? (
@@ -1481,13 +1768,13 @@ export function DiagnosticDrawer({
                   &gt; {feedback.text}
                 </div>
               ) : (
-                <div style={{ color: "#737B75" }}>
-                  &gt; Selecione uma tarefa abaixo para despachar ao agente.
+                <div style={{ color: theme.colors.textSecondary }}>
+                  &gt; Selecione uma tarefa homologada abaixo para despachar ao agente.
                 </div>
               )}
 
               {(activeReport?.summary || tasks[0]?.output_summary) && (
-                <div style={{ marginTop: "6px" }}>
+                <div style={{ marginTop: "8px" }}>
                   <DiagItemsGrid>
                     {parseDiagnosticSummary(
                       activeReport?.summary || tasks[0]?.output_summary
@@ -1509,12 +1796,14 @@ export function DiagnosticDrawer({
                 return (
                   <KeycapButton
                     key={task.code}
+                    type="button"
                     $risk={task.riskLevel}
                     disabled={!allowed || isBusy}
                     onClick={() => handleRunTask(task)}
                     title={task.description}
                   >
                     <div className="key-head">
+                      <span className="risk-dot" />
                       <span className="key-badge">
                         Risco {RISK_LABELS[task.riskLevel] || task.riskLevel}
                       </span>
@@ -1532,26 +1821,27 @@ export function DiagnosticDrawer({
 
       {printerPicker?.open && (
         <DiagnosticModalBackdrop onClick={() => setPrinterPicker(null)}>
-          <DiagnosticModalCard onClick={(e) => e.stopPropagation()}>
-            <div>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>
-                Instalar Impressora Homologada
-              </h3>
-              <div style={{ fontSize: "0.75rem", color: "#737B75" }}>
-                Estação: {machine.hostname} ({machine.ip_address}) • Selecione a impressora de rede a mapear
+          <DiagnosticModalCard onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <ModalHead>
+              <div>
+                <h3>Instalar impressora homologada</h3>
+                <div className="m-sub">
+                  {machine.hostname} ({machine.ip_address}) · Selecione a impressora de rede
+                </div>
               </div>
-            </div>
+              <HeaderActionBtn type="button" onClick={() => setPrinterPicker(null)} aria-label="Fechar">
+                <IconClose size={14} />
+              </HeaderActionBtn>
+            </ModalHead>
 
             {printerPicker.loading && (
-              <div style={{ fontSize: "0.78rem", color: "#52796B", fontWeight: 600 }}>
+              <div style={{ fontSize: "0.82rem", color: theme.colors.brandPrimary, fontWeight: 600 }}>
                 Carregando impressoras homologadas...
               </div>
             )}
 
             {printerPicker.error && (
-              <div style={{ fontSize: "0.78rem", color: "#DC2626", fontWeight: 600 }}>
-                {printerPicker.error}
-              </div>
+              <ModalNotice $tone="danger">{printerPicker.error}</ModalNotice>
             )}
 
             {!printerPicker.loading && printerPicker.printers.length > 0 && (
@@ -1573,10 +1863,12 @@ export function DiagnosticDrawer({
                         display: "flex",
                         alignItems: "center",
                         gap: "10px",
-                        padding: "8px 10px",
-                        borderRadius: "6px",
-                        border: `1px solid ${selected ? "#52796B" : "#E4E8E3"}`,
-                        background: selected ? "#F0FDF4" : "#F8FAF8",
+                        padding: "9px 11px",
+                        borderRadius: "8px",
+                        border: `1px solid ${
+                          selected ? theme.colors.brandPrimary : theme.colors.borderSubtle
+                        }`,
+                        background: selected ? "rgba(45, 106, 79, 0.06)" : theme.colors.bgSurfaceSubtle,
                         cursor: "pointer",
                       }}
                     >
@@ -1584,28 +1876,29 @@ export function DiagnosticDrawer({
                         type="radio"
                         name="approved_printer"
                         checked={selected}
+                        style={{ accentColor: theme.colors.brandPrimary }}
                         onChange={() =>
                           setPrinterPicker((prev) =>
                             prev ? { ...prev, selectedId: printer.id } : prev
                           )
                         }
                       />
-                      <span style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
-                        <strong style={{ fontSize: "0.8rem", color: "#242925" }}>
+                      <span style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <strong style={{ fontSize: "0.82rem", color: theme.colors.textPrimary }}>
                           {printer.name}
                           <span
                             style={{
                               marginLeft: "6px",
-                              padding: "1px 5px",
-                              borderRadius: "4px",
-                              fontSize: "0.6rem",
-                              fontWeight: 700,
+                              padding: "1px 6px",
+                              borderRadius: "999px",
+                              fontSize: "0.64rem",
+                              fontWeight: 600,
                               background:
                                 printer.source === "NETWORK"
-                                  ? "#EFF6FF"
+                                  ? "rgba(29, 78, 216, 0.09)"
                                   : printer.source === "INSTALLED"
-                                    ? "#F0FDF4"
-                                    : "#FEF3C7",
+                                    ? "rgba(45, 106, 79, 0.1)"
+                                    : "rgba(180, 83, 9, 0.1)",
                               color:
                                 printer.source === "NETWORK"
                                   ? "#1D4ED8"
@@ -1615,21 +1908,21 @@ export function DiagnosticDrawer({
                             }}
                           >
                             {printer.source === "NETWORK"
-                              ? "REDE"
+                              ? "Rede"
                               : printer.source === "INSTALLED"
-                                ? "INSTALADA"
-                                : "HOMOLOGADA"}
+                                ? "Instalada"
+                                : "Homologada"}
                           </span>
                         </strong>
                         <span
                           style={{
-                            fontFamily: "monospace",
+                            fontFamily: theme.fonts.mono,
                             fontSize: "0.72rem",
-                            color: "#737B75",
+                            color: theme.colors.textSecondary,
                           }}
                         >
                           {printer.ip_address}
-                          {printer.model ? ` • ${printer.model}` : ""}
+                          {printer.model ? ` · ${printer.model}` : ""}
                         </span>
                       </span>
                     </label>
@@ -1638,159 +1931,90 @@ export function DiagnosticDrawer({
               </div>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-              <button
-                type="button"
-                onClick={() => setPrinterPicker(null)}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  background: "#F8FAF8",
-                  color: "#242925",
-                  border: "1px solid #E4E8E3",
-                  fontWeight: 600,
-                  fontSize: "0.76rem",
-                  cursor: "pointer",
-                }}
-              >
+            <ModalFooterRow>
+              <ModalBtn type="button" onClick={() => setPrinterPicker(null)}>
                 Cancelar
-              </button>
-              <button
+              </ModalBtn>
+              <ModalBtn
                 type="button"
+                $variant="primary"
                 disabled={!printerPicker.selectedId}
                 onClick={confirmPrinterInstall}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  background: printerPicker.selectedId ? "#52796B" : "#CBD3CB",
-                  color: "#FFFFFF",
-                  border: "none",
-                  fontWeight: 600,
-                  fontSize: "0.76rem",
-                  cursor: printerPicker.selectedId ? "pointer" : "not-allowed",
-                }}
               >
                 Instalar impressora
-              </button>
-            </div>
+              </ModalBtn>
+            </ModalFooterRow>
           </DiagnosticModalCard>
         </DiagnosticModalBackdrop>
       )}
 
       {rebootConfirm.open && (
         <DiagnosticModalBackdrop onClick={() => setRebootConfirm({ open: false, task: null })}>
-          <DiagnosticModalCard onClick={(e) => e.stopPropagation()}>
-            <div>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>Confirmar Reinicialização</h3>
-              <div style={{ fontSize: "0.75rem", color: "#737B75" }}>
-                Estação: {machine.hostname} ({machine.ip_address})
+          <DiagnosticModalCard onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <ModalHead>
+              <div>
+                <h3>Confirmar reinicialização</h3>
+                <div className="m-sub">
+                  {machine.hostname} ({machine.ip_address})
+                </div>
               </div>
-            </div>
+            </ModalHead>
 
-            <div
-              style={{
-                background: "#FFFBEB",
-                border: "1px solid #FDE68A",
-                borderRadius: "6px",
-                padding: "10px 12px",
-                fontSize: "0.78rem",
-                color: "#92400E",
-                lineHeight: 1.4,
-              }}
-            >
-              O computador será reiniciado com aviso de 30 segundos na tela do usuário.
-              Salve o trabalho em aberto antes de confirmar.
-            </div>
+            <ModalNotice $tone="warning">
+              O computador será reiniciado com aviso de 30 segundos na tela do usuário. Salve o
+              trabalho em aberto antes de confirmar.
+            </ModalNotice>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-              <button
-                type="button"
-                onClick={() => setRebootConfirm({ open: false, task: null })}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  background: "#F8FAF8",
-                  color: "#242925",
-                  border: "1px solid #E4E8E3",
-                  fontWeight: 600,
-                  fontSize: "0.76rem",
-                  cursor: "pointer",
-                }}
-              >
+            <ModalFooterRow>
+              <ModalBtn type="button" onClick={() => setRebootConfirm({ open: false, task: null })}>
                 Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmReboot}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  background: "#DC2626",
-                  color: "#FFFFFF",
-                  border: "none",
-                  fontWeight: 600,
-                  fontSize: "0.76rem",
-                  cursor: "pointer",
-                }}
-              >
+              </ModalBtn>
+              <ModalBtn type="button" $variant="danger" onClick={confirmReboot}>
                 Confirmar reinício
-              </button>
-            </div>
+              </ModalBtn>
+            </ModalFooterRow>
           </DiagnosticModalCard>
         </DiagnosticModalBackdrop>
       )}
 
       {activeReport && (
         <DiagnosticModalBackdrop onClick={() => setActiveReport(null)}>
-          <DiagnosticModalCard onClick={(e) => e.stopPropagation()}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                borderBottom: "1px solid #E4E8E3",
-                paddingBottom: "10px",
-              }}
-            >
+          <DiagnosticModalCard onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <ModalHead>
               <div>
-                <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>
-                  {activeReport.title}
-                </h3>
-                <div style={{ fontSize: "0.75rem", color: "#737B75" }}>
-                  Estação: {machine.hostname} ({machine.ip_address}) • {activeReport.timestamp}
+                <h3>{activeReport.title}</h3>
+                <div className="m-sub">
+                  {machine.hostname} ({machine.ip_address}) · {activeReport.timestamp}
                 </div>
               </div>
-              <span
-                style={{
-                  padding: "4px 8px",
-                  borderRadius: "6px",
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                  background:
-                    activeReport.status === "FAILED" || activeReport.status === "EXPIRED"
-                      ? "#FEF2F2"
-                      : activeReport.status === "DISPATCHED" || activeReport.status === "PENDING"
-                        ? "#FFFBEB"
-                        : "#F0FDF4",
-                  color:
-                    activeReport.status === "FAILED" || activeReport.status === "EXPIRED"
-                      ? "#DC2626"
-                      : activeReport.status === "DISPATCHED" || activeReport.status === "PENDING"
-                        ? "#92400E"
-                        : "#2D6A4F",
-                }}
+              <StatusBadge
+                $color={
+                  activeReport.status === "FAILED" || activeReport.status === "EXPIRED"
+                    ? theme.colors.status.CRITICAL
+                    : activeReport.status === "DISPATCHED" || activeReport.status === "PENDING"
+                      ? theme.colors.status.WARNING
+                      : theme.colors.status.NORMAL
+                }
+                $bgColor={
+                  activeReport.status === "FAILED" || activeReport.status === "EXPIRED"
+                    ? theme.colors.statusBg.CRITICAL
+                    : activeReport.status === "DISPATCHED" || activeReport.status === "PENDING"
+                      ? theme.colors.statusBg.WARNING
+                      : theme.colors.statusBg.NORMAL
+                }
               >
+                <span className="dot" />
                 {activeReport.status === "RUNNING"
                   ? "Em execução..."
                   : activeReport.status === "DISPATCHED" || activeReport.status === "PENDING"
-                    ? "Na fila (aguardando agente)"
+                    ? "Na fila"
                     : activeReport.status === "EXPIRED"
                       ? "Expirado"
                       : activeReport.status === "FAILED"
                         ? "Falha"
                         : "Concluído"}
-              </span>
-            </div>
+              </StatusBadge>
+            </ModalHead>
 
             <DiagItemsGrid>
               {parseDiagnosticSummary(activeReport.summary).map((item, idx) => (
@@ -1801,30 +2025,11 @@ export function DiagnosticDrawer({
               ))}
             </DiagItemsGrid>
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                marginTop: "4px",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setActiveReport(null)}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  background: "#52796B",
-                  color: "#FFFFFF",
-                  border: "none",
-                  fontWeight: 600,
-                  fontSize: "0.76rem",
-                  cursor: "pointer",
-                }}
-              >
+            <ModalFooterRow>
+              <ModalBtn type="button" $variant="primary" onClick={() => setActiveReport(null)}>
                 Fechar
-              </button>
-            </div>
+              </ModalBtn>
+            </ModalFooterRow>
           </DiagnosticModalCard>
         </DiagnosticModalBackdrop>
       )}
@@ -1832,67 +2037,35 @@ export function DiagnosticDrawer({
       {deleteConfirmOpen && (
         <DiagnosticModalBackdrop onClick={() => setDeleteConfirmOpen(false)}>
           <DiagnosticModalCard onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-            <div>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>
-                Confirmar Remoção de Equipamento
-              </h3>
-              <div style={{ fontSize: "0.75rem", color: "#737B75" }}>
-                Estação: {fixTextEncoding(machine.hostname)} ({machine.ip_address})
+            <ModalHead>
+              <div>
+                <h3>Confirmar remoção de equipamento</h3>
+                <div className="m-sub">
+                  {fixTextEncoding(machine.hostname)} ({machine.ip_address})
+                </div>
               </div>
-            </div>
+            </ModalHead>
 
-            <div
-              style={{
-                background: "#FEF2F2",
-                border: "1px solid #FECACA",
-                borderRadius: "6px",
-                padding: "10px 12px",
-                fontSize: "0.78rem",
-                color: "#991B1B",
-                lineHeight: 1.4,
-              }}
-            >
-              Esta ação remove permanentemente o cadastro, histórico de telemetria e mensagens
-              desta estação do painel. A operação será registrada na trilha de auditoria.
-            </div>
+            <ModalNotice $tone="danger">
+              Esta ação remove permanentemente o cadastro, histórico de telemetria e mensagens desta
+              estação do painel. A operação será registrada na trilha de auditoria.
+            </ModalNotice>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmOpen(false)}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  background: "#F8FAF8",
-                  color: "#242925",
-                  border: "1px solid #E4E8E3",
-                  fontWeight: 600,
-                  fontSize: "0.76rem",
-                  cursor: "pointer",
-                }}
-              >
+            <ModalFooterRow>
+              <ModalBtn type="button" onClick={() => setDeleteConfirmOpen(false)}>
                 Cancelar
-              </button>
-              <button
+              </ModalBtn>
+              <ModalBtn
                 type="button"
+                $variant="danger"
                 onClick={async () => {
                   setDeleteConfirmOpen(false);
                   if (onDeleteMachine) await onDeleteMachine(machine.id);
                 }}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  background: "#DC2626",
-                  color: "#FFFFFF",
-                  border: "none",
-                  fontWeight: 600,
-                  fontSize: "0.76rem",
-                  cursor: "pointer",
-                }}
               >
                 Confirmar remoção
-              </button>
-            </div>
+              </ModalBtn>
+            </ModalFooterRow>
           </DiagnosticModalCard>
         </DiagnosticModalBackdrop>
       )}

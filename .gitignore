@@ -22,3 +22,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.log
+
+# Third-party installed agent skills (restorable via skills-lock.json)
+.agents/skills/design-taste-frontend/
+.taste-skill/

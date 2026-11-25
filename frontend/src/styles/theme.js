@@ -1,36 +1,50 @@
 export const theme = {
   colors: {
-    bgCanvas: '#F4F5F2', // Fundo linho neutro e acolhedor
-    bgSurface: '#FFFFFF', // Superfícies e cartões brancos puros
-    bgSurfaceSubtle: '#ECEFEB', // Superfícies secundárias neutras
+    bgCanvas: '#F4F5F2', // Linho neutro editorial
+    bgSurface: '#FFFFFF', // Superfície limpa principal
+    bgSurfaceSubtle: '#F6F7F4', // Superfície secundária discreta
+    bgSurfaceHover: '#EEF1EC', // Hover sutil sem saturação
     bgElevated: '#FFFFFF',
-    bgGlassHeavy: 'rgba(255, 255, 255, 0.94)',
-    borderSubtle: '#E4E8E3', // Divisórias discretas
-    borderStrong: '#CBD3CB',
-    textPrimary: '#242925', // Preto carvão de alto contraste
-    textSecondary: '#737B75', // Ardósia neutra
-    textMuted: '#9BA39D',
-    brandPrimary: '#52796B', // Verde sálvia arquitetônico institucional
-    brandPrimaryLight: '#6B9080',
-    brandPrimarySubtle: 'rgba(82, 121, 107, 0.12)',
+    bgGlassHeavy: 'rgba(255, 255, 255, 0.96)',
+    borderSubtle: 'rgba(30, 36, 32, 0.09)', // Hairline fino 1px
+    borderStrong: 'rgba(30, 36, 32, 0.18)',
+    textPrimary: '#1E2420', // Carvão quente de alto contraste (>= 12:1)
+    textSecondary: '#5B655F', // Ardósia legível (>= 5.5:1)
+    textMuted: '#7B857F',
+    brandPrimary: '#2D6A4F', // Único acento institucional verde-floresta
+    brandPrimaryHover: '#23533D',
+    brandPrimaryLight: '#52796B',
+    brandPrimarySubtle: 'rgba(45, 106, 79, 0.09)',
     accentMuted: '#3E5C52',
     status: {
-      NORMAL: '#2D6A4F', // Verde moderado funcional
-      WARNING: '#D97706', // Âmbar discreto
-      CRITICAL: '#DC2626', // Vermelho reservado
-      OFFLINE: '#718096', // Cinza ardósia neutro
+      NORMAL: '#2D6A4F', // Online saudável
+      WARNING: '#B45309', // Âmbar com contraste >= 4.5:1
+      CRITICAL: '#C81E1E', // Vermelho editorial contido
+      OFFLINE: '#64748B', // Ardósia neutra
     },
     statusBg: {
-      NORMAL: 'rgba(45, 106, 79, 0.1)',
-      WARNING: 'rgba(217, 119, 6, 0.12)',
-      CRITICAL: 'rgba(220, 38, 38, 0.1)',
-      OFFLINE: 'rgba(113, 128, 150, 0.12)',
+      NORMAL: 'rgba(45, 106, 79, 0.10)',
+      WARNING: 'rgba(180, 83, 9, 0.10)',
+      CRITICAL: 'rgba(200, 30, 30, 0.09)',
+      OFFLINE: 'rgba(100, 116, 139, 0.11)',
     },
   },
+  radius: {
+    sm: '6px',
+    md: '10px',
+    lg: '12px',
+    pill: '999px',
+  },
+  motion: {
+    ease: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    fast: '150ms',
+    press: '90ms',
+    panel: '200ms',
+  },
   shadows: {
-    sm: '0 1px 3px rgba(0, 0, 0, 0.05)',
-    md: '0 4px 14px rgba(0, 0, 0, 0.06)',
-    lg: '0 12px 32px rgba(0, 0, 0, 0.08)',
+    sm: '0 1px 2px rgba(30, 36, 32, 0.04)',
+    md: '0 6px 20px rgba(30, 36, 32, 0.07)',
+    lg: '0 18px 44px rgba(30, 36, 32, 0.12)',
   },
   fonts: {
     sans: "'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",

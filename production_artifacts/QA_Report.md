@@ -770,3 +770,34 @@ Verificado no navegador (Vite dev em `10.200.33.30:5181` apontando para backend 
 | Suíte automatizada backend (Testes #1 a #18) | `npm --prefix backend test` | **18/18 APROVADO** (`fail 0`, `4.93s`), validando `latest_version: "2.5.1-native-exe"` + SHA-256 64 hex + anti-downgrade SemVer. |
 
 **Parecer do Gate de Qualidade — Ciclo #52:** **APROVADO PELO `@qa`**.
+
+---
+
+## Ciclo #53 — Redesign Editorial do Dashboard (`design-taste-frontend` / `tasteskill 2.5.1`) (`@designer` + `@frontend` + `@qa`)
+
+**Data:** 2026-11-25  
+**Escopo:** Reestruturação completa da camada de interface do Dashboard ([App.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/App.jsx), [DiagnosticDrawer.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DiagnosticDrawer.jsx), [Icons.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/Icons.jsx), [theme.js](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/styles/theme.js), [GlobalStyles.js](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/styles/GlobalStyles.js) e [UnitSectorManagerModal.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/UnitSectorManagerModal.jsx)), preservando intactas as maquetes 3D e Pixel Art e os contratos da API.
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Build de produção Frontend | `npm --prefix frontend run build` (`vite v6.4.6`) | **APROVADO** — `673` módulos em `8.86s`; chunk inicial lazy preservado (`index` `353.34 kB` / `106.66 kB` gzip; `DigitalTwin3D` e `ModelShowcase` em chunks separados). |
+| Varredura de segredos em `frontend/dist/` | `Select-String` (`Admin@Rmm2026`, `Suporte@Rmm2026`, `Gestao@Rmm2026`, `DEMO_PROFILES`) | **APROVADO** — `SECRET_SCAN_HITS = 0`. |
+| Inspeção visual real em navegador headless (`1440×900` e `1280×720`) | CDP + captura real de `frontend/dist` com dados reais (3 estações, alerta >24h, chat bidirecional) | **APROVADO** — `0` erros JS no console, `scrollWidth === clientWidth` (`1280/1280`), barra superior sem cortes após ajuste do scroller de unidades, trilho esquerdo contínuo recolhível, gaveta de diagnóstico e chat em balões validados visualmente. |
+| Regressão Backend (`18/18`) | `npm --prefix backend test` | **18/18 APROVADO** (`fail 0`). |
+
+**Parecer do Gate de Qualidade — Ciclo #53:** **APROVADO PELO `@qa`**.
+
+---
+
+## Ciclo #54 — Redesign Editorial da Tela de Login (`design-taste-frontend`) (`@designer` + `@frontend` + `@security` + `@qa`)
+
+**Data:** 2026-11-25  
+**Escopo:** Reestruturação de [LoginScreen.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/LoginScreen.jsx) e adição de ícones de autenticação em [Icons.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/Icons.jsx) em composição editorial de duas colunas alinhada ao Dashboard do Ciclo #53.
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Build de produção Frontend | `npm --prefix frontend run build` (`vite v6.4.6`) | **APROVADO** — `673` módulos (`10.55s`), chunks lazy preservados. |
+| Varredura de segredos em `frontend/dist/` | `Select-String` (`Admin@Rmm2026`, `Suporte@Rmm2026`, `Gestao@Rmm2026`, `DEMO_PROFILES`) | **APROVADO** — `SECRET_SCAN_HITS = 0`. |
+| Inspeção visual real (`1440×900`, `1280×720`, mobile `390×844`) | CDP em navegador headless contra `frontend/dist` + API real | **APROVADO** — `JS_ERRORS = 0`, `MOBILE = 390/390`, toggle de senha (`type: "text"`), erro inline (`"Credenciais inválidas."`) e indicador real `/api/health` (`"Serviço RMM operacional"`) validados. |
+
+**Parecer do Gate de Qualidade — Ciclo #54:** **APROVADO PELO `@qa`**.

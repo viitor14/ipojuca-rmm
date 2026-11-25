@@ -19,6 +19,15 @@ export const GlobalStyles = createGlobalStyle`
     overflow: hidden;
   }
 
+  button, a, input, select {
+    font-family: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.brandPrimary};
+    outline-offset: 2px;
+  }
+
   /* Barras de rolagem discretas e refinadas */
   ::-webkit-scrollbar {
     width: 6px;
@@ -28,10 +37,19 @@ export const GlobalStyles = createGlobalStyle`
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #CBD5E1;
+    background: rgba(30, 36, 32, 0.16);
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #94A3B8;
+    background: rgba(30, 36, 32, 0.30);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 `;
