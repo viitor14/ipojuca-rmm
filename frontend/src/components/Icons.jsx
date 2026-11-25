@@ -298,3 +298,95 @@ export function IconMonitor(props) {
     </Svg>
   );
 }
+
+export function IconCopy(props) {
+  return (
+    <Svg {...props}>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </Svg>
+  );
+}
+
+export function IconCheck(props) {
+  return (
+    <Svg {...props}>
+      <path d="M20 6L9 17l-5-5" />
+    </Svg>
+  );
+}
+
+export function IconMapPin(props) {
+  return (
+    <Svg {...props}>
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </Svg>
+  );
+}
+
+export function IconMessage(props) {
+  return (
+    <Svg {...props}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </Svg>
+  );
+}
+
+export function IconPower(props) {
+  return (
+    <Svg {...props}>
+      <path d="M12 2v10" />
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+    </Svg>
+  );
+}
+
+export function IconHardDrive(props) {
+  return (
+    <Svg {...props}>
+      <path d="M22 12H2" />
+      <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+      <circle cx="6" cy="16" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="16" r="0.8" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconWifi(props) {
+  return (
+    <Svg {...props}>
+      <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+      <circle cx="12" cy="19.5" r="0.9" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconCpu(props) {
+  return (
+    <Svg {...props}>
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+      <rect x="9.5" y="9.5" width="5" height="5" rx="0.5" />
+      <path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4" />
+    </Svg>
+  );
+}
+
+export function IconSparkles(props) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
+      <path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" />
+    </Svg>
+  );
+}
+
+export function IconClock(props) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </Svg>
+  );
+}

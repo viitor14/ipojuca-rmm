@@ -49,9 +49,10 @@ fi
 echo "[1/5] Atualizando codigo (git pull)..."
 run git pull origin main
 
-echo "[2/5] Rebuild e subida dos containers (mysql, backend, frontend)..."
-run docker compose build --no-cache frontend
-run docker compose up -d --build
+echo "[2/5] Rebuild sem cache e subida dos containers (mysql, backend, frontend)..."
+run docker compose up -d mysql
+run docker compose build --no-cache backend frontend
+run docker compose up -d --force-recreate backend frontend
 
 if [ "$DRY_RUN" = "1" ]; then
   echo "[3/5] [dry-run] aguardaria o backend em http://127.0.0.1:${BACKEND_PORT}/api/health"

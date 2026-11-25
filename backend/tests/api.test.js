@@ -366,7 +366,7 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
 
   const verRes = await requestJson('GET', '/api/agent/version');
   assert.equal(verRes.status, 200);
-  assert.equal(verRes.data.latest_version, '2.5.2-native-exe');
+  assert.equal(verRes.data.latest_version, '2.6.0-native-exe');
   assert.match(String(verRes.data.sha256 || ''), /^[a-f0-9]{64}$/i);
 
   const updateRes = await requestJson(
@@ -395,7 +395,7 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
   // Anti-downgrade: versão igual ou superior à do servidor NÃO recebe auto-update
   const pollSameVer = await requestJson(
     'GET',
-    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.5.2-native-exe&idle_seconds=10',
+    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.6.0-native-exe&idle_seconds=10',
     {
       headers: {
         'X-Agent-Uuid': 'agt-win-posto-teste01',

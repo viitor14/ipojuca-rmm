@@ -815,3 +815,55 @@ Verificado no navegador (Vite dev em `10.200.33.30:5181` apontando para backend 
 | Compilação `csc.exe` (`v2.5.2.0`) | **APROVADO** — `backend/public/IpojucaRMM-Setup.exe` (`90.624 B`, SHA-256 `287e59dc150decfbd4798f404d76e42e3924b34d5e88afd544531b0a3cc28c4a`). |
 | Leitura real não elevada nesta estação | **APROVADO** — `ReadRealTemperatureC() = 29.9°C`, `CollectMetrics()["temperature_c"] = 29.9°C`. |
 | Suíte backend (`npm --prefix backend test`) | **18/18 APROVADO** (`fail 0`, `latest_version = "2.5.2-native-exe"`). |
+
+---
+
+## Ciclo #55 — Redesign Editorial do Painel Inspetor do Computador (`DiagnosticDrawer.jsx` com `design-taste-frontend`) (`@designer` + `@frontend` + `@qa`)
+
+**Data:** 2026-11-25  
+**Escopo:** Reestruturação completa de [DiagnosticDrawer.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DiagnosticDrawer.jsx) e adição de ícones (`IconCopy`, `IconCheck`, `IconMapPin`, `IconMessage`) em [Icons.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/Icons.jsx), aplicando as regras de `cards.md`, `system.md` e `motion.md` (eliminação de caixas aninhadas em 3 níveis, arquitetura em 4 zonas fixo/abas/corpo/rodapé, realocação sob demanda via botão `Mover`, métricas semânticas diretas sobre branco, gráfico com área gradiente sem distorção, lista hairline com cópia em 1 clique para IPv4/MAC/Serial e 3 abas dedicadas `Visão geral`, `Ações` e `Chat`).
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Build de produção Frontend | `npm --prefix frontend run build` (`vite v6.4.6`) | **APROVADO** — `673` módulos em `9.03s`, chunks lazy preservados (`index-BW8yPY1u.js` `368.55 kB` / `109.81 kB` gzip). |
+| Varredura de segredos em `frontend/dist/` | `Select-String` (`Admin@Rmm`, `Suporte@Rmm`, `Gestor@Rmm`, `rmm-ipojuca-enroll`) | **APROVADO** — `SECRET_SCAN_HITS = 0`. |
+| Encaixe vertical em `1440×900` (`Visão geral`) | Inspeção DOM + captura real via CDP em navegador headless | **APROVADO** — `specRows = 8`, `bodyScrollH = 367`, `bodyClientH = 367`, `bodyOverflowY = 0`, `hasSparkSvg = true` (todas as 8 especificações + gráfico + rodapé visíveis sem corte e sem scrollbar). |
+| Abas `Ações` e `Chat` (`1440×900`) | Captura real em navegador headless | **APROVADO** — Catálogo 2 colunas com todas as 10 tarefas + `Retorno das tarefas` integralmente visíveis; aba `Chat` em altura completa com balões limpos e compositor fixo no rodapé. |
+| Interações reais (`1280×720`) | Clique programático em `Mover` e no IP (`Copiar endereço IPv4`) via CDP | **APROVADO** — `moveSelectVisible = true`, `copySwappedToCheck = true` (`IconCopy` → `IconCheck` verde por 1,8s), `scrollW === clientW` (`1280/1280`), `JS_ERRORS = 0`. |
+
+**Parecer do Gate de Qualidade — Ciclo #55:** **APROVADO PELO `@qa`**.
+
+---
+
+## Ciclo #56 — Redesign do Catálogo de Ações e Cards de Execução / Confirmação (`design-taste-frontend`) (`@designer` + `@frontend` + `@qa`)
+
+**Data:** 2026-11-25  
+**Escopo:** Reestruturação da aba `Ações` e dos 4 cards/modais de ação (`activeReport`, `rebootConfirm`, `printerPicker`, `deleteConfirmOpen`) em [DiagnosticDrawer.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/DiagnosticDrawer.jsx) + 6 novos ícones vetoriais em [Icons.jsx](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/frontend/src/components/Icons.jsx), mantendo 100% compatibilidade com o catálogo homologado HMAC-SHA256.
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Build de produção Frontend | `npm --prefix frontend run build` (`vite v6.4.6`) | **APROVADO** — `673` módulos em `10.63s`, chunks lazy preservados (`index-DuJcx59F.js` `390.61 kB` / `114.56 kB` gzip). |
+| Varredura de segredos em `frontend/dist/` | `Select-String` (`Admin@Rmm`, `Suporte@Rmm`, `Gestor@Rmm`, `rmm-ipojuca-enroll`) | **APROVADO** — `SECRET_SCAN_HITS = 0`. |
+| Catálogo agrupado + filtros + rodapé `Última ação` | Captura real em navegador headless (`1440×900`) | **APROVADO** — 3 grupos (`Diagnóstico`, `Manutenção`, `Sistema e periféricos`), filtro rápido (`Todas`, `Diagnóstico`, `Manutenção`, `Sistema`), ícones dedicados, subtítulos claros, sem ruído `"Risco Baixo"` e rodapé fixo `Ver retorno`. |
+| Card de Execução (`activeReport`) | Clique real em `Coletar telemetria` + `Copiar resultado` + `Esc` via CDP | **APROVADO** — `modalOpen = true`, `isCompleted = true`, `hasItem1Bug = false` (tabela hairline estruturada), `hasStepper = true` (`Assinada → Enviada → Retorno`), `hasCopiedLabel = true`, `ESC_CLOSED = true`, proteção contra reabertura indevida após fechamento manual. |
+| Cards de Reinício (`REBOOT_WORKSTATION`) e Impressora (`INSTALL_APPROVED_PRINTER`) | Captura real (`1440×900` e `1280×720`) | **APROVADO** — `printerModalVisible = true`, `scrollW === clientW` (`1280/1280`), `JS_ERRORS = 0`. |
+
+**Parecer do Gate de Qualidade — Ciclo #56:** **APROVADO PELO `@qa`**.
+
+---
+
+## Ciclo #57 — Redesign Editorial do Agente Windows no Padrão `Pulso RMM` (`v2.6.0-native-exe`) (`@designer` + `@engineer` + `@security` + `@qa`)
+
+**Data:** 2026-11-25  
+**Escopo:** Alinhamento completo da interface WinForms e identidade da bandeja do Agente Windows em [IpojucaAgent.cs](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/agent/native/IpojucaAgent.cs) → [IpojucaRMM-Setup.exe](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/public/IpojucaRMM-Setup.exe) (`v2.6.0.0`, zero dependências externas), com `PulsoGraphics.DrawBrandMark`, faixa unificada de 4 métricas (`CPU`, `RAM`, `Disco`, `Temp.`), IPv4 copiável em 1 clique, chat em balões GDI+ (`BubbleChatPanel`), botões arredondados anti-aliased (`PulsoButton`) e atualização de `LATEST_AGENT_VERSION` para `2.6.0-native-exe` em [api.js](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/src/routes/api.js) e [api.test.js](file:///C:/Users/vitor.franca/Desktop/Vitor/monitor/ipojuca-rmm/backend/tests/api.test.js).
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Compilação `csc.exe` (`.NET 4.x`) | `csc.exe /optimize+ /target:winexe ... agent/native/IpojucaAgent.cs` | **APROVADO** — `backend/public/IpojucaRMM-Setup.exe` (`99.840 B`, `FileVersion = 2.6.0.0`, SHA-256 `d97b4af851547f99a2be4e1d70c110f98bb035ad97ff1430fc978b93160e15ec`, `0` erros/avisos). |
+| Proteção UAC (`--verify-admin-exit`) | Execução não elevada em conta padrão | **APROVADO** — `ExitCode = 5` (`ERROR_ACCESS_DENIED`). |
+| Anti-Downgrade SemVer (`IsRemoteVersionNewer`) | Reflexão sobre o executável compilado | **APROVADO** — `2.6.0 > 2.5.2 = True`, `2.5.2 > 2.6.0 = False`, `2.6.0 > 2.6.0 = False`. |
+| Sensor térmico não elevado | `HardwareCollector.ReadRealTemperatureC()` | **APROVADO** — Leitura real `29.9°C` sem elevação. |
+| Captura visual real (`SuperAgentForm` + `BrandMark`) | `DrawToBitmap` + inspeção pixel a pixel | **APROVADO** — Identidade `Pulso RMM`, 4 métricas com barras de `4px`, `IPv4 · Copiar`, balões de chat diferenciados e ícone 32×32 nítido. |
+| Suíte automatizada backend | `npm --prefix backend test` | **18/18 APROVADO** (`fail 0`, `6.63s`, validando `latest_version = "2.6.0-native-exe"` + SHA-256 64 hex). |
+
+**Parecer do Gate de Qualidade — Ciclo #57:** **APROVADO PELO `@qa`**.

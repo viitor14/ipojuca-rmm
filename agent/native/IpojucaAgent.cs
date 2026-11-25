@@ -21,18 +21,18 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-[assembly: AssemblyTitle("Ipojuca RMM - Super Agente Windows")]
+[assembly: AssemblyTitle("Pulso RMM - Agente Windows")]
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA Silencioso e Comunicacao Client-Server")]
-[assembly: AssemblyCompany("Prefeitura do Ipojuca - Secretaria de Saude / TI")]
+[assembly: AssemblyCompany("Pulso RMM")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.5.2.0")]
+[assembly: AssemblyVersion("2.6.0.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.5.2-native-exe";
-        public const string DISPLAY_VERSION = "2.5.2";
+        public const string CURRENT_VERSION = "2.6.0-native-exe";
+        public const string DISPLAY_VERSION = "2.6.0";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public int UnitId = 1;
@@ -65,6 +65,7 @@ namespace IpojucaRMM
         public double CpuPct;
         public double RamPct;
         public double DiskPct;
+        public double? TemperatureC;
         public string IpAddress = "—";
         public bool IsConnected;
         public bool IsSyncing;
@@ -383,22 +384,22 @@ namespace IpojucaRMM
             menu.BackColor = Color.White;
             menu.ForeColor = Color.FromArgb(36, 41, 37);
 
-            ToolStripMenuItem titleItem = new ToolStripMenuItem("RMM Ipojuca — v" + AgentConfig.DISPLAY_VERSION);
+            ToolStripMenuItem titleItem = new ToolStripMenuItem("Pulso RMM · v" + AgentConfig.DISPLAY_VERSION);
             titleItem.Enabled = false;
             titleItem.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
             menu.Items.Add(titleItem);
             menu.Items.Add(new ToolStripSeparator());
 
-            ToolStripMenuItem openPanelItem = new ToolStripMenuItem("Abrir Painel de Suporte e Status");
+            ToolStripMenuItem openPanelItem = new ToolStripMenuItem("Abrir painel de suporte");
             openPanelItem.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
             openPanelItem.Click += (s, e) => ShowStatusWindow();
             menu.Items.Add(openPanelItem);
 
-            ToolStripMenuItem sendNowItem = new ToolStripMenuItem("Sincronizar Telemetria Agora");
+            ToolStripMenuItem sendNowItem = new ToolStripMenuItem("Sincronizar telemetria agora");
             sendNowItem.Click += (s, e) => TriggerHeartbeatAsync("MANUAL_TRAY_CLICK");
             menu.Items.Add(sendNowItem);
 
-            ToolStripMenuItem openLogsItem = new ToolStripMenuItem("Abrir Pasta de Logs");
+            ToolStripMenuItem openLogsItem = new ToolStripMenuItem("Abrir pasta de logs");
             openLogsItem.Click += (s, e) =>
             {
                 try { Process.Start("explorer.exe", _installDir); } catch { }
@@ -406,8 +407,8 @@ namespace IpojucaRMM
             menu.Items.Add(openLogsItem);
 
             menu.Items.Add(new ToolStripSeparator());
-            ToolStripMenuItem exitItem = new ToolStripMenuItem("Encerrar Agente");
-            exitItem.ForeColor = Color.FromArgb(180, 35, 24);
+            ToolStripMenuItem exitItem = new ToolStripMenuItem("Encerrar agente");
+            exitItem.ForeColor = Color.FromArgb(200, 30, 30);
             exitItem.Click += (s, e) => RequestAdminExit();
             menu.Items.Add(exitItem);
 
@@ -423,7 +424,7 @@ namespace IpojucaRMM
             _appIcon = CreateCustomIcon();
             _trayIcon = new NotifyIcon();
             _trayIcon.Icon = _appIcon;
-            _trayIcon.Text = "RMM Ipojuca — " + Environment.MachineName;
+            _trayIcon.Text = "Pulso RMM — " + Environment.MachineName;
             _trayIcon.ContextMenuStrip = menu;
             _trayIcon.Visible = true;
             _trayIcon.DoubleClick += (s, e) => ShowStatusWindow();
@@ -445,7 +446,7 @@ namespace IpojucaRMM
             _commandPollTimer.Start();
         }
 
-        private Icon CreateCustomIcon()
+        public static Icon CreateCustomIcon()
         {
             try
             {
@@ -453,30 +454,9 @@ namespace IpojucaRMM
                 using (Graphics g = Graphics.FromImage(bmp))
                 {
                     g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
                     g.Clear(Color.Transparent);
-
-                    PointF[] shield = new PointF[]
-                    {
-                        new PointF(16f, 2f),
-                        new PointF(28f, 6.5f),
-                        new PointF(26.5f, 18.5f),
-                        new PointF(16f, 30f),
-                        new PointF(5.5f, 18.5f),
-                        new PointF(4f, 6.5f)
-                    };
-
-                    using (SolidBrush fillBrush = new SolidBrush(Color.FromArgb(45, 106, 79)))
-                    {
-                        g.FillPolygon(fillBrush, shield);
-                    }
-                    using (Pen borderPen = new Pen(Color.FromArgb(244, 245, 242), 1.6f))
-                    {
-                        g.DrawPolygon(borderPen, shield);
-                    }
-                    using (SolidBrush dotBrush = new SolidBrush(Color.White))
-                    {
-                        g.FillEllipse(dotBrush, 11.5f, 11.5f, 9f, 9f);
-                    }
+                    PulsoGraphics.DrawBrandMark(g, 1f, 1f, 30f);
                 }
                 return Icon.FromHandle(bmp.GetHicon());
             }
@@ -494,6 +474,7 @@ namespace IpojucaRMM
                 copy.CpuPct = _snapshot.CpuPct;
                 copy.RamPct = _snapshot.RamPct;
                 copy.DiskPct = _snapshot.DiskPct;
+                copy.TemperatureC = _snapshot.TemperatureC;
                 copy.IpAddress = _snapshot.IpAddress;
                 copy.IsConnected = _snapshot.IsConnected;
                 copy.IsSyncing = _snapshot.IsSyncing;
@@ -844,6 +825,10 @@ namespace IpojucaRMM
                         _snapshot.RamPct = Convert.ToDouble(metrics["ram_usage_pct"]);
                     if (metrics.ContainsKey("disk_usage_pct") && metrics["disk_usage_pct"] != null)
                         _snapshot.DiskPct = Convert.ToDouble(metrics["disk_usage_pct"]);
+                    if (metrics.ContainsKey("temperature_c") && metrics["temperature_c"] != null)
+                        _snapshot.TemperatureC = Convert.ToDouble(metrics["temperature_c"]);
+                    else
+                        _snapshot.TemperatureC = null;
                     if (inventory.ContainsKey("ip_address") && inventory["ip_address"] != null)
                     {
                         string ipVal = inventory["ip_address"].ToString().Trim();
@@ -1820,7 +1805,7 @@ namespace IpojucaRMM
         {
             try
             {
-                RunHiddenCommand("shutdown.exe", "/r /t 30 /c \"Reinicializacao solicitada pela Central de TI - RMM Ipojuca (30 segundos)\"", 3000);
+                RunHiddenCommand("shutdown.exe", "/r /t 30 /c \"Reinicializacao solicitada pela Central de TI - Pulso RMM (30 segundos)\"", 3000);
                 return "Reinicialização agendada para daqui a 30 segundos em " + Environment.MachineName + " (aviso exibido na tela).";
             }
             catch (Exception ex)
@@ -2961,30 +2946,605 @@ namespace IpojucaRMM
         }
     }
 
+    public static class PulsoGraphics
+    {
+        public static GraphicsPath CreateRoundedRect(RectangleF bounds, float radius)
+        {
+            float d = radius * 2f;
+            GraphicsPath path = new GraphicsPath();
+            if (radius <= 0.1f)
+            {
+                path.AddRectangle(bounds);
+                return path;
+            }
+            path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
+            path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
+            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        public static void DrawBrandMark(Graphics g, float x, float y, float size)
+        {
+            RectangleF rect = new RectangleF(x, y, size, size);
+            using (GraphicsPath bg = CreateRoundedRect(rect, size * 0.26f))
+            using (SolidBrush fill = new SolidBrush(Color.FromArgb(45, 106, 79)))
+            {
+                g.FillPath(fill, bg);
+            }
+
+            float s = size / 24f;
+            PointF[] pulse = new PointF[]
+            {
+                new PointF(x + 5.5f * s, y + 12.3f * s),
+                new PointF(x + 9.0f * s, y + 12.3f * s),
+                new PointF(x + 10.7f * s, y + 7.6f * s),
+                new PointF(x + 13.1f * s, y + 16.4f * s),
+                new PointF(x + 14.9f * s, y + 12.3f * s),
+                new PointF(x + 18.5f * s, y + 12.3f * s)
+            };
+            using (Pen pen = new Pen(Color.White, Math.Max(1.8f, 2.0f * s)))
+            {
+                pen.StartCap = LineCap.Round;
+                pen.EndCap = LineCap.Round;
+                pen.LineJoin = LineJoin.Round;
+                g.DrawLines(pen, pulse);
+            }
+        }
+    }
+
+    public class PulsoButton : Control
+    {
+        public bool IsPrimary = true;
+        public float CornerRadius = 7f;
+        private bool _hovered = false;
+        private bool _pressed = false;
+
+        public PulsoButton()
+        {
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw |
+                ControlStyles.SupportsTransparentBackColor,
+                true
+            );
+            this.Cursor = Cursors.Hand;
+            this.Font = new Font("Segoe UI", 8.75f, FontStyle.Bold);
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hovered = false;
+            _pressed = false;
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button == MouseButtons.Left)
+            {
+                _pressed = true;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            _pressed = false;
+            Invalidate();
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            this.Cursor = this.Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+        }
+
+        protected override void OnTextChanged(EventArgs e)
+        {
+            base.OnTextChanged(e);
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            Color bg;
+            Color fg;
+            Color border = Color.Transparent;
+
+            if (IsPrimary)
+            {
+                bg = !Enabled
+                    ? Color.FromArgb(148, 179, 165)
+                    : _pressed
+                        ? Color.FromArgb(29, 74, 54)
+                        : _hovered
+                            ? Color.FromArgb(35, 84, 62)
+                            : Color.FromArgb(45, 106, 79);
+                fg = Color.White;
+            }
+            else
+            {
+                bg = !Enabled
+                    ? Color.FromArgb(248, 250, 248)
+                    : _pressed
+                        ? Color.FromArgb(236, 241, 237)
+                        : _hovered
+                            ? Color.FromArgb(244, 247, 245)
+                            : Color.White;
+                fg = Enabled ? Color.FromArgb(30, 36, 32) : Color.FromArgb(148, 156, 150);
+                border = _hovered && Enabled ? Color.FromArgb(182, 194, 185) : Color.FromArgb(212, 220, 214);
+            }
+
+            RectangleF rect = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+            using (GraphicsPath path = PulsoGraphics.CreateRoundedRect(rect, CornerRadius))
+            using (SolidBrush fill = new SolidBrush(bg))
+            {
+                g.FillPath(fill, path);
+                if (border != Color.Transparent)
+                {
+                    using (Pen pen = new Pen(border, 1f))
+                    {
+                        g.DrawPath(pen, path);
+                    }
+                }
+            }
+
+            TextRenderer.DrawText(
+                g,
+                this.Text,
+                this.Font,
+                new Rectangle(0, 0, Width, Height),
+                fg,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix
+            );
+        }
+    }
+
+    public class PulsoStatusPill : Control
+    {
+        private string _label = "Conectando";
+        private Color _dotColor = Color.FromArgb(180, 83, 9);
+        private Color _bgColor = Color.FromArgb(254, 243, 199);
+
+        public PulsoStatusPill()
+        {
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw |
+                ControlStyles.SupportsTransparentBackColor,
+                true
+            );
+            this.BackColor = Color.Transparent;
+            this.Font = new Font("Segoe UI", 8.25f, FontStyle.Bold);
+        }
+
+        public void SetState(string label, Color dotColor, Color bgColor)
+        {
+            if (_label == label && _dotColor == dotColor && _bgColor == bgColor) return;
+            _label = label;
+            _dotColor = dotColor;
+            _bgColor = bgColor;
+            Size textSz = TextRenderer.MeasureText(label ?? "", this.Font, new Size(200, 26), TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+            int targetW = Math.Max(88, Math.Min(136, textSz.Width + 32));
+            int rightEdge = this.Left + this.Width;
+            this.Width = targetW;
+            this.Left = rightEdge - targetW;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            RectangleF rect = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+            using (GraphicsPath path = PulsoGraphics.CreateRoundedRect(rect, (Height - 2f) / 2f))
+            using (SolidBrush fill = new SolidBrush(_bgColor))
+            {
+                g.FillPath(fill, path);
+            }
+
+            float dotSize = 6.5f;
+            float dotX = 11f;
+            float dotY = (Height - dotSize) / 2f;
+            using (SolidBrush dotBrush = new SolidBrush(_dotColor))
+            {
+                g.FillEllipse(dotBrush, dotX, dotY, dotSize, dotSize);
+            }
+
+            TextRenderer.DrawText(
+                g,
+                _label,
+                this.Font,
+                new Rectangle(22, 0, Width - 28, Height),
+                _dotColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix
+            );
+        }
+    }
+
+    public class PulsoMetricsStrip : Control
+    {
+        private double _cpu = 0;
+        private double _ram = 0;
+        private double _disk = 0;
+        private double? _temp = null;
+
+        private readonly Font _lblFont = new Font("Segoe UI", 8f, FontStyle.Regular);
+        private readonly Font _valFont = new Font("Consolas", 13.5f, FontStyle.Bold);
+
+        public PulsoMetricsStrip()
+        {
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw,
+                true
+            );
+            this.BackColor = Color.White;
+        }
+
+        public void UpdateMetrics(double cpu, double ram, double disk, double? temp)
+        {
+            if (Math.Abs(_cpu - cpu) < 0.05 &&
+                Math.Abs(_ram - ram) < 0.05 &&
+                Math.Abs(_disk - disk) < 0.05 &&
+                _temp == temp)
+                return;
+            _cpu = cpu;
+            _ram = ram;
+            _disk = disk;
+            _temp = temp;
+            Invalidate();
+        }
+
+        private static Color ValueTone(double val, double warnAt, double critAt)
+        {
+            if (val >= critAt) return Color.FromArgb(200, 30, 30);
+            if (val >= warnAt) return Color.FromArgb(180, 83, 9);
+            return Color.FromArgb(30, 36, 32);
+        }
+
+        private static Color BarTone(double val, double warnAt, double critAt, Color normalColor)
+        {
+            if (val >= critAt) return Color.FromArgb(200, 30, 30);
+            if (val >= warnAt) return Color.FromArgb(180, 83, 9);
+            return normalColor;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.Clear(Color.White);
+
+            int padX = 20;
+            int innerW = Width - padX * 2;
+            int colW = innerW / 4;
+
+            string[] labels = new string[] { "CPU", "RAM", "Disco", "Temp." };
+            string[] values = new string[]
+            {
+                _cpu > 0 ? string.Format(CultureInfo.InvariantCulture, "{0:0}%", _cpu) : "—",
+                _ram > 0 ? string.Format(CultureInfo.InvariantCulture, "{0:0}%", _ram) : "—",
+                _disk > 0 ? string.Format(CultureInfo.InvariantCulture, "{0:0}%", _disk) : "—",
+                (_temp.HasValue && _temp.Value > 0)
+                    ? string.Format(CultureInfo.InvariantCulture, "{0:0}°C", _temp.Value)
+                    : "N/D"
+            };
+            double[] ratios = new double[]
+            {
+                Math.Min(1.0, Math.Max(0.0, _cpu / 100.0)),
+                Math.Min(1.0, Math.Max(0.0, _ram / 100.0)),
+                Math.Min(1.0, Math.Max(0.0, _disk / 100.0)),
+                (_temp.HasValue && _temp.Value > 0) ? Math.Min(1.0, Math.Max(0.0, _temp.Value / 95.0)) : 0.0
+            };
+            Color[] textColors = new Color[]
+            {
+                _cpu > 0 ? ValueTone(_cpu, 80, 92) : Color.FromArgb(132, 142, 136),
+                _ram > 0 ? ValueTone(_ram, 80, 92) : Color.FromArgb(132, 142, 136),
+                _disk > 0 ? ValueTone(_disk, 82, 92) : Color.FromArgb(132, 142, 136),
+                (_temp.HasValue && _temp.Value > 0) ? ValueTone(_temp.Value, 75, 85) : Color.FromArgb(132, 142, 136)
+            };
+            Color[] barColors = new Color[]
+            {
+                BarTone(_cpu, 80, 92, Color.FromArgb(45, 106, 79)),
+                BarTone(_ram, 80, 92, Color.FromArgb(64, 145, 108)),
+                BarTone(_disk, 82, 92, Color.FromArgb(100, 116, 139)),
+                BarTone(_temp.HasValue ? _temp.Value : 0, 75, 85, Color.FromArgb(64, 145, 108))
+            };
+
+            using (Pen divPen = new Pen(Color.FromArgb(232, 236, 232), 1f))
+            using (SolidBrush trackBrush = new SolidBrush(Color.FromArgb(234, 237, 234)))
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    int x = padX + i * colW;
+                    int cellPadL = i == 0 ? 0 : 12;
+                    int cellPadR = i == 3 ? 0 : 12;
+
+                    if (i > 0)
+                    {
+                        g.DrawLine(divPen, x, 14, x, Height - 14);
+                    }
+
+                    int contentX = x + cellPadL;
+                    int contentW = colW - cellPadL - cellPadR;
+
+                    TextRenderer.DrawText(
+                        g,
+                        labels[i],
+                        _lblFont,
+                        new Rectangle(contentX, 12, contentW, 16),
+                        Color.FromArgb(94, 104, 97),
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix
+                    );
+
+                    TextRenderer.DrawText(
+                        g,
+                        values[i],
+                        _valFont,
+                        new Rectangle(contentX - 1, 29, contentW + 2, 24),
+                        textColors[i],
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix
+                    );
+
+                    RectangleF track = new RectangleF(contentX, 58, contentW, 4f);
+                    using (GraphicsPath tPath = PulsoGraphics.CreateRoundedRect(track, 2f))
+                    {
+                        g.FillPath(trackBrush, tPath);
+                    }
+
+                    float fillW = (float)(contentW * ratios[i]);
+                    if (fillW >= 3f)
+                    {
+                        RectangleF fillRect = new RectangleF(contentX, 58, fillW, 4f);
+                        using (GraphicsPath fPath = PulsoGraphics.CreateRoundedRect(fillRect, 2f))
+                        using (SolidBrush fBrush = new SolidBrush(barColors[i]))
+                        {
+                            g.FillPath(fBrush, fPath);
+                        }
+                    }
+                }
+
+                // Hairline inferior
+                g.DrawLine(divPen, 0, Height - 1, Width, Height - 1);
+            }
+        }
+    }
+
+    public class BubbleChatPanel : Panel
+    {
+        private List<ChatEntry> _entries = new List<ChatEntry>();
+        private readonly Font _senderFont = new Font("Segoe UI", 8f, FontStyle.Bold);
+        private readonly Font _timeFont = new Font("Consolas", 7.5f, FontStyle.Regular);
+        private readonly Font _bodyFont = new Font("Segoe UI", 9f, FontStyle.Regular);
+        private readonly Font _sysFont = new Font("Segoe UI", 8.25f, FontStyle.Regular);
+
+        public BubbleChatPanel()
+        {
+            this.DoubleBuffered = true;
+            this.AutoScroll = true;
+            this.BackColor = Color.White;
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        }
+
+        public void SetEntries(List<ChatEntry> entries)
+        {
+            _entries = entries != null ? new List<ChatEntry>(entries) : new List<ChatEntry>();
+            RecalcScrollHeight();
+            Invalidate();
+            ScrollToBottom();
+        }
+
+        private void ScrollToBottom()
+        {
+            int maxY = Math.Max(0, this.AutoScrollMinSize.Height - this.ClientSize.Height);
+            this.AutoScrollPosition = new Point(0, maxY);
+        }
+
+        private void RecalcScrollHeight()
+        {
+            int contentW = Math.Max(240, this.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 8);
+            int y = 12;
+            foreach (ChatEntry item in _entries)
+            {
+                y += MeasureEntryHeight(item, contentW) + 9;
+            }
+            this.AutoScrollMinSize = new Size(0, y + 6);
+        }
+
+        private int MeasureEntryHeight(ChatEntry item, int totalW)
+        {
+            if (item.IsSystem)
+            {
+                int maxW = Math.Max(180, totalW - 44);
+                Size sz = TextRenderer.MeasureText(
+                    item.Text ?? "",
+                    _sysFont,
+                    new Size(maxW - 22, 0),
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix
+                );
+                return sz.Height + 14;
+            }
+
+            int maxBubbleW = (int)(totalW * 0.78);
+            Size bodySz = TextRenderer.MeasureText(
+                item.Text ?? "",
+                _bodyFont,
+                new Size(maxBubbleW - 22, 0),
+                TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix
+            );
+            return 22 + bodySz.Height + 14;
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            RecalcScrollHeight();
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.Clear(Color.White);
+
+            int padX = 18;
+            int scrollW = this.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
+            int totalW = Math.Max(240, this.ClientSize.Width - padX * 2 - (scrollW > 0 ? 4 : 0));
+            int y = 12 + this.AutoScrollPosition.Y;
+
+            foreach (ChatEntry item in _entries)
+            {
+                if (item.IsSystem)
+                {
+                    int maxSysW = Math.Max(180, totalW - 24);
+                    Size sz = TextRenderer.MeasureText(
+                        item.Text ?? "",
+                        _sysFont,
+                        new Size(maxSysW - 24, 0),
+                        TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix
+                    );
+                    int pillW = Math.Min(maxSysW, sz.Width + 24);
+                    int pillH = sz.Height + 12;
+                    int pillX = padX + (totalW - pillW) / 2;
+
+                    RectangleF pillRect = new RectangleF(pillX, y, pillW, pillH);
+                    using (GraphicsPath path = PulsoGraphics.CreateRoundedRect(pillRect, 9f))
+                    using (SolidBrush fill = new SolidBrush(Color.FromArgb(244, 246, 244)))
+                    {
+                        g.FillPath(fill, path);
+                    }
+                    TextRenderer.DrawText(
+                        g,
+                        item.Text ?? "",
+                        _sysFont,
+                        new Rectangle(pillX + 12, y + 6, pillW - 24, sz.Height),
+                        Color.FromArgb(94, 104, 97),
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix
+                    );
+                    y += pillH + 10;
+                    continue;
+                }
+
+                int maxBubbleW = (int)(totalW * 0.78);
+                Size headSenderSz = TextRenderer.MeasureText(item.Sender ?? "", _senderFont, new Size(maxBubbleW, 20), TextFormatFlags.NoPrefix);
+                Size headTimeSz = TextRenderer.MeasureText(item.Timestamp ?? "", _timeFont, new Size(60, 20), TextFormatFlags.NoPrefix);
+                Size bodySz = TextRenderer.MeasureText(
+                    item.Text ?? "",
+                    _bodyFont,
+                    new Size(maxBubbleW - 24, 0),
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix
+                );
+
+                int headMinW = headSenderSz.Width + headTimeSz.Width + 22;
+                int bubbleW = Math.Min(maxBubbleW, Math.Max(headMinW, bodySz.Width) + 24);
+                int bubbleH = 22 + bodySz.Height + 14;
+                int bubbleX = item.IsSelf ? (padX + totalW - bubbleW) : padX;
+
+                Color bg = item.IsSelf ? Color.FromArgb(233, 244, 238) : Color.FromArgb(243, 245, 242);
+                Color border = item.IsSelf ? Color.FromArgb(201, 226, 212) : Color.FromArgb(227, 231, 227);
+                Color senderClr = item.IsSelf ? Color.FromArgb(45, 106, 79) : Color.FromArgb(30, 36, 32);
+
+                RectangleF bRect = new RectangleF(bubbleX, y, bubbleW, bubbleH);
+                using (GraphicsPath path = PulsoGraphics.CreateRoundedRect(bRect, 10f))
+                using (SolidBrush fill = new SolidBrush(bg))
+                using (Pen pen = new Pen(border, 1f))
+                {
+                    g.FillPath(fill, path);
+                    g.DrawPath(pen, path);
+                }
+
+                TextRenderer.DrawText(
+                    g,
+                    item.Sender ?? "",
+                    _senderFont,
+                    new Rectangle(bubbleX + 12, y + 7, bubbleW - 58, 16),
+                    senderClr,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix
+                );
+
+                TextRenderer.DrawText(
+                    g,
+                    item.Timestamp ?? "",
+                    _timeFont,
+                    new Rectangle(bubbleX + bubbleW - 52, y + 7, 40, 16),
+                    Color.FromArgb(128, 138, 131),
+                    TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix
+                );
+
+                TextRenderer.DrawText(
+                    g,
+                    item.Text ?? "",
+                    _bodyFont,
+                    new Rectangle(bubbleX + 12, y + 25, bubbleW - 24, bodySz.Height + 2),
+                    Color.FromArgb(30, 36, 32),
+                    TextFormatFlags.Left | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix
+                );
+
+                y += bubbleH + 9;
+            }
+        }
+    }
+
     public class SuperAgentForm : Form
     {
-        private readonly Color _bgCanvas = Color.FromArgb(244, 245, 242);
-        private readonly Color _bgCard = Color.White;
-        private readonly Color _bgSubtle = Color.FromArgb(248, 250, 248);
-        private readonly Color _borderColor = Color.FromArgb(228, 232, 227);
-        private readonly Color _textPrimary = Color.FromArgb(36, 41, 37);
-        private readonly Color _textMuted = Color.FromArgb(115, 123, 117);
-        private readonly Color _accentPrimary = Color.FromArgb(45, 106, 79);
-        private readonly Color _accentSecondary = Color.FromArgb(82, 121, 107);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, string lParam);
+        private const int EM_SETCUEBANNER = 0x1501;
 
-        private readonly Label _lblStatusPill;
+        private readonly Color _bgSurface = Color.White;
+        private readonly Color _bgSubtle = Color.FromArgb(248, 250, 248);
+        private readonly Color _borderSubtle = Color.FromArgb(229, 234, 230);
+        private readonly Color _borderStrong = Color.FromArgb(207, 216, 209);
+        private readonly Color _textPrimary = Color.FromArgb(30, 36, 32);
+        private readonly Color _textSecondary = Color.FromArgb(94, 104, 97);
+        private readonly Color _accentPrimary = Color.FromArgb(45, 106, 79);
+
+        private readonly PulsoStatusPill _statusPill;
+        private readonly PulsoMetricsStrip _metricsStrip;
+        private readonly Label _lblIpCopy;
+        private readonly Label _lblIpAction;
         private readonly Label _lblSyncInfo;
-        private readonly Label _lblCpuVal;
-        private readonly Label _lblRamVal;
-        private readonly Label _lblDiskVal;
-        private readonly Label _lblIpVal;
-        private readonly Button _btnSyncNow;
-        private readonly RichTextBox _rtbChat;
+        private readonly PulsoButton _btnSyncNow;
+        private readonly BubbleChatPanel _chatPanel;
         private readonly TextBox _txtMessage;
+        private readonly Label _lblPlaceholder;
+        private readonly Panel _msgWrap;
         private readonly System.Windows.Forms.Timer _uiTimer;
+        private readonly System.Windows.Forms.Timer _copyResetTimer;
         private readonly Func<StationSnapshot> _getSnapshot;
         private readonly Func<List<ChatEntry>> _getChatHistory;
-        private int _lastChatCount = 0;
+        private string _currentIp = "—";
+        private bool _ipCopied = false;
+        private bool _msgFocused = false;
+        private int _lastChatCount = -1;
         private bool _allowRealClose = false;
 
         public SuperAgentForm(
@@ -2998,155 +3558,232 @@ namespace IpojucaRMM
             _getSnapshot = getSnapshot;
             _getChatHistory = getChatHistory;
 
-            this.Text = "RMM Ipojuca — Central de Suporte (" + Environment.MachineName + ")";
-            this.ClientSize = new Size(544, 544);
+            this.Text = "Pulso RMM — " + Environment.MachineName;
+            this.ClientSize = new Size(520, 588);
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = _bgCanvas;
+            this.BackColor = _bgSurface;
             this.ForeColor = _textPrimary;
-            this.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+            this.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
             this.DoubleBuffered = true;
             if (appIcon != null) this.Icon = appIcon;
 
-            // 1. Cartao de Cabecalho Editorial
-            Panel headerCard = CreateCard(16, 16, 512, 68);
-            this.Controls.Add(headerCard);
-
-            Panel accentBar = new Panel();
-            accentBar.BackColor = _accentPrimary;
-            accentBar.Location = new Point(0, 0);
-            accentBar.Size = new Size(4, 68);
-            headerCard.Controls.Add(accentBar);
+            // ZONA 1: CABEÇALHO EDITORIAL PULSO RMM (66px)
+            Panel headerBar = new Panel();
+            headerBar.BackColor = _bgSurface;
+            headerBar.Location = new Point(0, 0);
+            headerBar.Size = new Size(520, 66);
+            headerBar.Paint += (s, e) =>
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                PulsoGraphics.DrawBrandMark(e.Graphics, 20f, 18f, 30f);
+                using (Pen p = new Pen(_borderSubtle, 1f))
+                {
+                    e.Graphics.DrawLine(p, 0, headerBar.Height - 1, headerBar.Width, headerBar.Height - 1);
+                }
+            };
+            this.Controls.Add(headerBar);
 
             Label lblBrand = new Label();
-            lblBrand.Text = "RMM // Saúde Ipojuca";
-            lblBrand.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+            lblBrand.Text = "Pulso RMM";
+            lblBrand.Font = new Font("Segoe UI", 11.5f, FontStyle.Bold);
             lblBrand.ForeColor = _textPrimary;
-            lblBrand.Location = new Point(16, 12);
+            lblBrand.BackColor = Color.Transparent;
+            lblBrand.Location = new Point(60, 14);
             lblBrand.AutoSize = true;
-            headerCard.Controls.Add(lblBrand);
+            headerBar.Controls.Add(lblBrand);
 
-            Label lblSub = new Label();
-            lblSub.Text = "v" + AgentConfig.DISPLAY_VERSION;
-            lblSub.Font = new Font("Segoe UI", 8.5f, FontStyle.Regular);
-            lblSub.ForeColor = _textMuted;
-            lblSub.Location = new Point(16, 38);
-            lblSub.Size = new Size(340, 18);
-            headerCard.Controls.Add(lblSub);
+            Label lblMeta = new Label();
+            lblMeta.Text = Environment.MachineName + " · v" + AgentConfig.DISPLAY_VERSION;
+            lblMeta.Font = new Font("Consolas", 8.25f, FontStyle.Regular);
+            lblMeta.ForeColor = _textSecondary;
+            lblMeta.BackColor = Color.Transparent;
+            lblMeta.Location = new Point(61, 37);
+            lblMeta.Size = new Size(300, 16);
+            headerBar.Controls.Add(lblMeta);
 
-            _lblStatusPill = new Label();
-            _lblStatusPill.Text = "● Conectando";
-            _lblStatusPill.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-            _lblStatusPill.ForeColor = Color.FromArgb(154, 91, 19);
-            _lblStatusPill.BackColor = Color.FromArgb(253, 243, 231);
-            _lblStatusPill.TextAlign = ContentAlignment.MiddleCenter;
-            _lblStatusPill.Location = new Point(368, 20);
-            _lblStatusPill.Size = new Size(128, 28);
-            headerCard.Controls.Add(_lblStatusPill);
+            _statusPill = new PulsoStatusPill();
+            _statusPill.Location = new Point(378, 20);
+            _statusPill.Size = new Size(122, 26);
+            headerBar.Controls.Add(_statusPill);
 
-            // 2. Cartao de Saude e Telemetria Rapida
-            Panel healthCard = CreateCard(16, 96, 512, 136);
-            this.Controls.Add(healthCard);
+            // ZONA 2: FAIXA UNIFICADA DE 4 MÉTRICAS (CPU / RAM / DISCO / TEMP.)
+            _metricsStrip = new PulsoMetricsStrip();
+            _metricsStrip.Location = new Point(0, 66);
+            _metricsStrip.Size = new Size(520, 74);
+            this.Controls.Add(_metricsStrip);
 
-            Label lblHealthTitle = new Label();
-            lblHealthTitle.Text = "SAÚDE DA ESTAÇÃO";
-            lblHealthTitle.Font = new Font("Segoe UI", 7.5f, FontStyle.Bold);
-            lblHealthTitle.ForeColor = _textMuted;
-            lblHealthTitle.Location = new Point(16, 12);
-            lblHealthTitle.AutoSize = true;
-            healthCard.Controls.Add(lblHealthTitle);
+            // SUBFAIXA DE REDE (IP COPIÁVEL 1 CLIQUE) + BOTÃO SINCRONIZAR
+            Panel syncStrip = new Panel();
+            syncStrip.BackColor = _bgSubtle;
+            syncStrip.Location = new Point(0, 140);
+            syncStrip.Size = new Size(520, 44);
+            syncStrip.Paint += (s, e) =>
+            {
+                using (Pen p = new Pen(_borderSubtle, 1f))
+                {
+                    e.Graphics.DrawLine(p, 0, syncStrip.Height - 1, syncStrip.Width, syncStrip.Height - 1);
+                }
+            };
+            this.Controls.Add(syncStrip);
 
-            _lblCpuVal = CreateMetricTile(healthCard, "CPU", "—", 16, 32, 108);
-            _lblRamVal = CreateMetricTile(healthCard, "RAM", "—", 132, 32, 108);
-            _lblDiskVal = CreateMetricTile(healthCard, "DISCO C:", "—", 248, 32, 108);
-            _lblIpVal = CreateMetricTile(healthCard, "ENDEREÇO IP", "—", 364, 32, 132);
+            _lblIpCopy = new Label();
+            _lblIpCopy.Text = "IPv4 —";
+            _lblIpCopy.Font = new Font("Consolas", 8.5f, FontStyle.Bold);
+            _lblIpCopy.ForeColor = _textPrimary;
+            _lblIpCopy.BackColor = Color.Transparent;
+            _lblIpCopy.Cursor = Cursors.Hand;
+            _lblIpCopy.Location = new Point(20, 7);
+            _lblIpCopy.AutoSize = true;
+            _lblIpCopy.Click += (s, e) => CopyIpAddress();
+            syncStrip.Controls.Add(_lblIpCopy);
+
+            _lblIpAction = new Label();
+            _lblIpAction.Text = "Copiar IP";
+            _lblIpAction.Font = new Font("Segoe UI", 7.5f, FontStyle.Regular);
+            _lblIpAction.ForeColor = _textSecondary;
+            _lblIpAction.BackColor = Color.Transparent;
+            _lblIpAction.Cursor = Cursors.Hand;
+            _lblIpAction.Location = new Point(155, 8);
+            _lblIpAction.AutoSize = true;
+            _lblIpAction.Click += (s, e) => CopyIpAddress();
+            syncStrip.Controls.Add(_lblIpAction);
 
             _lblSyncInfo = new Label();
-            _lblSyncInfo.Text = "Última sincronização: aguardando...";
-            _lblSyncInfo.Font = new Font("Segoe UI", 8.5f, FontStyle.Regular);
-            _lblSyncInfo.ForeColor = _textMuted;
-            _lblSyncInfo.Location = new Point(16, 102);
-            _lblSyncInfo.Size = new Size(326, 22);
-            healthCard.Controls.Add(_lblSyncInfo);
+            _lblSyncInfo.Text = "Aguardando primeira sincronização...";
+            _lblSyncInfo.Font = new Font("Segoe UI", 7.75f, FontStyle.Regular);
+            _lblSyncInfo.ForeColor = _textSecondary;
+            _lblSyncInfo.BackColor = Color.Transparent;
+            _lblSyncInfo.Location = new Point(20, 23);
+            _lblSyncInfo.Size = new Size(344, 15);
+            syncStrip.Controls.Add(_lblSyncInfo);
 
-            _btnSyncNow = new Button();
-            _btnSyncNow.Text = "Sincronizar Agora";
-            _btnSyncNow.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-            _btnSyncNow.BackColor = _accentPrimary;
-            _btnSyncNow.ForeColor = Color.White;
-            _btnSyncNow.FlatStyle = FlatStyle.Flat;
-            _btnSyncNow.FlatAppearance.BorderSize = 0;
-            _btnSyncNow.Cursor = Cursors.Hand;
-            _btnSyncNow.Location = new Point(352, 95);
-            _btnSyncNow.Size = new Size(144, 30);
+            _btnSyncNow = new PulsoButton();
+            _btnSyncNow.Text = "Sincronizar";
+            _btnSyncNow.IsPrimary = true;
+            _btnSyncNow.Location = new Point(386, 8);
+            _btnSyncNow.Size = new Size(114, 28);
             _btnSyncNow.Click += (s, e) =>
             {
                 _btnSyncNow.Enabled = false;
                 _btnSyncNow.Text = "Sincronizando...";
                 onManualSync();
             };
-            healthCard.Controls.Add(_btnSyncNow);
+            syncStrip.Controls.Add(_btnSyncNow);
 
-            // 3. Cartao de Chat com a Central de TI
-            Panel chatCard = CreateCard(16, 244, 512, 246);
-            this.Controls.Add(chatCard);
+            // ZONA 3: CANAL DE SUPORTE COM BALÕES MODERNOS
+            Panel chatHeader = new Panel();
+            chatHeader.BackColor = _bgSurface;
+            chatHeader.Location = new Point(0, 184);
+            chatHeader.Size = new Size(520, 34);
+            chatHeader.Paint += (s, e) =>
+            {
+                using (Pen p = new Pen(Color.FromArgb(238, 241, 238), 1f))
+                {
+                    e.Graphics.DrawLine(p, 20, chatHeader.Height - 1, chatHeader.Width - 20, chatHeader.Height - 1);
+                }
+            };
+            this.Controls.Add(chatHeader);
 
             Label lblChatTitle = new Label();
-            lblChatTitle.Text = "CANAL DE SUPORTE — CENTRAL DE TI";
-            lblChatTitle.Font = new Font("Segoe UI", 7.5f, FontStyle.Bold);
-            lblChatTitle.ForeColor = _textMuted;
-            lblChatTitle.Location = new Point(16, 12);
+            lblChatTitle.Text = "Chat com a Central de TI";
+            lblChatTitle.Font = new Font("Segoe UI", 8.75f, FontStyle.Bold);
+            lblChatTitle.ForeColor = _textPrimary;
+            lblChatTitle.Location = new Point(20, 9);
             lblChatTitle.AutoSize = true;
-            chatCard.Controls.Add(lblChatTitle);
+            chatHeader.Controls.Add(lblChatTitle);
 
-            Panel rtbWrap = new Panel();
-            rtbWrap.BackColor = _bgSubtle;
-            rtbWrap.Location = new Point(16, 32);
-            rtbWrap.Size = new Size(480, 158);
-            rtbWrap.Paint += (s, e) =>
+            Label lblChatHint = new Label();
+            lblChatHint.Text = "Enter para enviar";
+            lblChatHint.Font = new Font("Segoe UI", 7.75f, FontStyle.Regular);
+            lblChatHint.ForeColor = Color.FromArgb(132, 142, 136);
+            lblChatHint.TextAlign = ContentAlignment.MiddleRight;
+            lblChatHint.Location = new Point(370, 9);
+            lblChatHint.Size = new Size(130, 16);
+            chatHeader.Controls.Add(lblChatHint);
+
+            _chatPanel = new BubbleChatPanel();
+            _chatPanel.Location = new Point(0, 218);
+            _chatPanel.Size = new Size(520, 270);
+            this.Controls.Add(_chatPanel);
+
+            // COMPOSITOR DE MENSAGEM ARREDONDADO
+            Panel composerBar = new Panel();
+            composerBar.BackColor = _bgSurface;
+            composerBar.Location = new Point(0, 488);
+            composerBar.Size = new Size(520, 56);
+            composerBar.Paint += (s, e) =>
             {
-                using (Pen p = new Pen(_borderColor, 1))
+                using (Pen p = new Pen(_borderSubtle, 1f))
                 {
-                    e.Graphics.DrawRectangle(p, 0, 0, rtbWrap.Width - 1, rtbWrap.Height - 1);
+                    e.Graphics.DrawLine(p, 0, 0, composerBar.Width, 0);
                 }
             };
-            chatCard.Controls.Add(rtbWrap);
+            this.Controls.Add(composerBar);
 
-            _rtbChat = new RichTextBox();
-            _rtbChat.BorderStyle = BorderStyle.None;
-            _rtbChat.ReadOnly = true;
-            _rtbChat.TabStop = false;
-            _rtbChat.WordWrap = true;
-            _rtbChat.ScrollBars = RichTextBoxScrollBars.Vertical;
-            _rtbChat.BackColor = _bgSubtle;
-            _rtbChat.ForeColor = _textPrimary;
-            _rtbChat.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
-            _rtbChat.Location = new Point(8, 6);
-            _rtbChat.Size = new Size(464, 146);
-            rtbWrap.Controls.Add(_rtbChat);
-
-            Panel msgWrap = new Panel();
-            msgWrap.BackColor = Color.White;
-            msgWrap.Location = new Point(16, 200);
-            msgWrap.Size = new Size(374, 32);
-            msgWrap.Paint += (s, e) =>
+            _msgWrap = new Panel();
+            _msgWrap.BackColor = _bgSubtle;
+            _msgWrap.Location = new Point(20, 11);
+            _msgWrap.Size = new Size(382, 34);
+            _msgWrap.Paint += (s, e) =>
             {
-                using (Pen p = new Pen(Color.FromArgb(208, 215, 209), 1))
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                RectangleF r = new RectangleF(0.5f, 0.5f, _msgWrap.Width - 1.5f, _msgWrap.Height - 1.5f);
+                using (GraphicsPath path = PulsoGraphics.CreateRoundedRect(r, 8f))
+                using (SolidBrush fill = new SolidBrush(_msgFocused ? Color.White : _bgSubtle))
+                using (Pen pen = new Pen(_msgFocused ? _accentPrimary : _borderStrong, _msgFocused ? 1.4f : 1f))
                 {
-                    e.Graphics.DrawRectangle(p, 0, 0, msgWrap.Width - 1, msgWrap.Height - 1);
+                    e.Graphics.FillPath(fill, path);
+                    e.Graphics.DrawPath(pen, path);
                 }
             };
-            chatCard.Controls.Add(msgWrap);
+            composerBar.Controls.Add(_msgWrap);
 
             _txtMessage = new TextBox();
             _txtMessage.BorderStyle = BorderStyle.None;
-            _txtMessage.BackColor = Color.White;
+            _txtMessage.BackColor = _bgSubtle;
             _txtMessage.ForeColor = _textPrimary;
-            _txtMessage.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            _txtMessage.Location = new Point(8, 7);
-            _txtMessage.Size = new Size(356, 20);
-            msgWrap.Controls.Add(_txtMessage);
+            _txtMessage.Font = new Font("Segoe UI", 9.25f, FontStyle.Regular);
+            _txtMessage.Location = new Point(11, 8);
+            _txtMessage.Size = new Size(360, 19);
+            _txtMessage.HandleCreated += (s, e) =>
+            {
+                try { SendMessage(_txtMessage.Handle, EM_SETCUEBANNER, (IntPtr)1, "Escrever mensagem para o suporte..."); } catch { }
+            };
+            _txtMessage.TextChanged += (s, e) =>
+            {
+                if (_lblPlaceholder != null)
+                    _lblPlaceholder.Visible = (_txtMessage.TextLength == 0);
+            };
+            _txtMessage.GotFocus += (s, e) =>
+            {
+                _msgFocused = true;
+                _txtMessage.BackColor = Color.White;
+                if (_lblPlaceholder != null) _lblPlaceholder.BackColor = Color.White;
+                _msgWrap.Invalidate();
+            };
+            _txtMessage.LostFocus += (s, e) =>
+            {
+                _msgFocused = false;
+                _txtMessage.BackColor = _bgSubtle;
+                if (_lblPlaceholder != null) _lblPlaceholder.BackColor = _bgSubtle;
+                _msgWrap.Invalidate();
+            };
+            _msgWrap.Controls.Add(_txtMessage);
+
+            _lblPlaceholder = new Label();
+            _lblPlaceholder.Text = "Escrever mensagem para o suporte...";
+            _lblPlaceholder.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
+            _lblPlaceholder.ForeColor = Color.FromArgb(142, 151, 145);
+            _lblPlaceholder.BackColor = _bgSubtle;
+            _lblPlaceholder.Location = new Point(11, 8);
+            _lblPlaceholder.AutoSize = true;
+            _lblPlaceholder.Cursor = Cursors.IBeam;
+            _lblPlaceholder.Click += (s, e) => _txtMessage.Focus();
+            _msgWrap.Controls.Add(_lblPlaceholder);
+            _lblPlaceholder.BringToFront();
 
             Action dispatchMessage = () =>
             {
@@ -3168,41 +3805,55 @@ namespace IpojucaRMM
                 }
             };
 
-            Button btnSend = new Button();
+            PulsoButton btnSend = new PulsoButton();
             btnSend.Text = "Enviar";
-            btnSend.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            btnSend.BackColor = _accentPrimary;
-            btnSend.ForeColor = Color.White;
-            btnSend.FlatStyle = FlatStyle.Flat;
-            btnSend.FlatAppearance.BorderSize = 0;
-            btnSend.Cursor = Cursors.Hand;
-            btnSend.Location = new Point(398, 200);
-            btnSend.Size = new Size(98, 32);
+            btnSend.IsPrimary = true;
+            btnSend.CornerRadius = 8f;
+            btnSend.Location = new Point(410, 11);
+            btnSend.Size = new Size(90, 34);
             btnSend.Click += (s, e) => dispatchMessage();
-            chatCard.Controls.Add(btnSend);
+            composerBar.Controls.Add(btnSend);
 
-            // 4. Rodape discreto
+            // ZONA 4: RODAPÉ DISCRETO (44px)
+            Panel footerBar = new Panel();
+            footerBar.BackColor = _bgSubtle;
+            footerBar.Location = new Point(0, 544);
+            footerBar.Size = new Size(520, 44);
+            footerBar.Paint += (s, e) =>
+            {
+                using (Pen p = new Pen(_borderSubtle, 1f))
+                {
+                    e.Graphics.DrawLine(p, 0, 0, footerBar.Width, 0);
+                }
+            };
+            this.Controls.Add(footerBar);
+
             Label lblFooter = new Label();
-            lblFooter.Text = "Atualizações silenciosas ativas · Encerramento protegido por Administrador";
-            lblFooter.Font = new Font("Segoe UI", 8f, FontStyle.Regular);
-            lblFooter.ForeColor = _textMuted;
-            lblFooter.Location = new Point(16, 508);
-            lblFooter.Size = new Size(356, 20);
-            this.Controls.Add(lblFooter);
+            lblFooter.Text = "Atualização silenciosa ativa · Protegido por UAC";
+            lblFooter.Font = new Font("Segoe UI", 7.75f, FontStyle.Regular);
+            lblFooter.ForeColor = _textSecondary;
+            lblFooter.BackColor = Color.Transparent;
+            lblFooter.Location = new Point(20, 14);
+            lblFooter.Size = new Size(310, 16);
+            footerBar.Controls.Add(lblFooter);
 
-            Button btnMinimize = new Button();
-            btnMinimize.Text = "Minimizar para Bandeja";
-            btnMinimize.Font = new Font("Segoe UI", 8.5f, FontStyle.Regular);
-            btnMinimize.BackColor = Color.White;
-            btnMinimize.ForeColor = _textPrimary;
-            btnMinimize.FlatStyle = FlatStyle.Flat;
-            btnMinimize.FlatAppearance.BorderColor = Color.FromArgb(208, 215, 209);
-            btnMinimize.FlatAppearance.BorderSize = 1;
-            btnMinimize.Cursor = Cursors.Hand;
-            btnMinimize.Location = new Point(378, 501);
-            btnMinimize.Size = new Size(150, 30);
+            PulsoButton btnMinimize = new PulsoButton();
+            btnMinimize.Text = "Recolher para bandeja";
+            btnMinimize.IsPrimary = false;
+            btnMinimize.Font = new Font("Segoe UI", 8.25f, FontStyle.Regular);
+            btnMinimize.Location = new Point(352, 8);
+            btnMinimize.Size = new Size(148, 28);
             btnMinimize.Click += (s, e) => this.Hide();
-            this.Controls.Add(btnMinimize);
+            footerBar.Controls.Add(btnMinimize);
+
+            _copyResetTimer = new System.Windows.Forms.Timer();
+            _copyResetTimer.Interval = 1800;
+            _copyResetTimer.Tick += (s, e) =>
+            {
+                _copyResetTimer.Stop();
+                _ipCopied = false;
+                UpdateIpLabel();
+            };
 
             this.Shown += (s, e) => _txtMessage.Focus();
             this.Activated += (s, e) => { if (_txtMessage.CanFocus) _txtMessage.Focus(); };
@@ -3224,64 +3875,51 @@ namespace IpojucaRMM
             RefreshUi();
         }
 
+        private void CopyIpAddress()
+        {
+            if (string.IsNullOrEmpty(_currentIp) || _currentIp == "—") return;
+            try
+            {
+                Clipboard.SetText(_currentIp);
+                _ipCopied = true;
+                UpdateIpLabel();
+                _copyResetTimer.Stop();
+                _copyResetTimer.Start();
+            }
+            catch { }
+        }
+
+        private void UpdateIpLabel()
+        {
+            _lblIpCopy.Text = "IPv4 " + _currentIp;
+            _lblIpCopy.ForeColor = _ipCopied ? _accentPrimary : _textPrimary;
+            if (_lblIpAction != null)
+            {
+                _lblIpAction.Left = _lblIpCopy.Left + _lblIpCopy.Width + 6;
+                if (_ipCopied)
+                {
+                    _lblIpAction.Text = "✓ Copiado";
+                    _lblIpAction.ForeColor = _accentPrimary;
+                    _lblIpAction.Font = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+                }
+                else
+                {
+                    _lblIpAction.Text = "· Copiar";
+                    _lblIpAction.ForeColor = _textSecondary;
+                    _lblIpAction.Font = new Font("Segoe UI", 7.5f, FontStyle.Regular);
+                }
+            }
+        }
+
         public void ForceCloseFromAdmin()
         {
             _allowRealClose = true;
             try { _uiTimer.Stop(); } catch { }
+            try { _copyResetTimer.Stop(); } catch { }
             this.Close();
         }
 
-        private Panel CreateCard(int x, int y, int width, int height)
-        {
-            Panel p = new Panel();
-            p.BackColor = _bgCard;
-            p.Location = new Point(x, y);
-            p.Size = new Size(width, height);
-            p.Paint += (s, e) =>
-            {
-                using (Pen pen = new Pen(_borderColor, 1))
-                {
-                    e.Graphics.DrawRectangle(pen, 0, 0, p.Width - 1, p.Height - 1);
-                }
-            };
-            return p;
-        }
-
-        private Label CreateMetricTile(Panel parent, string caption, string initialValue, int x, int y, int width)
-        {
-            Panel tile = new Panel();
-            tile.BackColor = _bgSubtle;
-            tile.Location = new Point(x, y);
-            tile.Size = new Size(width, 54);
-            tile.Paint += (s, e) =>
-            {
-                using (Pen pen = new Pen(_borderColor, 1))
-                {
-                    e.Graphics.DrawRectangle(pen, 0, 0, tile.Width - 1, tile.Height - 1);
-                }
-            };
-            parent.Controls.Add(tile);
-
-            Label lblCap = new Label();
-            lblCap.Text = caption;
-            lblCap.Font = new Font("Segoe UI", 7f, FontStyle.Bold);
-            lblCap.ForeColor = _textMuted;
-            lblCap.Location = new Point(10, 7);
-            lblCap.AutoSize = true;
-            tile.Controls.Add(lblCap);
-
-            Label lblVal = new Label();
-            lblVal.Text = initialValue;
-            lblVal.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
-            lblVal.ForeColor = _textPrimary;
-            lblVal.Location = new Point(10, 24);
-            lblVal.Size = new Size(width - 16, 22);
-            tile.Controls.Add(lblVal);
-
-            return lblVal;
-        }
-
-        private void RefreshUi()
+        public void RefreshUi()
         {
             if (this.IsDisposed) return;
 
@@ -3290,33 +3928,26 @@ namespace IpojucaRMM
             {
                 if (snap.IsSyncing)
                 {
-                    _lblStatusPill.Text = "● Sincronizando";
-                    _lblStatusPill.ForeColor = Color.FromArgb(30, 86, 59);
-                    _lblStatusPill.BackColor = Color.FromArgb(230, 244, 236);
+                    _statusPill.SetState("Sincronizando", Color.FromArgb(45, 106, 79), Color.FromArgb(233, 244, 238));
                     _btnSyncNow.Enabled = false;
                     _btnSyncNow.Text = "Sincronizando...";
                 }
                 else if (snap.IsConnected)
                 {
-                    _lblStatusPill.Text = "● Conectado";
-                    _lblStatusPill.ForeColor = Color.FromArgb(30, 86, 59);
-                    _lblStatusPill.BackColor = Color.FromArgb(230, 244, 236);
+                    _statusPill.SetState("Conectado", Color.FromArgb(45, 106, 79), Color.FromArgb(233, 244, 238));
                     _btnSyncNow.Enabled = true;
-                    _btnSyncNow.Text = "Sincronizar Agora";
+                    _btnSyncNow.Text = "Sincronizar";
                 }
                 else
                 {
-                    _lblStatusPill.Text = "● Atenção";
-                    _lblStatusPill.ForeColor = Color.FromArgb(154, 91, 19);
-                    _lblStatusPill.BackColor = Color.FromArgb(253, 243, 231);
+                    _statusPill.SetState("Atenção", Color.FromArgb(180, 83, 9), Color.FromArgb(254, 243, 199));
                     _btnSyncNow.Enabled = true;
-                    _btnSyncNow.Text = "Sincronizar Agora";
+                    _btnSyncNow.Text = "Sincronizar";
                 }
 
-                _lblCpuVal.Text = snap.CpuPct > 0 ? string.Format(CultureInfo.InvariantCulture, "{0:0.0}%", snap.CpuPct) : "—";
-                _lblRamVal.Text = snap.RamPct > 0 ? string.Format(CultureInfo.InvariantCulture, "{0:0.0}%", snap.RamPct) : "—";
-                _lblDiskVal.Text = snap.DiskPct > 0 ? string.Format(CultureInfo.InvariantCulture, "{0:0.0}%", snap.DiskPct) : "—";
-                _lblIpVal.Text = string.IsNullOrEmpty(snap.IpAddress) ? "—" : snap.IpAddress;
+                _metricsStrip.UpdateMetrics(snap.CpuPct, snap.RamPct, snap.DiskPct, snap.TemperatureC);
+                _currentIp = string.IsNullOrEmpty(snap.IpAddress) ? "—" : snap.IpAddress;
+                if (!_ipCopied) UpdateIpLabel();
                 _lblSyncInfo.Text = snap.StatusText;
             }
 
@@ -3324,47 +3955,7 @@ namespace IpojucaRMM
             if (entries != null && entries.Count != _lastChatCount)
             {
                 _lastChatCount = entries.Count;
-                RenderChatEntries(entries);
-            }
-        }
-
-        private void RenderChatEntries(List<ChatEntry> entries)
-        {
-            _rtbChat.SuspendLayout();
-            try
-            {
-                _rtbChat.Clear();
-                for (int i = 0; i < entries.Count; i++)
-                {
-                    ChatEntry item = entries[i];
-                    if (i > 0)
-                    {
-                        _rtbChat.AppendText("\n");
-                    }
-
-                    _rtbChat.SelectionFont = new Font("Segoe UI", 8f, FontStyle.Regular);
-                    _rtbChat.SelectionColor = _textMuted;
-                    _rtbChat.AppendText("[" + item.Timestamp + "] ");
-
-                    _rtbChat.SelectionFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-                    if (item.IsSystem)
-                        _rtbChat.SelectionColor = _accentSecondary;
-                    else if (item.IsSelf)
-                        _rtbChat.SelectionColor = _textPrimary;
-                    else
-                        _rtbChat.SelectionColor = _accentPrimary;
-                    _rtbChat.AppendText(item.Sender + ": ");
-
-                    _rtbChat.SelectionFont = new Font("Segoe UI", 9f, FontStyle.Regular);
-                    _rtbChat.SelectionColor = item.IsSystem ? _textMuted : _textPrimary;
-                    _rtbChat.AppendText(item.Text + "\n");
-                }
-                _rtbChat.SelectionStart = _rtbChat.TextLength;
-                _rtbChat.ScrollToCaret();
-            }
-            finally
-            {
-                _rtbChat.ResumeLayout();
+                _chatPanel.SetEntries(entries);
             }
         }
     }
