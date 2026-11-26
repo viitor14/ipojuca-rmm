@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { fixTextEncoding } from '../styles/theme';
 import { rmmApi } from '../services/api';
-import { IconRefresh, IconSearch, IconMapPin } from './Icons';
+import { IconRefresh, IconSearch, IconMapPin, IconDownload } from './Icons';
 
 const PageContainer = styled.div`
   max-width: 1380px;
@@ -334,16 +334,72 @@ function formatDateTime(iso) {
   });
 }
 
+const ACTION_LABELS = {
+  AUTH_LOGIN_SUCCESS: 'Login realizado',
+  AUTH_LOGIN_FAILED: 'Tentativa de login negada',
+  AUTH_LOGOUT: 'Logout realizado',
+  AUTH_PASSWORD_CHANGED: 'Senha própria alterada',
+  AUTH_PASSWORD_CHANGE_FAILED: 'Falha na troca de senha',
+  USER_CREATED: 'Usuário criado',
+  USER_UPDATED: 'Usuário editado',
+  USER_PASSWORD_RESET: 'Senha redefinida (Admin)',
+  USER_DELETED: 'Usuário excluído',
+  REMOTE_TASK_DISPATCHED: 'Ação remota enviada',
+  REMOTE_TASK_RESULT: 'Retorno de ação remota',
+  REMOTE_TASK_DISPATCH_ERROR: 'Erro ao despachar ação',
+  MANUAL_TELEMETRY_REFRESH: 'Coleta manual de telemetria',
+  AGENT_OTA_UPDATE_REQUESTED: 'Atualização OTA enviada',
+  AGENT_OTA_UPDATE_ALL_REQUESTED: 'Atualização OTA global',
+  AGENT_INSTALLER_DOWNLOADED: 'Instalador baixado',
+  AGENT_AUTO_ENROLLED: 'Estação cadastrada',
+  AGENT_REBOUND: 'Reassociação de hardware',
+  AGENT_REVOKED: 'Agente revogado',
+  AGENT_UNREVOKED: 'Agente reativado',
+  AGENT_DISCONNECTED: 'Agente desconectado',
+  AGENT_AUTH_FAILED: 'Auth de agente recusada',
+  AGENT_MESSAGE_SENT: 'Mensagem enviada (TI)',
+  AGENT_MESSAGE_RECEIVED: 'Mensagem recebida (PC)',
+  MACHINE_RELOCATED: 'Estação movida',
+  MACHINE_DELETED: 'Estação removida',
+  UNIT_CREATED: 'Unidade criada',
+  UNIT_UPDATED: 'Unidade editada',
+  UNIT_DELETED: 'Unidade excluída',
+  SECTOR_CREATED: 'Setor criado',
+  SECTOR_UPDATED: 'Setor editado',
+  SECTOR_DELETED: 'Setor excluído',
+  SECURITY_BLOCKED_ARBITRARY_COMMAND: 'Comando livre bloqueado',
+  SECURITY_BLOCKED_UNKNOWN_TASK: 'Tarefa desconhecida bloqueada',
+  SECURITY_BLOCKED_INSUFFICIENT_ROLE: 'Ação bloqueada (RBAC)',
+  SECURITY_BLOCKED_TASK_RESULT_SPOOF: 'Spoof de tarefa bloqueado',
+  SECURITY_BLOCKED_ACTIVE_AGENT_REBIND: 'Rebind ativo bloqueado',
+  HARDWARE_KEY_CONFLICT: 'Conflito de hardware',
+};
+
+function sanitizeCsvCell(value) {
+  let str = String(value ?? '').replace(/\r?\n/g, ' ').trim();
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
 function classifyAuditAction(actionType = '') {
   const act = String(actionType).toUpperCase();
   if (
     act.startsWith('SECURITY_') ||
     act.includes('FAILED') ||
-    act.includes('REVOKED')
+    act.includes('REVOKED') ||
+    act.includes('CONFLICT') ||
+    act.includes('ERROR')
   ) {
     return { category: 'SECURITY', color: '#C81E1E', bg: 'rgba(200, 30, 30, 0.10)' };
   }
-  if (act.startsWith('REMOTE_TASK') || act.startsWith('AGENT_OTA')) {
+  if (
+    act.startsWith('REMOTE_TASK') ||
+    act.startsWith('AGENT_OTA') ||
+    act === 'MANUAL_TELEMETRY_REFRESH' ||
+    act.startsWith('AGENT_MESSAGE')
+  ) {
     return { category: 'TASKS', color: '#B45309', bg: 'rgba(180, 83, 9, 0.11)' };
   }
   if (act.startsWith('USER_') || act.startsWith('AUTH_')) {
@@ -359,13 +415,19 @@ function summarizeAuditDetails(raw) {
     try {
       obj = JSON.parse(raw);
     } catch {
-      return raw.slice(0, 120);
+      return raw.slice(0, 160);
     }
   }
   if (typeof obj !== 'object' || obj === null) return String(obj);
+  if (obj.task_title && obj.output_summary) {
+    return `${obj.task_title} (${obj.status || 'OK'}): ${String(obj.output_summary).slice(0, 160)}`;
+  }
+  if (obj.task_title && obj.task_code) {
+    return `${obj.task_title} (${obj.task_code}) · ${obj.task_id || ''}`.replace(/\s*·\s*$/, '');
+  }
   const entries = Object.entries(obj)
     .filter(([, v]) => v !== null && v !== undefined && v !== '')
-    .slice(0, 4)
+    .slice(0, 5)
     .map(([k, v]) => {
       const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
       return `${k}: ${val}`;
@@ -379,6 +441,7 @@ export function MonitoringAuditView({
   allMachines = [],
   alerts = [],
   currentUser,
+  latestAuditEvent = null,
   onOpenMachineInMap,
   onRefreshFleet,
 }) {
@@ -391,19 +454,21 @@ export function MonitoringAuditView({
 
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState('');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditCategory, setAuditCategory] = useState('ALL');
 
-  const loadAuditLogs = useCallback(async () => {
+  const loadAuditLogs = useCallback(async ({ silent = false } = {}) => {
     if (!token || !isAdmin) return;
-    setAuditLoading(true);
+    if (!silent) setAuditLoading(true);
+    setAuditError('');
     try {
       const res = await rmmApi.getAuditLogs(token);
       setAuditLogs(res.logs || []);
-    } catch {
-      setAuditLogs([]);
+    } catch (err) {
+      setAuditError(err?.message || 'Não foi possível carregar a trilha de auditoria.');
     } finally {
-      setAuditLoading(false);
+      if (!silent) setAuditLoading(false);
     }
   }, [token, isAdmin]);
 
@@ -412,6 +477,25 @@ export function MonitoringAuditView({
       loadAuditLogs();
     }
   }, [isAdmin, loadAuditLogs]);
+
+  // Recarrega ao abrir a aba Trilha de auditoria e mantém sincronização periódica
+  useEffect(() => {
+    if (!isAdmin || activeTab !== 'AUDIT') return undefined;
+    loadAuditLogs({ silent: auditLogs.length > 0 });
+    const timer = setInterval(() => {
+      loadAuditLogs({ silent: true });
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [isAdmin, activeTab, loadAuditLogs]);
+
+  // Inserção imediata em tempo real via WebSocket (audit:created)
+  useEffect(() => {
+    if (!isAdmin || !latestAuditEvent || !latestAuditEvent.id) return;
+    setAuditLogs((prev) => {
+      if (prev.some((l) => Number(l.id) === Number(latestAuditEvent.id))) return prev;
+      return [latestAuditEvent, ...prev].slice(0, 250);
+    });
+  }, [isAdmin, latestAuditEvent]);
 
   // Consolida alertas do backend com alertas ao vivo de inatividade >24h
   const combinedAlerts = useMemo(() => {
@@ -498,6 +582,7 @@ export function MonitoringAuditView({
       if (q) {
         const hay = [
           l.action_type,
+          ACTION_LABELS[l.action_type] || '',
           l.user_name,
           l.user_email,
           l.machine_hostname,
@@ -511,6 +596,35 @@ export function MonitoringAuditView({
       return true;
     });
   }, [auditLogs, auditCategory, auditSearch]);
+
+  function handleExportAuditCsv() {
+    const headers = ['Data/Hora', 'Evento', 'Codigo', 'Operador', 'Email', 'Estacao', 'IP', 'Detalhes'];
+    const rows = filteredAuditLogs.map((l) => [
+      formatDateTime(l.created_at),
+      ACTION_LABELS[l.action_type] || l.action_type,
+      l.action_type,
+      fixTextEncoding(l.user_name || 'Sistema / Agente'),
+      l.user_email || '',
+      l.machine_hostname || '',
+      l.ip_address || '',
+      summarizeAuditDetails(l.details_json),
+    ]);
+    const lines = [
+      headers.map(sanitizeCsvCell).join(';'),
+      ...rows.map((r) => r.map(sanitizeCsvCell).join(';')),
+    ];
+    const blob = new Blob([`\uFEFF${lines.join('\r\n')}`], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `pulso-rmm-auditoria-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 4000);
+  }
 
   function openAlertInMap(al) {
     const machine = allMachines.find((m) => Number(m.id) === Number(al.machine_id));
@@ -528,16 +642,29 @@ export function MonitoringAuditView({
             Acompanhamento de incidentes da frota e trilha auditável de ações remotas, acessos e segurança.
           </p>
         </div>
-        <ActionBtn
-          type="button"
-          onClick={() => {
-            onRefreshFleet?.();
-            if (isAdmin) loadAuditLogs();
-          }}
-        >
-          <IconRefresh size={14} />
-          <span>Atualizar</span>
-        </ActionBtn>
+        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+          {activeTab === 'AUDIT' && isAdmin && (
+            <ActionBtn
+              type="button"
+              onClick={handleExportAuditCsv}
+              disabled={filteredAuditLogs.length === 0}
+              title="Exportar trilha de auditoria filtrada em CSV"
+            >
+              <IconDownload size={14} />
+              <span>Exportar CSV ({filteredAuditLogs.length})</span>
+            </ActionBtn>
+          )}
+          <ActionBtn
+            type="button"
+            onClick={() => {
+              onRefreshFleet?.();
+              if (isAdmin) loadAuditLogs();
+            }}
+          >
+            <IconRefresh size={14} />
+            <span>Atualizar</span>
+          </ActionBtn>
+        </div>
       </PageHeader>
 
       <TabBar>
@@ -759,6 +886,22 @@ export function MonitoringAuditView({
             </CategoryStrip>
           </FilterBar>
 
+          {auditError && (
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: 8,
+                background: '#FEF2F2',
+                border: '1px solid #FECACA',
+                color: '#991B1B',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+              }}
+            >
+              {auditError}
+            </div>
+          )}
+
           <TableCard>
             <TableScroller>
               {auditLoading ? (
@@ -780,15 +923,19 @@ export function MonitoringAuditView({
                   <tbody>
                     {filteredAuditLogs.map((log) => {
                       const cls = classifyAuditAction(log.action_type);
+                      const friendlyLabel = ACTION_LABELS[log.action_type];
                       return (
                         <tr key={log.id}>
                           <td className="mono">{formatDateTime(log.created_at)}</td>
                           <td>
                             <Pill $bg={cls.bg} $color={cls.color}>
-                              <span className="mono" style={{ fontSize: '0.68rem' }}>
-                                {log.action_type}
-                              </span>
+                              <span>{friendlyLabel || log.action_type}</span>
                             </Pill>
+                            {friendlyLabel && (
+                              <div className="sub mono" style={{ fontSize: '0.66rem' }}>
+                                {log.action_type}
+                              </div>
+                            )}
                           </td>
                           <td>
                             <div style={{ fontWeight: 600 }}>

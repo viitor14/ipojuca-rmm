@@ -1796,27 +1796,69 @@ class RmmRepository {
     return task;
   }
 
+  setAuditListener(fn) {
+    this.auditListener = typeof fn === 'function' ? fn : null;
+  }
+
   async recordAuditLog({ userId = null, machineId = null, actionType, ipAddress, details = {} }) {
+    const cleanAction = String(actionType || 'SYSTEM_EVENT').trim().slice(0, 64);
+    const cleanIp = String(ipAddress || '127.0.0.1').trim().slice(0, 45);
+    const cleanUserId = userId ? Number(userId) : null;
+    const cleanMachineId = machineId ? Number(machineId) : null;
     const entry = {
       id: this.auditLogs.length + 1,
-      user_id: userId,
-      machine_id: machineId,
-      action_type: actionType,
-      ip_address: ipAddress || '127.0.0.1',
+      user_id: cleanUserId,
+      machine_id: cleanMachineId,
+      action_type: cleanAction,
+      ip_address: cleanIp,
       details_json: details,
       created_at: new Date().toISOString(),
     };
 
     if (this.mode === 'mysql') {
-      await this.pool.execute(
+      const [result] = await this.pool.execute(
         `INSERT INTO audit_logs (user_id, machine_id, action_type, ip_address, details_json)
          VALUES (?, ?, ?, ?, ?)`,
-        [userId, machineId, actionType, entry.ip_address, JSON.stringify(details)]
+        [cleanUserId, cleanMachineId, cleanAction, cleanIp, JSON.stringify(details || {})]
       );
+      if (result?.insertId) {
+        entry.id = Number(result.insertId);
+      }
+      if (this.auditListener) {
+        try {
+          const [rows] = await this.pool.execute(
+            `SELECT l.*, u.name AS user_name, u.email AS user_email, m.hostname AS machine_hostname
+               FROM audit_logs l
+               LEFT JOIN users u ON u.id = l.user_id
+               LEFT JOIN machines m ON m.id = l.machine_id
+              WHERE l.id = ? LIMIT 1`,
+            [entry.id]
+          );
+          if (rows[0]) {
+            this.auditListener(rows[0]);
+          }
+        } catch {
+          // Nao falha a operacao principal se broadcast de auditoria falhar
+        }
+      }
       return entry;
     }
 
     this.auditLogs.unshift(entry);
+    if (this.auditListener) {
+      try {
+        const u = cleanUserId ? this.users.find((x) => x.id === cleanUserId) : null;
+        const m = cleanMachineId ? this.machines.find((x) => x.id === cleanMachineId) : null;
+        this.auditListener({
+          ...entry,
+          user_name: u?.name || null,
+          user_email: u?.email || null,
+          machine_hostname: m?.hostname || null,
+        });
+      } catch {
+        // Ignora erro de listener em memoria
+      }
+    }
     return entry;
   }
 

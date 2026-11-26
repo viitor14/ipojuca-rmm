@@ -752,7 +752,7 @@ export function InventoryView({
   units = [],
   allMachines = [],
   currentUser,
-  latestAgentVersion = '2.6.1-native-exe',
+  latestAgentVersion = '2.6.2-native-exe',
   onOpenMachineInMap,
   onUpdateLocation,
   onRevokeMachine,

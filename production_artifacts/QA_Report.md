@@ -901,3 +901,20 @@ Verificado no navegador (Vite dev em `10.200.33.30:5181` apontando para backend 
 | Responsividade `1280×720` (`TopBar` + `Mapa`) e Console | Captura real em navegador headless | **APROVADO** — `scrollW === clientW` (`1280/1280`), `headerScrollW === headerClientW` (`1280/1280`), `JS_ERRORS = 0`. |
 
 **Parecer do Gate de Qualidade — Ciclo #59:** **APROVADO PELO `@qa` E `@security`**.
+
+---
+
+## Ciclo #60 — Limpeza Recursiva Segura de Temp (`v2.6.2-native-exe`) & Trilha de Auditoria Empresarial em Tempo Real (`@engineer` + `@frontend` + `@security` + `@qa`)
+
+**Data:** 2026-11-26  
+**Escopo:** Correção completa da limpeza de cache temporário no Agente Windows (arquivos + subpastas + atributos `ReadOnly` + bloqueio anti-Symlink/ReparsePoint + relatório estruturado honesto), rate limiter corporativo por agente (evitando `429` em redes NAT) e evolução da Trilha de Auditoria empresarial com transmissão em tempo real via Socket.io (`audit:created` restrito a `ADMIN_N2`), rótulos em português, cobertura total (envio/retorno de tarefas vinculado ao operador, downloads do instalador, chat e erros de despacho), `Cache-Control: no-store` e exportação CSV segura.
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Compilação `csc.exe` (`v2.6.2.0`) | `csc.exe /optimize+ /target:winexe ... agent/native/IpojucaAgent.cs` | **APROVADO** — `IpojucaRMM-Setup.exe` (`102.912 B`, `FileVersion = 2.6.2.0`, SHA-256 `1cc4baf5ebd3ebe2fc7b347697b59064227c559158b0c950e33dad837c8db0ea`, `0` erros/avisos). |
+| Sandbox real `CleanDirectoryRecursiveSafe` | Reflexão .NET sobre diretório com arquivos soltos, subpastas aninhadas e arquivo `ReadOnly` | **APROVADO** — `DeletedFiles = 3`, `DeletedDirs = 3`, `Skipped = 0`, `Remaining = 0`. |
+| Suíte Automatizada Backend (Testes #1 a #21) | `npm --prefix backend test` | **21/21 APROVADO** (`fail 0`, `6.85s`), incluindo **Teste #21** (`CLEAR_TEMP_CACHE` dispatch + retorno vinculado ao operador + listener em tempo real). |
+| Build Frontend + Varredura de Segredos | `npm --prefix frontend run build` + `Select-String` | **APROVADO** — `676` módulos (`8.14s`), `SECRET_SCAN_HITS = 0`. |
+| Bateria E2E Real em Navegador Headless | `node scratch/e2e_ciclo59_functional.mjs` | **20/20 APROVADO** (`JS_ERRORS = 0`), validando `Limpar Cache Temporário` e `Pastas removidas: 6` na aba `Trilha de auditoria → Tarefas remotas`. |
+
+**Parecer do Gate de Qualidade — Ciclo #60:** **APROVADO PELO `@qa` E `@security`**.

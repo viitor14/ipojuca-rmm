@@ -5,6 +5,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 async function request(path, { method = 'GET', token, body, headers = {} } = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -278,6 +279,9 @@ export function connectDashboardSocket(token, handlers = {}) {
   }
   if (handlers.onUnitsUpdated) {
     socket.on('units:updated', handlers.onUnitsUpdated);
+  }
+  if (handlers.onAuditCreated) {
+    socket.on('audit:created', handlers.onAuditCreated);
   }
   if (handlers.onConnect) {
     socket.on('connect', handlers.onConnect);

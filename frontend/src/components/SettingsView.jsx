@@ -1038,7 +1038,7 @@ export function SettingsView({
                   <AgentMetaGrid>
                     <div className="meta-item">
                       <span className="m-lbl">Versão publicada</span>
-                      <span className="m-val">{agentInfo?.latest_version || '2.6.1-native-exe'}</span>
+                      <span className="m-val">{agentInfo?.latest_version || '2.6.2-native-exe'}</span>
                     </div>
                     <div className="meta-item">
                       <span className="m-lbl">Tamanho</span>

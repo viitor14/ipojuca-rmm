@@ -366,7 +366,7 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
 
   const verRes = await requestJson('GET', '/api/agent/version');
   assert.equal(verRes.status, 200);
-  assert.equal(verRes.data.latest_version, '2.6.1-native-exe');
+  assert.equal(verRes.data.latest_version, '2.6.2-native-exe');
   assert.match(String(verRes.data.sha256 || ''), /^[a-f0-9]{64}$/i);
 
   const updateRes = await requestJson(
@@ -395,7 +395,7 @@ test('8. Auto-Enrollment de Máquina Real e Botão Manual de Coleta de Telemetri
   // Anti-downgrade: versão igual ou superior à do servidor NÃO recebe auto-update
   const pollSameVer = await requestJson(
     'GET',
-    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.6.1-native-exe&idle_seconds=10',
+    '/api/agent/pending?agent_uuid=agt-win-posto-teste01&agent_version=2.6.2-native-exe&idle_seconds=10',
     {
       headers: {
         'X-Agent-Uuid': 'agt-win-posto-teste01',
@@ -1543,4 +1543,72 @@ test('20. Ciclo #59: Troca de senha, CRUD de Usuários (anti-lockout ADMIN_N2) e
   assert.equal(chRes.data.changes.length, 1);
   assert.equal(chRes.data.changes[0].field_name, 'ram_total_mb');
   assert.equal(chRes.data.changes[0].hostname, 'USF-NSO-REC01');
+});
+
+test('21. Ciclo #60: Trilha de auditoria empresarial (CLEAR_TEMP_CACHE + retorno vinculado + listener tempo real)', async () => {
+  const machine = await enrollTestMachine();
+
+  const receivedRealtime = [];
+  repository.setAuditListener((ev) => receivedRealtime.push(ev));
+
+  try {
+    const adminLogin = await requestJson('POST', '/api/auth/login', {
+      body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+    });
+    const adminHdr = { Authorization: `Bearer ${adminLogin.data.token}` };
+
+    const cmdRes = await requestJson('POST', '/api/command', {
+      headers: adminHdr,
+      body: { machine_id: machine.id, task_code: 'CLEAR_TEMP_CACHE' },
+    });
+    assert.equal(cmdRes.status, 202);
+    const taskId = cmdRes.data.task.task_id;
+
+    // Agente reporta resultado da limpeza profunda (arquivos + pastas)
+    const reportRes = await requestJson('POST', '/api/agent/task-result', {
+      headers: {
+        'X-Agent-Uuid': 'agt-usf-nso-rec01',
+        'X-Agent-Token': 'tok-usf-nso-rec01-secret',
+      },
+      body: {
+        task_id: taskId,
+        status: 'COMPLETED',
+        exit_code: 0,
+        output_summary: 'Estação: USF-NSO-REC01 | Arquivos removidos: 42 | Pastas removidas: 11 | Espaço liberado: 84.5 MB (%TEMP%)',
+      },
+    });
+    assert.equal(reportRes.status, 200);
+
+    const auditRes = await requestJson('GET', '/api/audit-logs', { headers: adminHdr });
+    assert.equal(auditRes.status, 200);
+    const logs = auditRes.data.logs;
+
+    const dispatched = logs.find(
+      (l) => l.action_type === 'REMOTE_TASK_DISPATCHED' && l.details_json?.task_id === taskId
+    );
+    const completed = logs.find(
+      (l) => l.action_type === 'REMOTE_TASK_RESULT' && l.details_json?.task_id === taskId
+    );
+    assert.ok(dispatched, 'REMOTE_TASK_DISPATCHED não encontrado na trilha');
+    assert.equal(dispatched.details_json.task_code, 'CLEAR_TEMP_CACHE');
+    assert.equal(dispatched.details_json.task_title, 'Limpar Cache Temporário');
+    assert.equal(dispatched.machine_hostname, 'USF-NSO-REC01');
+    assert.equal(dispatched.user_email, 'admin@ipojuca.pe.gov.br');
+
+    assert.ok(completed, 'REMOTE_TASK_RESULT não encontrado na trilha');
+    assert.equal(completed.user_email, 'admin@ipojuca.pe.gov.br');
+    assert.equal(completed.details_json.task_code, 'CLEAR_TEMP_CACHE');
+    assert.ok(completed.details_json.output_summary.includes('Pastas removidas: 11'));
+
+    assert.ok(
+      receivedRealtime.some((e) => e.action_type === 'REMOTE_TASK_DISPATCHED'),
+      'Listener tempo real deveria receber REMOTE_TASK_DISPATCHED'
+    );
+    assert.ok(
+      receivedRealtime.some((e) => e.action_type === 'REMOTE_TASK_RESULT'),
+      'Listener tempo real deveria receber REMOTE_TASK_RESULT'
+    );
+  } finally {
+    repository.setAuditListener(null);
+  }
 });

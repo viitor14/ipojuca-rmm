@@ -73,21 +73,25 @@ class SocketHub {
         }
 
         const validStatus = status === 'COMPLETED' ? 'COMPLETED' : 'FAILED';
+        const cleanOutput = String(output_summary || '').slice(0, 2000);
         const updatedTask = await repository.completeRemoteTask({
           taskId: String(task_id),
           status: validStatus,
           exitCode: Number(exit_code ?? 0),
-          outputSummary: String(output_summary || '').slice(0, 2000),
+          outputSummary: cleanOutput,
         });
 
         await repository.recordAuditLog({
+          userId: existingTask.requested_by_user_id || null,
           machineId,
           actionType: 'REMOTE_TASK_RESULT',
           ipAddress: socket.handshake.address,
           details: {
             task_id,
+            task_code: existingTask.task_code,
             status: validStatus,
             exit_code: Number(exit_code ?? 0),
+            output_summary: cleanOutput.slice(0, 300),
           },
         });
 
@@ -126,12 +130,27 @@ class SocketHub {
     });
 
     dashboardNs.on('connection', (socket) => {
+      if (socket.user?.role) {
+        socket.join(`role:${socket.user.role}`);
+      }
       socket.emit('connection:ready', {
         status: 'connected',
         role: socket.user.role,
         server_time: new Date().toISOString(),
       });
     });
+
+    // Transmissão em tempo real de eventos de auditoria exclusivamente para ADMIN_N2
+    if (typeof repository.setAuditListener === 'function') {
+      repository.setAuditListener((auditEntry) => {
+        this.broadcastToRole('ADMIN_N2', 'audit:created', auditEntry);
+      });
+    }
+  }
+
+  broadcastToRole(role, event, data) {
+    if (!this.io || !role) return;
+    this.io.of('/dashboard').to(`role:${role}`).emit(event, data);
   }
 
   broadcastToDashboard(event, data) {

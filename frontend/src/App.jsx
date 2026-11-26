@@ -1262,6 +1262,7 @@ function DashboardApp() {
   const [allMachines, setAllMachines] = useState([]);
   const [activeModule, setActiveModule] = useState('MAP');
   const [agentInfo, setAgentInfo] = useState(null);
+  const [latestAuditEvent, setLatestAuditEvent] = useState(null);
   const [selectedMachineId, setSelectedMachineId] = useState(null);
   const [selectedSectorId, setSelectedSectorId] = useState(null);
   const [diagnostics, setDiagnostics] = useState(null);
@@ -1557,6 +1558,11 @@ function DashboardApp() {
       onUnitsUpdated: (payload) => {
         if (Array.isArray(payload?.units)) {
           setUnits(payload.units);
+        }
+      },
+      onAuditCreated: (auditEntry) => {
+        if (auditEntry && auditEntry.id) {
+          setLatestAuditEvent(auditEntry);
         }
       },
     });
@@ -2555,7 +2561,7 @@ function DashboardApp() {
                   units={units}
                   allMachines={allMachines}
                   currentUser={auth.user}
-                  latestAgentVersion={agentInfo?.latest_version || '2.6.1-native-exe'}
+                  latestAgentVersion={agentInfo?.latest_version || '2.6.2-native-exe'}
                   onOpenMachineInMap={handleOpenMachineInMap}
                   onUpdateLocation={handleUpdateLocation}
                   onRevokeMachine={handleRevokeMachine}
@@ -2569,6 +2575,7 @@ function DashboardApp() {
                   allMachines={allMachines}
                   alerts={alerts}
                   currentUser={auth.user}
+                  latestAuditEvent={latestAuditEvent}
                   onOpenMachineInMap={handleOpenMachineInMap}
                   onRefreshFleet={() => loadAllData(auth.token, selectedUnitId, selectedMachineId)}
                 />

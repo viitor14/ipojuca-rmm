@@ -25,14 +25,14 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Agente Nativo em Segundo Plano de Telemetria, Manutencao Remota, Auto-Update OTA Silencioso e Comunicacao Client-Server")]
 [assembly: AssemblyCompany("Pulso RMM")]
 [assembly: AssemblyProduct("IpojucaRMMService")]
-[assembly: AssemblyVersion("2.6.1.0")]
+[assembly: AssemblyVersion("2.6.2.0")]
 
 namespace IpojucaRMM
 {
     public class AgentConfig
     {
-        public const string CURRENT_VERSION = "2.6.1-native-exe";
-        public const string DISPLAY_VERSION = "2.6.1";
+        public const string CURRENT_VERSION = "2.6.2-native-exe";
+        public const string DISPLAY_VERSION = "2.6.2";
         public string BackendUrl = "http://31.97.86.253:4005";
         public string EnrollmentKey = "rmm-ipojuca-enroll-2026";
         public bool Enrolled = false;
@@ -1078,6 +1078,8 @@ namespace IpojucaRMM
             });
         }
 
+        private DateTime _lastPollErrorLogUtc = DateTime.MinValue;
+
         private void PollPendingCommandsAsync()
         {
             ThreadPool.QueueUserWorkItem(_ =>
@@ -1188,9 +1190,13 @@ namespace IpojucaRMM
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Silencioso caso o endpoint ainda não esteja publicado ou sem rede momentânea
+                    if ((DateTime.UtcNow - _lastPollErrorLogUtc).TotalMinutes >= 5.0)
+                    {
+                        _lastPollErrorLogUtc = DateTime.UtcNow;
+                        AppendLog("[POLL AVISO] Falha ao consultar comandos pendentes: " + ex.Message);
+                    }
                 }
             });
         }
@@ -1643,36 +1649,122 @@ namespace IpojucaRMM
             }
         }
 
-        private static string ClearUserAndSystemTemp()
+        private static void CleanDirectoryRecursiveSafe(string rootDir, bool deleteRootItself, ref int deletedFiles, ref int deletedDirs, ref int skippedLocked, ref long freedBytes)
         {
-            int deletedFiles = 0;
-            long freedBytes = 0;
-            string[] tempDirs = new string[]
-            {
-                Path.GetTempPath(),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp")
-            };
+            if (string.IsNullOrEmpty(rootDir) || !Directory.Exists(rootDir)) return;
 
-            foreach (string dir in tempDirs)
+            // Protecao @security: nunca seguir symlinks / junction points para fora de %TEMP%
+            try
             {
-                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
-                try
+                FileAttributes dirAttrs = File.GetAttributes(rootDir);
+                if ((dirAttrs & FileAttributes.ReparsePoint) != 0)
                 {
-                    string[] files = Directory.GetFiles(dir, "*", SearchOption.TopDirectoryOnly);
-                    foreach (string f in files)
+                    skippedLocked++;
+                    return;
+                }
+            }
+            catch
+            {
+                skippedLocked++;
+                return;
+            }
+
+            try
+            {
+                string[] files = Directory.GetFiles(rootDir, "*", SearchOption.TopDirectoryOnly);
+                foreach (string f in files)
+                {
+                    try
                     {
-                        try
+                        FileInfo fi = new FileInfo(f);
+                        if ((fi.Attributes & FileAttributes.ReparsePoint) != 0)
                         {
-                            FileInfo fi = new FileInfo(f);
-                            long len = fi.Length;
-                            File.Delete(f);
-                            deletedFiles++;
-                            freedBytes += len;
+                            skippedLocked++;
+                            continue;
                         }
-                        catch { }
+                        long len = fi.Length;
+                        if ((fi.Attributes & (FileAttributes.ReadOnly | FileAttributes.Hidden | FileAttributes.System)) != 0)
+                        {
+                            try { File.SetAttributes(f, FileAttributes.Normal); } catch { }
+                        }
+                        File.Delete(f);
+                        deletedFiles++;
+                        freedBytes += len;
+                    }
+                    catch
+                    {
+                        skippedLocked++;
                     }
                 }
-                catch { }
+            }
+            catch
+            {
+                skippedLocked++;
+            }
+
+            try
+            {
+                string[] subDirs = Directory.GetDirectories(rootDir, "*", SearchOption.TopDirectoryOnly);
+                foreach (string sub in subDirs)
+                {
+                    CleanDirectoryRecursiveSafe(sub, true, ref deletedFiles, ref deletedDirs, ref skippedLocked, ref freedBytes);
+                }
+            }
+            catch
+            {
+                skippedLocked++;
+            }
+
+            if (deleteRootItself)
+            {
+                try
+                {
+                    FileAttributes attrs = File.GetAttributes(rootDir);
+                    if ((attrs & FileAttributes.ReadOnly) != 0)
+                    {
+                        try { File.SetAttributes(rootDir, FileAttributes.Normal); } catch { }
+                    }
+                    Directory.Delete(rootDir, false);
+                    deletedDirs++;
+                }
+                catch
+                {
+                    skippedLocked++;
+                }
+            }
+        }
+
+        public static string ClearUserAndSystemTemp()
+        {
+            int deletedFiles = 0;
+            int deletedDirs = 0;
+            int skippedLocked = 0;
+            long freedBytes = 0;
+
+            string userTemp = Path.GetTempPath();
+            string winTemp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp");
+            List<string> cleanedScopes = new List<string>();
+
+            if (!string.IsNullOrEmpty(userTemp) && Directory.Exists(userTemp))
+            {
+                CleanDirectoryRecursiveSafe(userTemp, false, ref deletedFiles, ref deletedDirs, ref skippedLocked, ref freedBytes);
+                cleanedScopes.Add("%TEMP%");
+            }
+
+            if (!string.IsNullOrEmpty(winTemp) && Directory.Exists(winTemp) &&
+                !string.Equals(Path.GetFullPath(userTemp).TrimEnd('\\'), Path.GetFullPath(winTemp).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    // Verifica se temos permissao de leitura antes de incluir Windows\Temp no escopo
+                    Directory.GetFileSystemEntries(winTemp);
+                    CleanDirectoryRecursiveSafe(winTemp, false, ref deletedFiles, ref deletedDirs, ref skippedLocked, ref freedBytes);
+                    cleanedScopes.Add("Windows\\Temp");
+                }
+                catch
+                {
+                    // Conta padrao sem elevacao nao tem acesso a C:\Windows\Temp — relata de forma honesta
+                }
             }
 
             double freedMb = Math.Round(freedBytes / (1024.0 * 1024.0), 2);
@@ -1683,13 +1775,27 @@ namespace IpojucaRMM
                 if (cDrive.IsReady)
                 {
                     double freeGb = Math.Round(cDrive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0), 1);
-                    freeDiskInfo = string.Format(" | Espaço livre atual em C:: {0} GB", freeGb);
+                    freeDiskInfo = string.Format(CultureInfo.InvariantCulture, " | Espaço livre em C:: {0} GB", freeGb);
                 }
             }
             catch { }
 
-            return string.Format("Limpeza concluída em {0}: {1} arquivos temporários removidos ({2} MB liberados de %TEMP% e Windows\\Temp){3}.",
-                Environment.MachineName, deletedFiles, freedMb, freeDiskInfo);
+            string scopeLabel = cleanedScopes.Count > 0 ? string.Join(" e ", cleanedScopes.ToArray()) : "%TEMP%";
+            string lockedInfo = skippedLocked > 0
+                ? string.Format(" | Em uso/protegidos ignorados: {0}", skippedLocked)
+                : "";
+
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "Estação: {0} | Arquivos removidos: {1} | Pastas removidas: {2} | Espaço liberado: {3} MB ({4}){5}{6}",
+                Environment.MachineName,
+                deletedFiles,
+                deletedDirs,
+                freedMb,
+                scopeLabel,
+                lockedInfo,
+                freeDiskInfo
+            );
         }
 
         private static string RestartPrintSpooler(Action onTriggerHeartbeat)

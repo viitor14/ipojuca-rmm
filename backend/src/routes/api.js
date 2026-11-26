@@ -36,7 +36,7 @@ const pendingTasksByAgent = new Map();
 const taskResultWaiters = new Map();
 const heartbeatWaitersByAgent = new Map();
 
-const LATEST_AGENT_VERSION = "2.6.1-native-exe";
+const LATEST_AGENT_VERSION = "2.6.2-native-exe";
 
 function waitForLiveAgentTaskResult(taskId, timeoutMs = 4500) {
   return new Promise((resolve) => {
@@ -127,9 +127,18 @@ function notifyLiveAgentHeartbeat(agentUuid, updatedMachine) {
 }
 
 const authLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 30 });
+const agentKeyGen = (req) => {
+  const uuid = String(
+    req.headers["x-agent-uuid"] || req.query?.agent_uuid || req.body?.agent_uuid || "anon"
+  )
+    .trim()
+    .slice(0, 64);
+  return `${req.ip}:${uuid}:${req.path}`;
+};
 const heartbeatLimiter = createRateLimiter({
   windowMs: 60000,
   maxRequests: 240,
+  keyGenerator: agentKeyGen,
 });
 const refreshLimiter = createRateLimiter({
   windowMs: 60000,
@@ -142,14 +151,17 @@ const commandLimiter = createRateLimiter({
 const agentMessageLimiter = createRateLimiter({
   windowMs: 60000,
   maxRequests: 30,
+  keyGenerator: agentKeyGen,
 });
 const downloadLimiter = createRateLimiter({
   windowMs: 60000,
-  maxRequests: 20,
+  maxRequests: 40,
+  keyGenerator: agentKeyGen,
 });
 const agentPendingLimiter = createRateLimiter({
   windowMs: 60000,
   maxRequests: 120,
+  keyGenerator: agentKeyGen,
 });
 
 // 1. Healthcheck da API e Observabilidade
@@ -936,7 +948,11 @@ router.post("/machines/:id/refresh-telemetry", requireAuth, refreshLimiter, asyn
       machineId: machine.id,
       actionType: "MANUAL_TELEMETRY_REFRESH",
       ipAddress: req.ip,
-      details: { deliveredToSocket: socketOutcome.deliveredToSocket, queuedForNativeAgent: true },
+      details: {
+        hostname: machine.hostname,
+        deliveredToSocket: socketOutcome.deliveredToSocket,
+        queuedForNativeAgent: true,
+      },
     });
 
     // Aguarda até 3.8s pela resposta real do Agente Windows (via WebSocket ou Poll do .exe)
@@ -1124,6 +1140,8 @@ router.post(
         details: {
           task_id: taskId,
           task_code: taskSpec.code,
+          task_title: taskSpec.title,
+          hostname: machine.hostname,
           parameters: paramValidation.sanitized,
         },
       });
@@ -1212,6 +1230,21 @@ router.post(
         delivery_mode: "websocket_agent",
       });
     } catch (err) {
+      console.error("[RMM-API] Falha em POST /api/command:", err?.message || err);
+      try {
+        await repository.recordAuditLog({
+          userId: req.user?.id || null,
+          machineId: Number(req.body?.machine_id) || null,
+          actionType: "REMOTE_TASK_DISPATCH_ERROR",
+          ipAddress: req.ip,
+          details: {
+            task_code: String(req.body?.task_code || ""),
+            error: String(err?.message || "Erro interno").slice(0, 200),
+          },
+        });
+      } catch {
+        // Nao mascare erro original
+      }
       return res
         .status(500)
         .json({ error: "Erro ao despachar tarefa remota." });
@@ -1233,13 +1266,15 @@ router.get("/inventory/changes", requireAuth, asyncHandler(async (req, res) => {
   res.json({ changes });
 }));
 
-// 10. Listagem de Trilha de Auditoria (Restrito a ADMIN_N2)
+// 10. Listagem de Trilha de Auditoria (Restrito a ADMIN_N2, sem cache)
 router.get(
   "/audit-logs",
   requireAuth,
   requireRole(["ADMIN_N2"]),
   asyncHandler(async (req, res) => {
-    const logs = await repository.listAuditLogs(200);
+    const limit = Math.min(300, Math.max(1, Number(req.query.limit) || 250));
+    const logs = await repository.listAuditLogs(limit);
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.json({ logs });
   }),
 );
@@ -1249,12 +1284,27 @@ router.get("/agent/version", downloadLimiter, (req, res) => {
   return res.json(getAgentInstallerInfo());
 });
 
-router.get("/agent/download", downloadLimiter, requireOperatorOrAgentAuth, (req, res) => {
+router.get("/agent/download", downloadLimiter, requireOperatorOrAgentAuth, asyncHandler(async (req, res) => {
   const exePath = path.join(__dirname, "../../public/IpojucaRMM-Setup.exe");
   if (!fs.existsSync(exePath)) {
     return res
       .status(404)
       .json({ error: "Instalador IpojucaRMM-Setup.exe não encontrado no servidor." });
+  }
+  try {
+    await repository.recordAuditLog({
+      userId: req.user?.id || null,
+      machineId: req.machine?.id || null,
+      actionType: "AGENT_INSTALLER_DOWNLOADED",
+      ipAddress: req.ip,
+      details: {
+        version: LATEST_AGENT_VERSION,
+        via: req.user ? "dashboard_operator" : "agent_ota",
+        hostname: req.machine?.hostname || null,
+      },
+    });
+  } catch {
+    // Nao bloqueia download se auditoria falhar
   }
   res.setHeader("Content-Type", "application/octet-stream");
   res.setHeader("Cache-Control", "no-store");
@@ -1266,7 +1316,7 @@ router.get("/agent/download", downloadLimiter, requireOperatorOrAgentAuth, (req,
     return res.sendFile(exePath);
   }
   return fs.createReadStream(exePath).pipe(res);
-});
+}));
 
 // 11.1. Disparo de Atualização Remota do Agente (Individual ou Global em Todas as Máquinas)
 router.post(
@@ -1459,21 +1509,28 @@ router.post("/agent/task-result", requireAgentAuth, asyncHandler(async (req, res
   }
 
   const validStatus = status === "FAILED" ? "FAILED" : "COMPLETED";
+  const cleanSummary = String(output_summary || "Executado pelo Agente Windows.").slice(0, 1000);
   const completedTask = await repository.completeRemoteTask({
     taskId: String(task_id),
     status: validStatus,
     exitCode: Number(exit_code || 0),
-    outputSummary: String(output_summary || "Executado pelo Agente Windows.").slice(0, 1000),
+    outputSummary: cleanSummary,
   });
 
+  const taskSpecMeta = TASK_CATALOG[String(existingTask.task_code || "")];
   await repository.recordAuditLog({
+    userId: existingTask.requested_by_user_id || null,
     machineId: req.machine.id,
     actionType: "REMOTE_TASK_RESULT",
     ipAddress: req.ip,
     details: {
       task_id: String(task_id),
+      task_code: existingTask.task_code || null,
+      task_title: taskSpecMeta?.title || existingTask.task_code || null,
+      hostname: req.machine.hostname,
       status: validStatus,
       exit_code: Number(exit_code || 0),
+      output_summary: cleanSummary.slice(0, 300),
     },
   });
 
@@ -1615,6 +1672,17 @@ router.post("/agent/message", agentMessageLimiter, requireAgentAuth, asyncHandle
     sender,
     message: messageText,
     deliveredToAgent: true,
+  });
+
+  await repository.recordAuditLog({
+    machineId: req.machine.id,
+    actionType: "AGENT_MESSAGE_RECEIVED",
+    ipAddress: req.ip,
+    details: {
+      message_id: entry.id,
+      sender,
+      length: messageText.length,
+    },
   });
 
   socketHub.broadcastToDashboard("agent:message", entry);

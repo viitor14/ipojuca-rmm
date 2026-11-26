@@ -271,9 +271,12 @@ const bucketCleanupTimer = setInterval(() => {
 }, 60000);
 bucketCleanupTimer.unref();
 
-function createRateLimiter({ windowMs = 60000, maxRequests = 120 } = {}) {
+function createRateLimiter({ windowMs = 60000, maxRequests = 120, keyGenerator = null } = {}) {
   return (req, res, next) => {
-    const key = `${req.ip}:${req.path}`;
+    const key =
+      typeof keyGenerator === 'function'
+        ? String(keyGenerator(req) || `${req.ip}:${req.path}`)
+        : `${req.ip}:${req.path}`;
     const now = Date.now();
     if (!rateBuckets.has(key) && rateBuckets.size >= MAX_RATE_BUCKETS) {
       for (const [k, b] of rateBuckets.entries()) {
