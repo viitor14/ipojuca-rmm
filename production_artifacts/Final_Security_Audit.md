@@ -158,3 +158,20 @@ Parecer: sem vulnerabilidade crítica nova. O risco alto de S1 exige decisão do
 - **Checklist operacional restante para internet aberta (VPS):**
   1. Configurar domínio + HTTPS/WSS na VPS com `infrastructure/nginx/vps-https.conf.example` e fechar portas `4005`/`8095` em `127.0.0.1`.
   2. Configurar `AGENT_ENROLLMENT_KEY` exclusiva no `.env` da VPS (fora do Git) e distribuir o instalador passando `--url=https://... --enroll=<CHAVE>` (ou recompilado com esses valores) e confirmar senhas reais fortes no MySQL.
+
+---
+
+## 10. Auditoria de Segurança — Ciclo #59 (Gestão de Senhas, Usuários, Inventário e CSV, `@security`)
+
+**Data:** 2026-11-26  
+**Escopo:** Remediação do item **`S-08`** (fluxo de troca de senha e gestão de contas pelo painel) + validação de RBAC, anti-lockout e exportação CSV nos novos módulos (`InventoryView.jsx`, `MonitoringAuditView.jsx`, `SettingsView.jsx`, `api.js` e `repository.js`).
+
+| Controle Auditado | Implementação Verificada | Resultado |
+| :--- | :--- | :--- |
+| **Troca da Própria Senha (`S-08`)** | `POST /api/auth/change-password` (`requireAuth`, `authLimiter`): valida `current_password` via `verifyPassword`, exige `>= 8` chars diferente da atual, grava `scrypt$` com salt aleatório e audita `AUTH_PASSWORD_CHANGED` / `AUTH_PASSWORD_CHANGE_FAILED`. | **APROVADO (REMEDIADO)** |
+| **RBAC e Sigilo de Hashes em `/api/users`** | `GET/POST/PUT/DELETE /api/users` restritos a `requireRole(['ADMIN_N2'])`; `sanitizeUser()` remove `password_hash` em todas as saídas; validado no Teste #20 (`VIEWER`/`TECH_N1` recebem `403`, zero vazamento de `password_hash`). | **APROVADO** |
+| **Proteção Anti-Lockout (`ADMIN_N2`)** | `updateUser` e `deleteUser` impedem auto-exclusão, auto-desativação e desativação/rebaixamento/exclusão do último `ADMIN_N2` ativo (`409 Conflict`). | **APROVADO** |
+| **Exportação CSV Segura (Anti-Formula Injection)** | `sanitizeCsvCell()` em `InventoryView.jsx` neutraliza células iniciadas por `=`, `+`, `-`, `@`, `\t` ou `\r` prefixando `'` antes da codificação CSV com UTF-8 BOM. | **APROVADO** |
+| **Correção de Logout em `App.jsx`** | Corrigida chamada `loadSessionToken()` → `readSavedToken()` em `handleLogout`, garantindo invocação real de `POST /api/auth/logout` (revogação JWT) ao sair do painel. | **APROVADO** |
+
+- **Parecer do Gate de Segurança (Pós-Ciclo #59):** **APROVADO PELO `@security`** (`20/20` testes backend, `SECRET_SCAN_HITS = 0`, `S-08` remediado — operadores já podem alterar todas as senhas iniciais diretamente pela aba `Configurações`).

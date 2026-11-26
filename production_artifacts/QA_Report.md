@@ -884,3 +884,20 @@ Verificado no navegador (Vite dev em `10.200.33.30:5181` apontando para backend 
 | Smoke Test HTTP Real de `/api/agent/download` | Servidor Express real (`fetch`) | **APROVADO** — `anon = 401`, `op (Bearer JWT) = 200 (101.888 B)`, `agt (X-Agent-Uuid/Token) = 200 (101.888 B)`. |
 
 **Parecer do Gate de Qualidade — Ciclo #58:** **APROVADO PELO `@qa` E `@security`**.
+
+---
+
+## Ciclo #59 — Módulos de Inventário (Quantitativos por Unidade/Setor), Monitoramento/Auditoria e Configurações (`Pulso RMM`) (`@pm` + `@designer` + `@engineer` + `@frontend` + `@security` + `@qa`)
+
+**Data:** 2026-11-26  
+**Escopo:** Evolução do painel para plataforma multimódulo com navegação na `TopBar` (`Mapa`, `Inventário`, `Monitoramento`, `Configurações`), mantendo o Digital Twin intacto e adicionando gestão de senhas/usuários (`ADMIN_N2`), revogação de estações, trilha de auditoria e inventário com quantitativo interativo por unidade e setor (`CA-150` a `CA-160`).
+
+| Verificação | Comando / Método | Resultado |
+| :--- | :--- | :--- |
+| Suíte Automatizada Backend (Testes #1 a #20) | `npm --prefix backend test` | **20/20 APROVADO** (`fail 0`, `7.69s`), incluindo **Teste #20** (`CA-153` a `CA-157`: troca de senha com validação `401`/login novo, RBAC `403` em `/api/users`, zero `password_hash`, anti-lockout `409` no último `ADMIN_N2` e auto-exclusão, CRUD completo + auditoria e `GET /api/inventory/changes`). |
+| Build Frontend + Lazy Chunks + Varredura de Segredos | `npm --prefix frontend run build` + `Select-String` | **APROVADO** — `676` módulos (`12.20s`), 3 novos chunks lazy (`InventoryView`, `MonitoringAuditView`, `SettingsView`), `SECRET_SCAN_HITS = 0`. |
+| Inventário + Quantitativo por Unidade e Setor (`1440×900`) | Captura real em navegador headless + clique interativo na unidade (`shoot_ciclo59.mjs`) | **APROVADO** — `rows = 5`, `hasQuantUnit = true`, `hasQuantSector = true`, clique na unidade filtrou de `5` para `3` PCs (`hasResetPill = true`), `tableOverflowX = 0` (todos os botões `Mapa`/`Mover`/`Revogar` visíveis sem corte), `scrollW = 1440/1440`, exportação CSV com proteção contra Formula Injection. |
+| Monitoramento, Trilha de Auditoria e Configurações (`1440×900`) | Captura real em navegador headless | **APROVADO** — `auditRows = 7` com tags semânticas (`SECURITY_*`, `AUTH_*`, `AGENT_*`), `userRows = 3` com `Editar`, `Redefinir senha`, `Excluir` e `+ Novo usuário`, `scrollW = 1440/1440`. |
+| Responsividade `1280×720` (`TopBar` + `Mapa`) e Console | Captura real em navegador headless | **APROVADO** — `scrollW === clientW` (`1280/1280`), `headerScrollW === headerClientW` (`1280/1280`), `JS_ERRORS = 0`. |
+
+**Parecer do Gate de Qualidade — Ciclo #59:** **APROVADO PELO `@qa` E `@security`**.

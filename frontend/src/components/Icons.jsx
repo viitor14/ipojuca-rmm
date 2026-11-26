@@ -390,3 +390,80 @@ export function IconClock(props) {
     </Svg>
   );
 }
+
+export function IconMap(props) {
+  return (
+    <Svg {...props}>
+      <path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6z" />
+      <path d="M9 4v14M15 6v14" />
+    </Svg>
+  );
+}
+
+export function IconClipboardList(props) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4V2.8A1 1 0 0 1 10 2h4a1 1 0 0 1 1 1V4" />
+      <path d="M9 10h6M9 14h6M9 18h4" />
+    </Svg>
+  );
+}
+
+export function IconBell(props) {
+  return (
+    <Svg {...props}>
+      <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </Svg>
+  );
+}
+
+export function IconSettings(props) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </Svg>
+  );
+}
+
+export function IconUsers(props) {
+  return (
+    <Svg {...props}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </Svg>
+  );
+}
+
+export function IconKey(props) {
+  return (
+    <Svg {...props}>
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="M21 2l-9.6 9.6" />
+      <path d="M15.5 7.5l3 3L22 7l-3-3" />
+    </Svg>
+  );
+}
+
+export function IconBan(props) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M5.6 5.6l12.8 12.8" />
+    </Svg>
+  );
+}
+
+export function IconBuilding(props) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="3" width="16" height="18" rx="1.5" />
+      <path d="M9 21v-4h6v4" />
+      <path d="M8 7h1.5M14.5 7H16M8 11h1.5M14.5 11H16" />
+    </Svg>
+  );
+}

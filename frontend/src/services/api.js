@@ -36,6 +36,49 @@ export const rmmApi = {
     if (!token) return Promise.resolve();
     return request('/api/auth/logout', { method: 'POST', token }).catch(() => {});
   },
+  changePassword(token, { currentPassword, newPassword }) {
+    return request('/api/auth/change-password', {
+      method: 'POST',
+      token,
+      body: {
+        current_password: currentPassword,
+        new_password: newPassword,
+      },
+    });
+  },
+  getUsers(token) {
+    return request('/api/users', { token });
+  },
+  createUser(token, { name, email, password, role }) {
+    return request('/api/users', {
+      method: 'POST',
+      token,
+      body: { name, email, password, role },
+    });
+  },
+  updateUser(token, userId, payload) {
+    return request(`/api/users/${userId}`, {
+      method: 'PUT',
+      token,
+      body: payload,
+    });
+  },
+  deleteUser(token, userId) {
+    return request(`/api/users/${userId}`, {
+      method: 'DELETE',
+      token,
+    });
+  },
+  getAuditLogs(token) {
+    return request('/api/audit-logs', { token });
+  },
+  getInventoryChanges(token, { machineId, limit = 120 } = {}) {
+    const params = new URLSearchParams();
+    if (machineId) params.set('machine_id', machineId);
+    if (limit) params.set('limit', limit);
+    const qs = params.toString();
+    return request(`/api/inventory/changes${qs ? `?${qs}` : ''}`, { token });
+  },
   async downloadAgentInstaller(token) {
     const res = await fetch(`${API_BASE}/api/agent/download`, {
       method: 'GET',

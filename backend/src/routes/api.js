@@ -168,6 +168,9 @@ router.get("/health", (req, res) => {
       "printers:discovery",
       "auth:session-me",
       "auth:logout-revoke",
+      "auth:change-password",
+      "users:crud",
+      "inventory:global-changes",
       "agent:authenticated-poll",
       "agent:auth-download",
       "agent:revoke",
@@ -201,6 +204,135 @@ router.post("/auth/logout", requireAuth, asyncHandler(async (req, res) => {
   });
   return res.json({ status: "logged_out" });
 }));
+
+router.post("/auth/change-password", requireAuth, authLimiter, asyncHandler(async (req, res) => {
+  const { current_password, new_password } = req.body || {};
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: "Senha atual e nova senha são obrigatórias." });
+  }
+  const cleanNew = String(new_password);
+  if (cleanNew.length < 8) {
+    return res.status(400).json({ error: "A nova senha deve conter no mínimo 8 caracteres." });
+  }
+  if (cleanNew === String(current_password)) {
+    return res.status(400).json({ error: "A nova senha deve ser diferente da senha atual." });
+  }
+
+  const user = await repository.findUserById(req.user.id);
+  if (!user || !Number(user.is_active) || !verifyPassword(current_password, user.password_hash)) {
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      actionType: "AUTH_PASSWORD_CHANGE_FAILED",
+      ipAddress: req.ip,
+      details: { reason: "current_password_mismatch" },
+    });
+    return res.status(401).json({ error: "Senha atual incorreta." });
+  }
+
+  await repository.updateUserPasswordHash(user.id, hashPassword(cleanNew));
+  await repository.recordAuditLog({
+    userId: user.id,
+    actionType: "AUTH_PASSWORD_CHANGED",
+    ipAddress: req.ip,
+    details: { email: user.email },
+  });
+
+  return res.json({ status: "ok", message: "Senha atualizada com sucesso." });
+}));
+
+// 2.1. Gestão de Usuários e Permissões (Ciclo #59 — restrito a ADMIN_N2)
+router.get(
+  "/users",
+  requireAuth,
+  requireRole(["ADMIN_N2"]),
+  asyncHandler(async (req, res) => {
+    const users = await repository.listUsers();
+    return res.json({ users });
+  }),
+);
+
+router.post(
+  "/users",
+  requireAuth,
+  requireRole(["ADMIN_N2"]),
+  asyncHandler(async (req, res) => {
+    const { name, email, password, role = "VIEWER" } = req.body || {};
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ error: "A senha inicial deve conter no mínimo 8 caracteres." });
+    }
+    const created = await repository.createUser({
+      name,
+      email,
+      passwordHash: hashPassword(String(password)),
+      role,
+    });
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      actionType: "USER_CREATED",
+      ipAddress: req.ip,
+      details: { created_user_id: created.id, email: created.email, role: created.role },
+    });
+    return res.status(201).json({ status: "created", user: created });
+  }),
+);
+
+router.put(
+  "/users/:id",
+  requireAuth,
+  requireRole(["ADMIN_N2"]),
+  asyncHandler(async (req, res) => {
+    const { name, role, is_active, password } = req.body || {};
+    let passwordHash;
+    if (password !== undefined && String(password).length > 0) {
+      if (String(password).length < 8) {
+        return res.status(400).json({ error: "A nova senha deve conter no mínimo 8 caracteres." });
+      }
+      passwordHash = hashPassword(String(password));
+    }
+
+    const updated = await repository.updateUser(req.params.id, {
+      name,
+      role,
+      isActive: is_active,
+      passwordHash,
+      actorUserId: req.user.id,
+    });
+
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      actionType: passwordHash ? "USER_PASSWORD_RESET" : "USER_UPDATED",
+      ipAddress: req.ip,
+      details: {
+        target_user_id: updated.id,
+        email: updated.email,
+        role: updated.role,
+        is_active: updated.is_active,
+      },
+    });
+    return res.json({ status: "updated", user: updated });
+  }),
+);
+
+router.delete(
+  "/users/:id",
+  requireAuth,
+  requireRole(["ADMIN_N2"]),
+  asyncHandler(async (req, res) => {
+    const result = await repository.deleteUser(req.params.id, {
+      actorUserId: req.user.id,
+    });
+    await repository.recordAuditLog({
+      userId: req.user.id,
+      actionType: "USER_DELETED",
+      ipAddress: req.ip,
+      details: {
+        deleted_user_id: result.deletedId,
+        deleted_email: result.deletedEmail,
+      },
+    });
+    return res.json({ status: "deleted", deleted_id: result.deletedId });
+  }),
+);
 
 router.post("/auth/login", authLimiter, asyncHandler(async (req, res) => {
   const { email, password } = req.body || {};
@@ -1089,8 +1221,16 @@ router.post(
 
 // 9. Listagem de Alertas e Chamados n8n
 router.get("/alerts", requireAuth, asyncHandler(async (req, res) => {
-  const alerts = await repository.listAlerts(50);
+  const alerts = await repository.listAlerts(100);
   res.json({ alerts });
+}));
+
+// 9.1. Histórico Consolidado de Alterações de Hardware (Ciclo #59)
+router.get("/inventory/changes", requireAuth, asyncHandler(async (req, res) => {
+  const machineId = Number(req.query.machine_id) || null;
+  const limit = Number(req.query.limit) || 120;
+  const changes = await repository.listAllInventoryChanges({ machineId, limit });
+  res.json({ changes });
 }));
 
 // 10. Listagem de Trilha de Auditoria (Restrito a ADMIN_N2)
@@ -1099,7 +1239,7 @@ router.get(
   requireAuth,
   requireRole(["ADMIN_N2"]),
   asyncHandler(async (req, res) => {
-    const logs = await repository.listAuditLogs(100);
+    const logs = await repository.listAuditLogs(200);
     res.json({ logs });
   }),
 );

@@ -10,10 +10,10 @@
 
 ---
 
-## 1. Status Atual do Projeto (Atualizado no Ciclo #58 — 2026-11-25)
+## 1. Status Atual do Projeto (Atualizado no Ciclo #59 — 2026-11-26)
 
 1. **Implantação na VPS (`31.97.86.253` / `root@srv912524`):**
-   - Repositório Oficial: `https://github.com/viitor14/ipojuca-rmm.git` (branch `main`, último push em `49f6e55` com `Pulso RMM` + `v2.6.0-native-exe`; **Ciclo #58 de Hardening Pré-Frota `v2.6.1-native-exe` pronto localmente** aguardando commit/push).
+   - Repositório Oficial: `https://github.com/viitor14/ipojuca-rmm.git` (privado, branch `main`, em produção na VPS no commit **`f9edd5e`** com `Pulso RMM` + `v2.6.1-native-exe` hardened; **Ciclo #59 — Módulos de Inventário com Quantitativos, Monitoramento/Auditoria e Configurações/Usuários pronto localmente** aguardando aprovação para commit/push/deploy).
    - **Portas configuradas sem conflito com os outros containers da VPS:**
      - **Frontend (Dashboard 3D Digital Twin):** `http://31.97.86.253:8095`
      - **Backend (API Node.js + Socket.io):** `http://31.97.86.253:4005`
@@ -42,23 +42,20 @@
    - O diretório `agent/src/` permanece apenas como módulo de referência/testes automatizados.
 4. **Banco de Dados & Migrations (`infrastructure/mysql/`):**
    - Migrations `02` a `08` aplicadas com sucesso em produção na VPS com controle em `schema_migrations` via `infrastructure/scripts/deploy_rmm_update.sh`.
-5. **Frontend, Digital Twin 3D e Modo Pixel Art (`frontend/src/` — Ciclos #55 e #56 prontos localmente):**
-   - Lazy loading (`React.lazy` + `Suspense`) de `DigitalTwin3D` e `ModelShowcase`; modelo `workstation_pc.glb` corrigido (monitor orientado corretamente, sem impressora sobre a mesa, LED centralizado).
-   - **Redesign Editorial `Pulso RMM` (Ciclos #53–#56 — skill `design-taste-frontend`):**
-     - **Dashboard & Login (em produção no commit `985c7a4`):** barra superior unificada (`54px`) sob marca independente **`Pulso RMM`**, controles centralizados `Pixel Art / 3D`, trilho esquerdo contínuo recolhível, biblioteca SVG inline (`Icons.jsx`) e tela de Login em duas colunas com rótulo `E-mail`, diagrama vetorial de topologia e indicador real `/api/health`.
-     - **Painel Inspetor, Catálogo de Ações e Cards de Execução (`DiagnosticDrawer.jsx` — Ciclos #55 e #56 prontos localmente):**
-       - Estrutura em 4 zonas (`Header fixo enxuto` + `3 abas com filete 2px` + `Corpo rolável` + `Rodapé contextual fixo`), realocação sob demanda (`Mover`), métricas semânticas diretas sobre branco, gráfico de área gradiente sem distorção, 8 especificações em hairlines com cópia em 1 clique cabendo 100% sem corte em `1440×900`, e aba `Chat` em altura completa.
-       - **Catálogo de Ações (Ciclo #56):** lista editorial agrupada em 3 categorias (`Diagnóstico`, `Manutenção`, `Sistema e periféricos`) com filtro rápido no topo, ícones SVG dedicados, subtítulos claros, selo de risco apenas para `Médio`/`Alto` e rodapé fixo **`Última ação`** com botão `Ver retorno`.
-       - **Cards/Modais de Ação (Ciclo #56):** entrada animada + fechamento via `Esc`, ícone temático, **stepper de 3 fases** (`Assinada HMAC → Enviada ao agente → Retorno recebido`), formatação inteligente em tabela hairline ou narrativa limpa (fim definitivo de `"Item #1"`), botões **`Copiar resultado`** e **`Executar novamente`**, além de cards unificados para **Reiniciar estação**, **Instalar impressora** e **Remover equipamento**.
-     - **Script de deploy (`infrastructure/scripts/deploy_rmm_update.sh` — pronto localmente):** atualizado para `docker compose build --no-cache backend frontend` + `docker compose up -d --force-recreate backend frontend`, evitando imagens em cache na VPS.
-6. **Qualidade & Segurança Verificados (Ciclos #55 e #56):**
-   - `npm --prefix frontend run build`: **APROVADO** (`673` módulos, `0` segredos vazados em `frontend/dist/`).
-   - Inspeção visual em navegador headless real (`1440×900` e `1280×720`): **APROVADA** (`bodyOverflowY = 0` na aba `Visão geral`, catálogo agrupado, stepper + tabela estruturada sem `"Item #1"`, cópia 1-clique, fechamento por `Esc`, `JS_ERRORS = 0`, `0` overflow horizontal).
-   - `npm --prefix backend test`: **18/18 aprovados** (`fail 0`).
+5. **Frontend Multimódulo, Digital Twin 3D e Modo Pixel Art (`frontend/src/` — Ciclo #59 pronto localmente):**
+   - Lazy loading (`React.lazy` + `Suspense`) de `DigitalTwin3D`, `ModelShowcase`, `InventoryView`, `MonitoringAuditView` e `SettingsView`; modelo `workstation_pc.glb` corrigido.
+   - **Navegação Unificada na `TopBar` (Ciclo #59 — pronto localmente):** alternância instantânea sem recarregar nem desconectar o WebSocket entre **`Mapa`** (Digital Twin atual intacto), **`Inventário`** (KPIs, **Quantitativo interativo de PCs por Unidade e por Setor** com clique filtrando a tabela, filtros avançados, exportação CSV anti-Formula Injection, ações rápidas e sub-aba **`Alterações de hardware`**), **`Monitoramento`** (`Alertas da frota` + **`Trilha de auditoria`** para `ADMIN_N2`) e **`Configurações`** (**`Minha conta e senha`**, **`Usuários e permissões`** com criação/edição/redefinição de senha/exclusão + proteção anti-lockout `ADMIN_N2`, e **`Agentes e segurança`** com revogação/reativação de estações e manifesto/download autenticado do agente `v2.6.1-native-exe`).
+   - **Redesign Editorial `Pulso RMM` (Ciclos #53–#56 — em produção em `f9edd5e`):**
+     - Barra superior unificada (`54px`), controles centralizados `Pixel Art / 3D`, trilho esquerdo contínuo recolhível, tela de Login editorial e Painel Inspetor (`DiagnosticDrawer.jsx`) em 4 zonas com catálogo de ações agrupado e cards/modais com stepper HMAC.
+6. **Qualidade & Segurança Verificados (Ciclo #59):**
+   - `npm --prefix backend test`: **20/20 aprovados** (`fail 0`, `7.69s`, incluindo Teste #20 de troca de senha, CRUD de usuários anti-lockout e histórico global de hardware).
+   - `npm --prefix frontend run build`: **APROVADO** (`676` módulos, 3 chunks lazy novos, `SECRET_SCAN_HITS = 0`).
+   - Inspeção visual em navegador headless real (`1440×900` e `1280×720`): **APROVADA** (`tableOverflowX = 0`, clique em unidade filtrando a tabela `5 → 3`, `headerScrollW = 1280/1280`, `JS_ERRORS = 0`).
 
 ---
 
 ## 2. Pendências Conhecidas / Próximos Passos (Requerem Autorização Explícita)
 
-1. **Commit, Push e Redeploy dos Ciclos #55, #56 e #57 na VPS (`Gate Final`):** Somente após aprovação explícita do usuário, realizar `git commit`, `git push` (incluindo o novo `DiagnosticDrawer.jsx`, `Icons.jsx`, `frontend/dist/`, o novo agente `v2.6.0-native-exe` em `IpojucaAgent.cs` + `IpojucaRMM-Setup.exe` e o `deploy_rmm_update.sh` com `--no-cache`) e rodar `bash infrastructure/scripts/deploy_rmm_update.sh` na VPS.
-2. **Ativar HTTPS/WSS e Rotacionar `AGENT_ENROLLMENT_KEY`:** Configurar domínio + certificado TLS usando `infrastructure/nginx/vps-https.conf.example`, atualizar o workflow do n8n com `N8N_WEBHOOK_SECRET` e planejar rotação da chave de enrollment.
+1. **Commit, Push e Redeploy do Ciclo #59 na VPS (`Gate Final`):** Somente após aprovação explícita do usuário, realizar `git commit`, `git push` e rodar `bash infrastructure/scripts/deploy_rmm_update.sh` na VPS (zero nova migration SQL necessária — `users`, `machines`, `machine_inventory_changes`, `alerts` e `audit_logs` já existem em produção).
+2. **Trocar senhas iniciais pelo próprio painel:** Após o deploy do Ciclo #59, abrir **`Configurações` → `Usuários e permissões`** e redefinir as senhas das contas `admin`, `suporte` e `gestao` (ou excluir as que não forem utilizadas).
+3. **Ativar HTTPS/WSS quando houver domínio:** Configurar domínio + certificado TLS usando `infrastructure/nginx/vps-https.conf.example`, fechar portas `4005`/`8095` em `127.0.0.1` e atualizar `AGENT_ENROLLMENT_KEY` no `.env` da VPS.

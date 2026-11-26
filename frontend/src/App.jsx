@@ -27,12 +27,27 @@ import {
   IconCube,
   IconGrid,
   IconAlertTriangle,
+  IconMap,
+  IconClipboardList,
+  IconBell,
+  IconSettings,
 } from './components/Icons';
 
 const DigitalTwin3D = lazy(() =>
   import('./components/DigitalTwin3D').then((m) => ({ default: m.DigitalTwin3D }))
 );
 const ModelShowcase = lazy(() => import('./components/twin/ModelShowcase'));
+const InventoryView = lazy(() =>
+  import('./components/InventoryView').then((m) => ({ default: m.InventoryView }))
+);
+const MonitoringAuditView = lazy(() =>
+  import('./components/MonitoringAuditView').then((m) => ({
+    default: m.MonitoringAuditView,
+  }))
+);
+const SettingsView = lazy(() =>
+  import('./components/SettingsView').then((m) => ({ default: m.SettingsView }))
+);
 
 const ROLE_DISPLAY = {
   ADMIN_N2: 'Admin N2',
@@ -70,11 +85,84 @@ const TopBar = styled.header`
   flex-shrink: 0;
   background: ${({ theme }) => theme.colors.bgSurface};
   border-bottom: 1px solid ${({ theme }) => theme.colors.borderSubtle};
-  padding: 0 18px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
+`;
+
+const ModuleNav = styled.nav`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  border: 1px solid ${({ theme }) => theme.colors.borderSubtle};
+  background: ${({ theme }) => theme.colors.bgSurfaceSubtle};
+  flex-shrink: 0;
+`;
+
+const ModuleTabBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 5px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.borderSubtle : 'transparent'};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.bgSurface : 'transparent'};
+  box-shadow: ${({ $active, theme }) => ($active ? theme.shadows.sm : 'none')};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.brandPrimary : theme.colors.textSecondary};
+  font-size: 0.75rem;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &:hover {
+    color: ${({ $active, theme }) =>
+      $active ? theme.colors.brandPrimary : theme.colors.textPrimary};
+  }
+
+  .m-badge {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-variant-numeric: tabular-nums;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: rgba(200, 30, 30, 0.11);
+    color: #c81e1e;
+  }
+
+  @media (max-width: 1360px) {
+    padding: 0 8px;
+    font-size: 0.73rem;
+  }
+`;
+
+const ModuleStage = styled.main`
+  pointer-events: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: ${({ theme }) => theme.colors.bgCanvas};
+`;
+
+const ModuleLoading = styled.div`
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 0.82rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
 const BrandCluster = styled.div`
@@ -270,7 +358,7 @@ const TopRightCluster = styled.div`
   gap: 8px;
   flex-shrink: 0;
 
-  @media (max-width: 1120px) {
+  @media (max-width: 1360px) {
     .hide-compact {
       display: none;
     }
@@ -1171,7 +1259,9 @@ function DashboardApp() {
   const [updateAllConfirm, setUpdateAllConfirm] = useState({ open: false, busy: false, resultMsg: '' });
   const [units, setUnits] = useState([]);
   const [selectedUnitId, setSelectedUnitId] = useState(1);
-  const [machines, setMachines] = useState([]);
+  const [allMachines, setAllMachines] = useState([]);
+  const [activeModule, setActiveModule] = useState('MAP');
+  const [agentInfo, setAgentInfo] = useState(null);
   const [selectedMachineId, setSelectedMachineId] = useState(null);
   const [selectedSectorId, setSelectedSectorId] = useState(null);
   const [diagnostics, setDiagnostics] = useState(null);
@@ -1257,7 +1347,7 @@ function DashboardApp() {
   });
 
   const handleLogout = useCallback((notice = '') => {
-    const currentToken = loadSessionToken();
+    const currentToken = readSavedToken();
     if (currentToken) {
       rmmApi.logout(currentToken);
     }
@@ -1265,7 +1355,8 @@ function DashboardApp() {
     setAuth({ token: null, user: null, checking: false });
     setSocketConnected(false);
     setUnits([]);
-    setMachines([]);
+    setAllMachines([]);
+    setActiveModule('MAP');
     setDiagnostics(null);
     setChatMessages([]);
     setAlerts([]);
@@ -1333,20 +1424,23 @@ function DashboardApp() {
     try {
       const [unitsRes, machinesRes, catalogRes, alertsRes] = await Promise.all([
         rmmApi.getUnits(token),
-        rmmApi.getMachines(token, { unitId }),
+        rmmApi.getMachines(token),
         rmmApi.getTaskCatalog(token),
         rmmApi.getAlerts(token),
       ]);
-      const loadedMachines = machinesRes.machines || [];
+      const loadedAll = machinesRes.machines || [];
+      const loadedUnitMachines = loadedAll.filter(
+        (m) => Number(m.unit_id) === Number(unitId)
+      );
       setUnits(unitsRes.units || []);
-      setMachines(loadedMachines);
+      setAllMachines(loadedAll);
       setTaskCatalog(catalogRes.tasks || []);
       setAlerts(alertsRes.alerts || []);
 
       const targetId =
-        machineId && loadedMachines.some((m) => m.id === Number(machineId))
+        machineId && loadedUnitMachines.some((m) => m.id === Number(machineId))
           ? machineId
-          : loadedMachines[0]?.id || null;
+          : loadedUnitMachines[0]?.id || null;
 
       if (targetId) {
         const [diagRes, msgRes] = await Promise.all([
@@ -1369,6 +1463,14 @@ function DashboardApp() {
   }, [handleLogout]);
 
   useEffect(() => {
+    if (!auth.token) return;
+    rmmApi
+      .getAgentVersionInfo()
+      .then((info) => setAgentInfo(info))
+      .catch(() => {});
+  }, [auth.token]);
+
+  useEffect(() => {
     if (!auth.token) return undefined;
     const token = auth.token;
 
@@ -1380,17 +1482,14 @@ function DashboardApp() {
         const machineUnitId = Number(updatedMachine.unit_id);
         const isForCurrentUnit = currentUnitId > 0 && machineUnitId === currentUnitId;
 
-        setMachines((prev) => {
+        setAllMachines((prev) => {
           const exists = prev.some((m) => m.id === updatedMachine.id);
-          if (isForCurrentUnit) {
-            if (exists) {
-              return prev.map((m) =>
-                m.id === updatedMachine.id ? updatedMachine : m
-              );
-            }
-            return [...prev, updatedMachine];
+          if (exists) {
+            return prev.map((m) =>
+              m.id === updatedMachine.id ? updatedMachine : m
+            );
           }
-          return exists ? prev.filter((m) => m.id !== updatedMachine.id) : prev;
+          return [...prev, updatedMachine];
         });
 
         setDiagnostics((prev) => {
@@ -1407,12 +1506,12 @@ function DashboardApp() {
         rmmApi.getUnits(token).then((uRes) => setUnits(uRes.units || [])).catch(() => {});
       },
       onMachineDeleted: ({ id }) => {
-        setMachines((prev) => prev.filter((m) => m.id !== Number(id)));
+        setAllMachines((prev) => prev.filter((m) => m.id !== Number(id)));
         setDiagnostics((prev) => (prev?.machine?.id === Number(id) ? null : prev));
         rmmApi.getUnits(token).then((uRes) => setUnits(uRes.units || [])).catch(() => {});
       },
       onAlertTriggered: (newAlert) => {
-        setAlerts((prev) => [newAlert, ...prev.filter((a) => a.id !== newAlert.id).slice(0, 19)]);
+        setAlerts((prev) => [newAlert, ...prev.filter((a) => a.id !== newAlert.id).slice(0, 99)]);
       },
       onTaskUpdated: (updatedTask) => {
         const currentSelectedMachineId = selectedMachineIdRef.current;
@@ -1485,6 +1584,11 @@ function DashboardApp() {
     }
   }, [units, selectedUnitId]);
 
+  const machines = useMemo(
+    () => allMachines.filter((m) => Number(m.unit_id) === Number(selectedUnitId)),
+    [allMachines, selectedUnitId]
+  );
+
   const activeUnit =
     units.find((u) => u.id === Number(selectedUnitId)) || units[0];
   const selectedMachine =
@@ -1493,6 +1597,21 @@ function DashboardApp() {
     () => (activeUnit?.sectors || []).find((s) => s.id === Number(selectedSectorId)) || null,
     [activeUnit, selectedSectorId]
   );
+
+  const globalOpenAlertsCount = useMemo(() => {
+    const persistedOpen = alerts.filter((a) => a.status !== 'RESOLVED').length;
+    const liveInact = allMachines.filter((m) => {
+      const info = getInactivityInfo(m, nowTimestamp);
+      if (!info.isInactive24h) return false;
+      return !alerts.some(
+        (a) =>
+          Number(a.machine_id) === Number(m.id) &&
+          a.metric_name === 'INACTIVITY_24H' &&
+          a.status !== 'RESOLVED'
+      );
+    }).length;
+    return persistedOpen + liveInact;
+  }, [alerts, allMachines, nowTimestamp]);
 
   const filteredMachines = useMemo(() => {
     if (!searchQuery.trim()) return machines;
@@ -1566,9 +1685,34 @@ function DashboardApp() {
 
   async function handleUpdateLocation(machineId, { unitId, sectorId }) {
     const res = await rmmApi.updateMachineLocation(auth.token, machineId, { unitId, sectorId });
-    setSelectedUnitId(Number(unitId));
-    await loadAllData(auth.token, Number(unitId), machineId);
+    const nextUnit = activeModule === 'MAP' ? Number(unitId) : selectedUnitId;
+    if (activeModule === 'MAP') {
+      setSelectedUnitId(Number(unitId));
+    }
+    await loadAllData(auth.token, nextUnit, machineId);
     return res;
+  }
+
+  async function handleRevokeMachine(machineId, revoked) {
+    const res = await rmmApi.revokeMachine(
+      auth.token,
+      machineId,
+      revoked,
+      revoked ? 'Revogado pelo painel Pulso RMM' : 'Reativado pelo painel Pulso RMM'
+    );
+    await loadAllData(auth.token, selectedUnitId, selectedMachineId);
+    return res;
+  }
+
+  function handleOpenMachineInMap(machine) {
+    if (!machine) return;
+    if (machine.unit_id) {
+      setSelectedUnitId(Number(machine.unit_id));
+    }
+    setSelectedMachineId(Number(machine.id));
+    setSelectedSectorId(null);
+    setCameraMode('FOCUS');
+    setActiveModule('MAP');
   }
 
   async function handleDeleteMachine(machineId) {
@@ -1663,38 +1807,39 @@ function DashboardApp() {
       <GlobalStyles />
 
       {/* MAQUETE 3D ISOMÉTRICA EM TELA CHEIA (ESTILO HABBLAUDE) */}
-      {twinMode === 'PIXEL' ? (
-        <PixelArtTwin
-          activeUnit={activeUnit}
-          machines={machines}
-          selectedMachine={selectedMachine}
-          selectedSector={selectedSector}
-          onSelectMachine={(m) => {
-            setSelectedMachineId(m.id);
-            setSelectedSectorId(null);
-          }}
-        />
-      ) : (
-        <Suspense fallback={<StageFallback>Carregando Gêmeo Digital 3D...</StageFallback>}>
-          <DigitalTwin3D
+      {activeModule === 'MAP' &&
+        (twinMode === 'PIXEL' ? (
+          <PixelArtTwin
             activeUnit={activeUnit}
             machines={machines}
             selectedMachine={selectedMachine}
             selectedSector={selectedSector}
-            cameraMode={cameraMode}
-            roomVariant={getReceptionVariant()}
-            sceneLayers={sceneLayers}
-            onUserOrbit={() => {
-              if (cameraMode !== 'FREE') setCameraMode('FREE');
-            }}
             onSelectMachine={(m) => {
               setSelectedMachineId(m.id);
               setSelectedSectorId(null);
-              setCameraMode('FOCUS');
             }}
           />
-        </Suspense>
-      )}
+        ) : (
+          <Suspense fallback={<StageFallback>Carregando Gêmeo Digital 3D...</StageFallback>}>
+            <DigitalTwin3D
+              activeUnit={activeUnit}
+              machines={machines}
+              selectedMachine={selectedMachine}
+              selectedSector={selectedSector}
+              cameraMode={cameraMode}
+              roomVariant={getReceptionVariant()}
+              sceneLayers={sceneLayers}
+              onUserOrbit={() => {
+                if (cameraMode !== 'FREE') setCameraMode('FREE');
+              }}
+              onSelectMachine={(m) => {
+                setSelectedMachineId(m.id);
+                setSelectedSectorId(null);
+                setCameraMode('FOCUS');
+              }}
+            />
+          </Suspense>
+        ))}
 
       {/* INTERFACE ADMINISTRATIVA EDITORIAL */}
       <HudOverlay>
@@ -1712,58 +1857,107 @@ function DashboardApp() {
 
           <HairlineV aria-hidden="true" />
 
-          <UnitNavCluster aria-label="Unidades de Saúde">
-            <UnitTabsScroller>
-              {units.map((u) => {
-                const isUnitActive = u.id === Number(selectedUnitId);
-                const unitLabel = fixTextEncoding(u.name);
-                return (
-                  <UnitTabBtn
-                    key={u.id}
-                    type="button"
-                    $active={isUnitActive}
-                    aria-current={isUnitActive ? 'page' : undefined}
-                    title={`${unitLabel} (${u.summary?.total || 0} estações)`}
-                    onClick={() => {
-                      setSelectedUnitId(u.id);
-                      setSelectedMachineId(null);
-                      setSelectedSectorId(null);
-                      setDiagnostics(null);
-                      setCameraMode('ISO');
-                    }}
-                  >
-                    <span className="u-name">{unitLabel}</span>
-                    <span className="u-count">{u.summary?.total || 0}</span>
-                  </UnitTabBtn>
-                );
-              })}
-            </UnitTabsScroller>
-            {canManageStructure && (
-              <UnitManageGroup>
-                <SubtleIconBtn
-                  type="button"
-                  $accent
-                  $iconOnly
-                  onClick={() => openManagerModal('CREATE_UNIT')}
-                  title="Cadastrar nova Unidade de Saúde"
-                  aria-label="Cadastrar nova Unidade de Saúde"
-                >
-                  <IconPlus size={14} />
-                </SubtleIconBtn>
-                {activeUnit && (
-                  <SubtleIconBtn
-                    type="button"
-                    $iconOnly
-                    onClick={() => openManagerModal('EDIT_UNIT')}
-                    title="Editar ou excluir unidade selecionada"
-                    aria-label="Editar unidade selecionada"
-                  >
-                    <IconEdit size={14} />
-                  </SubtleIconBtn>
+          <ModuleNav aria-label="Módulos do Pulso RMM">
+            <ModuleTabBtn
+              type="button"
+              $active={activeModule === 'MAP'}
+              aria-current={activeModule === 'MAP' ? 'page' : undefined}
+              onClick={() => setActiveModule('MAP')}
+            >
+              <IconMap size={13} />
+              <span>Mapa</span>
+            </ModuleTabBtn>
+            <ModuleTabBtn
+              type="button"
+              $active={activeModule === 'INVENTORY'}
+              aria-current={activeModule === 'INVENTORY' ? 'page' : undefined}
+              onClick={() => setActiveModule('INVENTORY')}
+            >
+              <IconClipboardList size={13} />
+              <span>Inventário</span>
+            </ModuleTabBtn>
+            <ModuleTabBtn
+              type="button"
+              $active={activeModule === 'MONITORING'}
+              aria-current={activeModule === 'MONITORING' ? 'page' : undefined}
+              onClick={() => setActiveModule('MONITORING')}
+            >
+              <IconBell size={13} />
+              <span>Monitoramento</span>
+              {globalOpenAlertsCount > 0 && (
+                <span className="m-badge">{globalOpenAlertsCount}</span>
+              )}
+            </ModuleTabBtn>
+            <ModuleTabBtn
+              type="button"
+              $active={activeModule === 'SETTINGS'}
+              aria-current={activeModule === 'SETTINGS' ? 'page' : undefined}
+              onClick={() => setActiveModule('SETTINGS')}
+            >
+              <IconSettings size={13} />
+              <span>Configurações</span>
+            </ModuleTabBtn>
+          </ModuleNav>
+
+          {activeModule === 'MAP' ? (
+            <>
+              <HairlineV aria-hidden="true" />
+              <UnitNavCluster aria-label="Unidades de Saúde">
+                <UnitTabsScroller>
+                  {units.map((u) => {
+                    const isUnitActive = u.id === Number(selectedUnitId);
+                    const unitLabel = fixTextEncoding(u.name);
+                    return (
+                      <UnitTabBtn
+                        key={u.id}
+                        type="button"
+                        $active={isUnitActive}
+                        aria-current={isUnitActive ? 'page' : undefined}
+                        title={`${unitLabel} (${u.summary?.total || 0} estações)`}
+                        onClick={() => {
+                          setSelectedUnitId(u.id);
+                          setSelectedMachineId(null);
+                          setSelectedSectorId(null);
+                          setDiagnostics(null);
+                          setCameraMode('ISO');
+                        }}
+                      >
+                        <span className="u-name">{unitLabel}</span>
+                        <span className="u-count">{u.summary?.total || 0}</span>
+                      </UnitTabBtn>
+                    );
+                  })}
+                </UnitTabsScroller>
+                {canManageStructure && (
+                  <UnitManageGroup>
+                    <SubtleIconBtn
+                      type="button"
+                      $accent
+                      $iconOnly
+                      onClick={() => openManagerModal('CREATE_UNIT')}
+                      title="Cadastrar nova Unidade de Saúde"
+                      aria-label="Cadastrar nova Unidade de Saúde"
+                    >
+                      <IconPlus size={14} />
+                    </SubtleIconBtn>
+                    {activeUnit && (
+                      <SubtleIconBtn
+                        type="button"
+                        $iconOnly
+                        onClick={() => openManagerModal('EDIT_UNIT')}
+                        title="Editar ou excluir unidade selecionada"
+                        aria-label="Editar unidade selecionada"
+                      >
+                        <IconEdit size={14} />
+                      </SubtleIconBtn>
+                    )}
+                  </UnitManageGroup>
                 )}
-              </UnitManageGroup>
-            )}
-          </UnitNavCluster>
+              </UnitNavCluster>
+            </>
+          ) : (
+            <div style={{ flex: 1 }} />
+          )}
 
           <TopRightCluster>
             <SubtleIconBtn
@@ -1808,6 +2002,7 @@ function DashboardApp() {
           </TopRightCluster>
         </TopBar>
 
+        {activeModule === 'MAP' ? (
         <WorkspaceFrame>
           <ViewportToolbarRow>
             <ViewportControlPill>
@@ -2351,6 +2546,46 @@ function DashboardApp() {
             </BottomMatrixDock>
           </DockShell>
         </WorkspaceFrame>
+        ) : (
+          <ModuleStage>
+            <Suspense fallback={<ModuleLoading>Carregando módulo...</ModuleLoading>}>
+              {activeModule === 'INVENTORY' && (
+                <InventoryView
+                  token={auth.token}
+                  units={units}
+                  allMachines={allMachines}
+                  currentUser={auth.user}
+                  latestAgentVersion={agentInfo?.latest_version || '2.6.1-native-exe'}
+                  onOpenMachineInMap={handleOpenMachineInMap}
+                  onUpdateLocation={handleUpdateLocation}
+                  onRevokeMachine={handleRevokeMachine}
+                  onRefreshFleet={() => loadAllData(auth.token, selectedUnitId, selectedMachineId)}
+                />
+              )}
+              {activeModule === 'MONITORING' && (
+                <MonitoringAuditView
+                  token={auth.token}
+                  units={units}
+                  allMachines={allMachines}
+                  alerts={alerts}
+                  currentUser={auth.user}
+                  onOpenMachineInMap={handleOpenMachineInMap}
+                  onRefreshFleet={() => loadAllData(auth.token, selectedUnitId, selectedMachineId)}
+                />
+              )}
+              {activeModule === 'SETTINGS' && (
+                <SettingsView
+                  token={auth.token}
+                  currentUser={auth.user}
+                  allMachines={allMachines}
+                  agentInfo={agentInfo}
+                  onDownloadAgent={handleDownloadAgent}
+                  onRevokeMachine={handleRevokeMachine}
+                />
+              )}
+            </Suspense>
+          </ModuleStage>
+        )}
       </HudOverlay>
 
       <UnitSectorManagerModal

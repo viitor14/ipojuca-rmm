@@ -1436,3 +1436,111 @@ test('19. Ciclo #58 (@security): Zero vazamento de agent_token_hash, Download Au
   });
   assert.equal(afterLogoutMe.status, 401);
 });
+
+test('20. Ciclo #59: Troca de senha, CRUD de Usuários (anti-lockout ADMIN_N2) e Histórico Global de Hardware', async () => {
+  repository.resetMemoryStore();
+
+  const adminLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'admin@ipojuca.pe.gov.br', password: 'Admin@Rmm2026' },
+  });
+  const techLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'suporte@ipojuca.pe.gov.br', password: 'Suporte@Rmm2026' },
+  });
+  const adminHdr = { Authorization: `Bearer ${adminLogin.data.token}` };
+  const techHdr = { Authorization: `Bearer ${techLogin.data.token}` };
+
+  // 1. RBAC: TECH_N1 não pode acessar /api/users
+  const techList = await requestJson('GET', '/api/users', { headers: techHdr });
+  assert.equal(techList.status, 403);
+
+  // 2. ADMIN_N2 lista usuários sem jamais expor password_hash
+  const listRes = await requestJson('GET', '/api/users', { headers: adminHdr });
+  assert.equal(listRes.status, 200);
+  assert.equal(listRes.data.users.length, 3);
+  for (const u of listRes.data.users) {
+    assert.equal(u.password_hash, undefined);
+  }
+
+  // 3. Anti-lockout: não permite excluir nem desativar nem rebaixar o único ADMIN_N2 ativo
+  const selfDel = await requestJson('DELETE', '/api/users/1', { headers: adminHdr });
+  assert.equal(selfDel.status, 409);
+  const selfDeactivate = await requestJson('PUT', '/api/users/1', {
+    headers: adminHdr,
+    body: { is_active: false },
+  });
+  assert.equal(selfDeactivate.status, 409);
+  const selfDemote = await requestJson('PUT', '/api/users/1', {
+    headers: adminHdr,
+    body: { role: 'VIEWER' },
+  });
+  assert.equal(selfDemote.status, 409);
+
+  // 4. Criar novo usuário, rejeitar duplicado, redefinir senha e excluir
+  const createRes = await requestJson('POST', '/api/users', {
+    headers: adminHdr,
+    body: {
+      name: 'Lucas Ferreira',
+      email: 'lucas@empresa.com',
+      password: 'NovaSenha#2026',
+      role: 'TECH_N1',
+    },
+  });
+  assert.equal(createRes.status, 201);
+  assert.equal(createRes.data.user.password_hash, undefined);
+  const createdId = createRes.data.user.id;
+
+  const dupRes = await requestJson('POST', '/api/users', {
+    headers: adminHdr,
+    body: { name: 'Dup', email: 'lucas@empresa.com', password: 'NovaSenha#2026', role: 'VIEWER' },
+  });
+  assert.equal(dupRes.status, 409);
+
+  // Login do usuário recém-criado e troca de própria senha
+  const lucasLogin = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'lucas@empresa.com', password: 'NovaSenha#2026' },
+  });
+  assert.equal(lucasLogin.status, 200);
+  const lucasHdr = { Authorization: `Bearer ${lucasLogin.data.token}` };
+
+  const wrongCur = await requestJson('POST', '/api/auth/change-password', {
+    headers: lucasHdr,
+    body: { current_password: 'Errada', new_password: 'OutraSenha#2026' },
+  });
+  assert.equal(wrongCur.status, 401);
+
+  const okChange = await requestJson('POST', '/api/auth/change-password', {
+    headers: lucasHdr,
+    body: { current_password: 'NovaSenha#2026', new_password: 'OutraSenha#2026' },
+  });
+  assert.equal(okChange.status, 200);
+
+  const loginNewPass = await requestJson('POST', '/api/auth/login', {
+    body: { email: 'lucas@empresa.com', password: 'OutraSenha#2026' },
+  });
+  assert.equal(loginNewPass.status, 200);
+
+  // Admin redefine senha e depois exclui conta de teste
+  const resetRes = await requestJson('PUT', `/api/users/${createdId}`, {
+    headers: adminHdr,
+    body: { name: 'Lucas F.', role: 'VIEWER', password: 'ResetSenha#2026' },
+  });
+  assert.equal(resetRes.status, 200);
+  assert.equal(resetRes.data.user.role, 'VIEWER');
+
+  const delRes = await requestJson('DELETE', `/api/users/${createdId}`, { headers: adminHdr });
+  assert.equal(delRes.status, 200);
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'USER_CREATED'));
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'USER_DELETED'));
+  assert.ok(repository.auditLogs.some((l) => l.action_type === 'AUTH_PASSWORD_CHANGED'));
+
+  // 5. Histórico global de mudanças de hardware
+  const m = await enrollTestMachine();
+  await repository.recordInventoryChanges(m.id, [
+    { field_name: 'ram_total_mb', old_value: '8192', new_value: '16384' },
+  ]);
+  const chRes = await requestJson('GET', '/api/inventory/changes', { headers: adminHdr });
+  assert.equal(chRes.status, 200);
+  assert.equal(chRes.data.changes.length, 1);
+  assert.equal(chRes.data.changes[0].field_name, 'ram_total_mb');
+  assert.equal(chRes.data.changes[0].hostname, 'USF-NSO-REC01');
+});

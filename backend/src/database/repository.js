@@ -720,6 +720,53 @@ class RmmRepository {
       .reverse();
   }
 
+  async listAllInventoryChanges({ machineId = null, limit = 100 } = {}) {
+    const safeLimit = Math.min(200, Math.max(1, Number(limit) || 100));
+    if (this.mode === 'mysql') {
+      const hasMachine = Number(machineId) > 0;
+      const sql = hasMachine
+        ? `SELECT c.*, m.hostname, m.ip_address, m.unit_id, m.sector_id,
+                  u.name AS unit_name, s.name AS sector_name
+             FROM machine_inventory_changes c
+             JOIN machines m ON m.id = c.machine_id
+             JOIN health_units u ON u.id = m.unit_id
+             JOIN sectors s ON s.id = m.sector_id
+            WHERE c.machine_id = ?
+            ORDER BY c.changed_at DESC, c.id DESC
+            LIMIT ?`
+        : `SELECT c.*, m.hostname, m.ip_address, m.unit_id, m.sector_id,
+                  u.name AS unit_name, s.name AS sector_name
+             FROM machine_inventory_changes c
+             JOIN machines m ON m.id = c.machine_id
+             JOIN health_units u ON u.id = m.unit_id
+             JOIN sectors s ON s.id = m.sector_id
+            ORDER BY c.changed_at DESC, c.id DESC
+            LIMIT ?`;
+      const params = hasMachine ? [Number(machineId), safeLimit] : [safeLimit];
+      const [rows] = await this.pool.query(sql, params);
+      return rows;
+    }
+
+    return this.inventoryChanges
+      .filter((c) => !machineId || c.machine_id === Number(machineId))
+      .slice(-safeLimit)
+      .reverse()
+      .map((c) => {
+        const m = this.machines.find((x) => x.id === c.machine_id);
+        const u = this.units.find((x) => x.id === m?.unit_id);
+        const s = this.sectors.find((x) => x.id === m?.sector_id);
+        return {
+          ...c,
+          hostname: m?.hostname || `PC #${c.machine_id}`,
+          ip_address: m?.ip_address || '0.0.0.0',
+          unit_id: m?.unit_id || null,
+          sector_id: m?.sector_id || null,
+          unit_name: u?.name || 'Unidade',
+          sector_name: s?.name || 'Setor',
+        };
+      });
+  }
+
   async listApprovedPrinters({ unitId = null } = {}) {
     const numericUnitId = Number(unitId) || null;
     if (this.mode === 'mysql') {
@@ -846,6 +893,209 @@ class RmmRepository {
     }
     const user = this.users.find((u) => u.id === id);
     if (user) user.password_hash = newHash;
+  }
+
+  async findUserById(userId) {
+    const id = Number(userId);
+    if (!id) return null;
+    if (this.mode === 'mysql') {
+      const [rows] = await this.pool.execute('SELECT * FROM users WHERE id = ? LIMIT 1', [id]);
+      return rows[0] || null;
+    }
+    return this.users.find((u) => u.id === id) || null;
+  }
+
+  sanitizeUser(u) {
+    if (!u) return null;
+    return {
+      id: Number(u.id),
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      is_active: Number(u.is_active) ? 1 : 0,
+      created_at: u.created_at || new Date().toISOString(),
+    };
+  }
+
+  async listUsers() {
+    if (this.mode === 'mysql') {
+      const [rows] = await this.pool.query(
+        'SELECT id, name, email, role, is_active, created_at FROM users ORDER BY id ASC'
+      );
+      return rows.map((u) => this.sanitizeUser(u));
+    }
+    return this.users
+      .slice()
+      .sort((a, b) => a.id - b.id)
+      .map((u) => this.sanitizeUser(u));
+  }
+
+  async countActiveAdmins(excludeUserId = null) {
+    if (this.mode === 'mysql') {
+      const sql = excludeUserId
+        ? "SELECT COUNT(*) AS cnt FROM users WHERE role = 'ADMIN_N2' AND is_active = 1 AND id != ?"
+        : "SELECT COUNT(*) AS cnt FROM users WHERE role = 'ADMIN_N2' AND is_active = 1";
+      const params = excludeUserId ? [Number(excludeUserId)] : [];
+      const [[row]] = await this.pool.execute(sql, params);
+      return Number(row?.cnt || 0);
+    }
+    return this.users.filter(
+      (u) =>
+        u.role === 'ADMIN_N2' &&
+        Number(u.is_active) === 1 &&
+        (!excludeUserId || u.id !== Number(excludeUserId))
+    ).length;
+  }
+
+  async createUser({ name, email, passwordHash, role = 'VIEWER' }) {
+    const cleanName = String(name || '').trim().slice(0, 120);
+    const cleanEmail = String(email || '').trim().toLowerCase().slice(0, 160);
+    const allowedRoles = new Set(['VIEWER', 'TECH_N1', 'ADMIN_N2']);
+    if (cleanName.length < 2) {
+      throw createDomainError('Informe um nome válido (mínimo 2 caracteres).', 400);
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      throw createDomainError('Informe um endereço de e-mail válido.', 400);
+    }
+    if (!allowedRoles.has(role)) {
+      throw createDomainError('Perfil inválido. Use VIEWER, TECH_N1 ou ADMIN_N2.', 400);
+    }
+
+    if (this.mode === 'mysql') {
+      const [dup] = await this.pool.execute(
+        'SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1',
+        [cleanEmail]
+      );
+      if (dup.length > 0) {
+        throw createDomainError('Já existe um usuário cadastrado com este e-mail.', 409);
+      }
+      const [result] = await this.pool.execute(
+        'INSERT INTO users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, 1)',
+        [cleanName, cleanEmail, passwordHash, role]
+      );
+      const created = await this.findUserById(result.insertId);
+      return this.sanitizeUser(created);
+    }
+
+    if (this.users.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      throw createDomainError('Já existe um usuário cadastrado com este e-mail.', 409);
+    }
+    const nextId = this.users.reduce((m, u) => Math.max(m, Number(u.id || 0)), 0) + 1;
+    const record = {
+      id: nextId,
+      name: cleanName,
+      email: cleanEmail,
+      password_hash: passwordHash,
+      role,
+      is_active: 1,
+      created_at: new Date().toISOString(),
+    };
+    this.users.push(record);
+    return this.sanitizeUser(record);
+  }
+
+  async updateUser(userId, { name, role, isActive, passwordHash, actorUserId } = {}) {
+    const id = Number(userId);
+    const existing = await this.findUserById(id);
+    if (!existing) {
+      throw createDomainError('Usuário não encontrado.', 404);
+    }
+
+    const allowedRoles = new Set(['VIEWER', 'TECH_N1', 'ADMIN_N2']);
+    const nextName = name !== undefined ? String(name || '').trim().slice(0, 120) : existing.name;
+    const nextRole = role !== undefined ? String(role).trim() : existing.role;
+    const nextActive =
+      isActive !== undefined ? (isActive ? 1 : 0) : Number(existing.is_active) ? 1 : 0;
+
+    if (nextName.length < 2) {
+      throw createDomainError('Informe um nome válido (mínimo 2 caracteres).', 400);
+    }
+    if (!allowedRoles.has(nextRole)) {
+      throw createDomainError('Perfil inválido. Use VIEWER, TECH_N1 ou ADMIN_N2.', 400);
+    }
+
+    // Salvaguarda anti-lockout (@security): impede auto-desativacao/rebaixamento ou ficar sem ADMIN_N2 ativo
+    const isSelf = Number(actorUserId) === id;
+    if (isSelf && nextActive === 0) {
+      throw createDomainError('Você não pode desativar a própria conta em uso.', 409);
+    }
+    if (isSelf && existing.role === 'ADMIN_N2' && nextRole !== 'ADMIN_N2') {
+      throw createDomainError('Você não pode rebaixar o perfil da própria conta administrativa.', 409);
+    }
+    const losesAdmin = existing.role === 'ADMIN_N2' && (nextRole !== 'ADMIN_N2' || nextActive === 0);
+    if (losesAdmin) {
+      const remainingAdmins = await this.countActiveAdmins(id);
+      if (remainingAdmins < 1) {
+        throw createDomainError(
+          'Operação bloqueada: é obrigatório manter ao menos um Admin N2 ativo no sistema.',
+          409
+        );
+      }
+    }
+
+    if (this.mode === 'mysql') {
+      if (passwordHash) {
+        await this.pool.execute(
+          'UPDATE users SET name = ?, role = ?, is_active = ?, password_hash = ? WHERE id = ?',
+          [nextName, nextRole, nextActive, passwordHash, id]
+        );
+      } else {
+        await this.pool.execute(
+          'UPDATE users SET name = ?, role = ?, is_active = ? WHERE id = ?',
+          [nextName, nextRole, nextActive, id]
+        );
+      }
+      return this.sanitizeUser(await this.findUserById(id));
+    }
+
+    existing.name = nextName;
+    existing.role = nextRole;
+    existing.is_active = nextActive;
+    if (passwordHash) existing.password_hash = passwordHash;
+    return this.sanitizeUser(existing);
+  }
+
+  async deleteUser(userId, { actorUserId } = {}) {
+    const id = Number(userId);
+    const existing = await this.findUserById(id);
+    if (!existing) {
+      throw createDomainError('Usuário não encontrado.', 404);
+    }
+    if (Number(actorUserId) === id) {
+      throw createDomainError('Você não pode excluir a própria conta em uso.', 409);
+    }
+    if (existing.role === 'ADMIN_N2' && Number(existing.is_active) === 1) {
+      const remainingAdmins = await this.countActiveAdmins(id);
+      if (remainingAdmins < 1) {
+        throw createDomainError(
+          'Operação bloqueada: é obrigatório manter ao menos um Admin N2 ativo no sistema.',
+          409
+        );
+      }
+    }
+
+    if (this.mode === 'mysql') {
+      try {
+        await this.pool.execute('DELETE FROM users WHERE id = ?', [id]);
+      } catch (err) {
+        if (err && (err.code === 'ER_ROW_IS_REFERENCED_2' || err.errno === 1451)) {
+          throw createDomainError(
+            'Este operador possui histórico de tarefas remotas na auditoria e não pode ser excluído permanentemente. Use "Editar" e desative a conta para revogar o acesso.',
+            409
+          );
+        }
+        throw err;
+      }
+    } else {
+      const idx = this.users.findIndex((u) => u.id === id);
+      if (idx >= 0) this.users.splice(idx, 1);
+    }
+
+    return {
+      deletedId: id,
+      deletedEmail: existing.email,
+      deletedName: existing.name,
+    };
   }
 
   async findMachineByAgentUuid(agentUuid) {
@@ -1570,26 +1820,29 @@ class RmmRepository {
     return entry;
   }
 
-  async listAlerts(limit = 50) {
+  async listAlerts(limit = 100) {
+    const safeLimit = Math.min(200, Math.max(1, Number(limit) || 100));
     if (this.mode === 'mysql') {
       const [rows] = await this.pool.query(
-        `SELECT a.*, m.hostname, m.ip_address, u.name AS unit_name, s.name AS sector_name
+        `SELECT a.*, m.hostname, m.ip_address, m.unit_id, m.sector_id, u.name AS unit_name, s.name AS sector_name
          FROM alerts a
          JOIN machines m ON m.id = a.machine_id
          JOIN health_units u ON u.id = m.unit_id
          JOIN sectors s ON s.id = m.sector_id
          ORDER BY a.triggered_at DESC LIMIT ?`,
-        [Number(limit)]
+        [safeLimit]
       );
       return rows;
     }
 
-    return this.alerts.slice(0, limit).map((a) => {
+    return this.alerts.slice(0, safeLimit).map((a) => {
       const m = this.machines.find((x) => x.id === a.machine_id);
       const u = this.units.find((x) => x.id === m?.unit_id);
       const s = this.sectors.find((x) => x.id === m?.sector_id);
       return {
         ...a,
+        unit_id: m?.unit_id || null,
+        sector_id: m?.sector_id || null,
         hostname: m?.hostname || 'N/A',
         ip_address: m?.ip_address || '0.0.0.0',
         unit_name: u?.name || 'Unidade',
@@ -1598,15 +1851,30 @@ class RmmRepository {
     });
   }
 
-  async listAuditLogs(limit = 50) {
+  async listAuditLogs(limit = 200) {
+    const safeLimit = Math.min(300, Math.max(1, Number(limit) || 200));
     if (this.mode === 'mysql') {
       const [rows] = await this.pool.query(
-        'SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?',
-        [Number(limit)]
+        `SELECT l.*, u.name AS user_name, u.email AS user_email, m.hostname AS machine_hostname
+           FROM audit_logs l
+           LEFT JOIN users u ON u.id = l.user_id
+           LEFT JOIN machines m ON m.id = l.machine_id
+          ORDER BY l.created_at DESC, l.id DESC
+          LIMIT ?`,
+        [safeLimit]
       );
       return rows;
     }
-    return this.auditLogs.slice(0, limit);
+    return this.auditLogs.slice(0, safeLimit).map((l) => {
+      const u = l.user_id ? this.users.find((x) => x.id === Number(l.user_id)) : null;
+      const m = l.machine_id ? this.machines.find((x) => x.id === Number(l.machine_id)) : null;
+      return {
+        ...l,
+        user_name: u?.name || null,
+        user_email: u?.email || null,
+        machine_hostname: m?.hostname || null,
+      };
+    });
   }
 
   async markStaleMachinesOffline(thresholdSeconds = env.offlineThresholdSeconds) {
